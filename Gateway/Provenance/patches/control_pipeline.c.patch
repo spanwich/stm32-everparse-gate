@@ -1,0 +1,69 @@
+--- components/PolicyGate/control_pipeline.c
++++ Gateway/Core/control_pipeline.c
+@@ -18,7 +18,9 @@
+  */
+ 
+ #include "control_pipeline.h"
+-#include "everparse_generated/RbacPolicyWrapper.h"
++#include "gateway_routes.h"
++#include "../Generated/Policy/RbacPolicyWrapper.h"
++#include "gateway_log.h"
+ #include <string.h>
+ #include <stdio.h>
+ 
+@@ -64,17 +66,20 @@
+ static void write_rules(uint8_t *buf, int offset, const Policy *p)
+ {
+     for (int i = 0; i < MAX_RULES; i++) {
+-        write_rule(buf, offset + i * 8, &p->rules[i]);
++        /* AccessRequest has no num_rules field: neutralize unused slots. */
++        const PolicyRule unused = { DEAD_HASH, 0, 0, 0 };
++        write_rule(buf, offset + i * 8, i < p->num_rules ? &p->rules[i] : &unused);
+     }
+ }
+ 
+ void policy_init_default(Policy *p)
+ {
+-    p->num_rules = 3;
++    p->num_rules = 4;
+     p->rules[0] = (PolicyRule){ PATH_STATUS, METHOD_GET,  ROLE_OPERATOR, 0x0001 }; /* READ_SENSORS */
+     p->rules[1] = (PolicyRule){ PATH_LOGOUT, METHOD_POST, ROLE_OPERATOR, 0x0000 }; /* no scope */
+     p->rules[2] = (PolicyRule){ PATH_POLICY, METHOD_GET,  ROLE_ADMIN,    0x0004 }; /* CONFIGURE */
+-    for (int i = 3; i < MAX_RULES; i++) {
++    p->rules[3] = (PolicyRule){ GATEWAY_PATH_DEMO, METHOD_GET, ROLE_ADMIN, 0x0001 };
++    for (int i = 4; i < MAX_RULES; i++) {
+         p->rules[i] = (PolicyRule){ DEAD_HASH, 0, 0, 0x0000 };
+     }
+ }
+@@ -144,9 +149,9 @@
+         return PIPELINE_DENY;
+     }
+ 
+-    if (body_len < 65) {
++    if (body_len != 65) {
+         *gate_len = make_gate_response(gate_buf, conn_id, GATE_STATUS_DENIED,
+-            "{\"status\":\"denied\",\"message\":\"policy too short\"}");
++            "{\"status\":\"denied\",\"message\":\"invalid policy length\"}");
+         return PIPELINE_DENY;
+     }
+ 
+@@ -173,6 +178,10 @@
+     /* Policy format valid and uploader is ADMIN — update active policy */
+     p->num_rules = num_rules;
+     for (int i = 0; i < MAX_RULES; i++) {
++        if (i >= p->num_rules) {
++            p->rules[i] = (PolicyRule){ DEAD_HASH, 0, 0, 0 };
++            continue;
++        }
+         int off = 1 + i * 8;
+         p->rules[i].path_hash =
+             (uint32_t)body[off + 0] |
+@@ -254,7 +263,7 @@
+     uint32_t path_hash = params->path_hash;
+     uint8_t method = params->method;
+ 
+-    printf("[PolicyGate] path=0x%08lx method=%u role=%s scope=0x%04x\n",
++    gateway_log("[PolicyGate] path=0x%08lx method=%u role=%s scope=0x%04x\n",
+            (unsigned long)path_hash, method, role_name(params->role),
+            params->scope);
+ 

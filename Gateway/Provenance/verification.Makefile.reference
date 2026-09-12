@@ -1,0 +1,160 @@
+# Makefile for F*-verified HTTP extractor
+#
+# Uses EverParse binary release (not opam).
+#
+# Targets:
+#   verify      - Type-check and verify all F* modules
+#   extract     - Extract to C code via KreMLin
+#   test        - Compile and run all C test harnesses
+#   test-scan   - Test find_header_end only
+#   test-method - Test parse_method only
+#   clean       - Remove generated files
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+# EverParse binary release root (contains bin/, krmllib/, include/, misc/)
+EVERPARSE_HOME ?= $(realpath ../../../../everparse/bin/everparse)
+
+# Tool paths
+FSTAR  = $(EVERPARSE_HOME)/bin/fstar.exe
+KRML   = $(EVERPARSE_HOME)/bin/krml
+
+# KRML_HOME must be set explicitly — krml auto-detects incorrectly
+# when invoked from within the everparse git repo tree
+export KRML_HOME = $(EVERPARSE_HOME)
+
+# F* flags for verification
+FSTAR_FLAGS = \
+  --cache_checked_modules \
+  --cache_dir .cache \
+  --include $(KRML_HOME)/krmllib \
+  --include $(KRML_HOME)/krmllib/obj
+
+# F* flags for extraction (adds codegen + output dir)
+FSTAR_EXTRACT_FLAGS = $(FSTAR_FLAGS) \
+  --odir .extract \
+  --codegen krml
+
+# Source files (dependency order: Types first, then modules that use it)
+FSTAR_SOURCES = \
+  HTTP.Extract.Types.fst \
+  HTTP.Extract.Scan.fst \
+  HTTP.Extract.Method.fst \
+  HTTP.Extract.Path.fst \
+  HTTP.Extract.Header.fst \
+  HTTP.Extract.Bearer.fst \
+  HTTP.Extract.Complete.fst \
+  IPC.Extract.fst
+
+# KreMLin flags — each module gets its own bundle for clean C files
+KRML_FLAGS = \
+  -skip-linking \
+  -skip-compilation \
+  -tmpdir extracted \
+  -bundle 'HTTP.Extract.Types=HTTP.Extract.Types' \
+  -bundle 'HTTP.Extract.Scan=HTTP.Extract.Scan' \
+  -bundle 'HTTP.Extract.Method=HTTP.Extract.Method' \
+  -bundle 'HTTP.Extract.Path=HTTP.Extract.Path' \
+  -bundle 'HTTP.Extract.Header=HTTP.Extract.Header' \
+  -bundle 'HTTP.Extract.Bearer=HTTP.Extract.Bearer' \
+  -bundle 'HTTP.Extract.Complete=HTTP.Extract.Complete' \
+  -bundle 'IPC.Extract=IPC.Extract' \
+  -no-prefix 'HTTP.Extract.Types' \
+  -no-prefix 'HTTP.Extract.Scan' \
+  -no-prefix 'HTTP.Extract.Method' \
+  -no-prefix 'HTTP.Extract.Path' \
+  -no-prefix 'HTTP.Extract.Header' \
+  -no-prefix 'HTTP.Extract.Bearer' \
+  -no-prefix 'HTTP.Extract.Complete' \
+  -no-prefix 'IPC.Extract'
+
+# C compiler flags for test
+CC = gcc
+CFLAGS = -Wall -Werror -I extracted -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal
+
+# All extracted C sources (for linking tests)
+EXTRACTED_C = $(wildcard extracted/*.c)
+
+.PHONY: all verify extract test test-scan test-method test-path test-header test-extractor test-ipc-extract clean check-tools info
+
+all: verify
+
+# Check tools exist
+check-tools:
+	@test -x "$(FSTAR)" || (echo "ERROR: fstar.exe not found at $(FSTAR)" && exit 1)
+	@test -x "$(KRML)" || (echo "ERROR: krml not found at $(KRML)" && exit 1)
+
+# Verify all F* modules (type-check + proof obligations)
+verify: check-tools .cache
+	@echo "=== Verifying F* modules ==="
+	$(FSTAR) $(FSTAR_FLAGS) $(FSTAR_SOURCES)
+	@echo "=== Verification successful ==="
+
+# Extract verified code to C
+extract: verify .extract extracted
+	@echo "=== Extracting to C ==="
+	$(FSTAR) $(FSTAR_EXTRACT_FLAGS) $(FSTAR_SOURCES)
+	$(KRML) $(KRML_FLAGS) .extract/out.krml
+	@echo "=== Extraction complete ==="
+	@ls -la extracted/*.c extracted/*.h 2>/dev/null || true
+
+# Run all tests
+test: test-scan test-method test-path test-header test-extractor test-ipc-extract
+
+# Test find_header_end
+test-scan: extract
+	@echo "=== Testing find_header_end ==="
+	$(CC) $(CFLAGS) test_scan.c extracted/HTTP_Extract_Scan.c -o test_scan
+	./test_scan
+
+# Test parse_method
+test-method: extract
+	@echo "=== Testing parse_method ==="
+	$(CC) $(CFLAGS) test_method.c $(EXTRACTED_C) -o test_method
+	./test_method
+
+# Test extract_path_hash
+test-path: extract
+	@echo "=== Testing extract_path_hash ==="
+	$(CC) $(CFLAGS) test_path.c $(EXTRACTED_C) -o test_path
+	./test_path
+
+# Test parse_content_length
+test-header: extract
+	@echo "=== Testing parse_content_length ==="
+	$(CC) $(CFLAGS) test_header.c $(EXTRACTED_C) -o test_header
+	./test_header
+
+# Test extract_security_params (end-to-end)
+test-extractor: extract
+	@echo "=== Testing extract_security_params ==="
+	$(CC) $(CFLAGS) test_extractor.c $(EXTRACTED_C) -o test_extractor
+	./test_extractor
+
+# Test IPC.Extract (populate_auth_fields + populate_rate_field)
+test-ipc-extract: extract
+	@echo "=== Testing IPC.Extract ==="
+	$(CC) $(CFLAGS) test_ipc_extract.c $(EXTRACTED_C) -o test_ipc_extract
+	./test_ipc_extract
+
+# Create directories
+.cache:
+	mkdir -p .cache
+
+.extract:
+	mkdir -p .extract
+
+extracted:
+	mkdir -p extracted
+
+# Clean generated files
+clean:
+	rm -rf .cache .extract extracted test_scan test_method test_path test_header test_extractor test_ipc_extract
+
+# Show tool info
+info:
+	@echo "EVERPARSE_HOME: $(EVERPARSE_HOME)"
+	@echo "FSTAR:          $(FSTAR)"
+	@echo "KRML:           $(KRML)"
+	@echo "KRML_HOME:      $(KRML_HOME)"
+	@$(FSTAR) --version 2>/dev/null || echo "fstar.exe: not found"

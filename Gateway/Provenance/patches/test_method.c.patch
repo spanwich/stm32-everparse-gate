@@ -1,0 +1,41 @@
+--- verified/test_method.c
++++ Gateway/SelfTest/test_method.c
+@@ -1,3 +1,7 @@
++#include <stdio.h>
++#include "gateway_tests.h"
++#define printf gateway_test_printf
++/* Adapted test harness; original assertion logic retained. */
+ /*
+  * Test harness for F*-verified parse_method
+  *
+@@ -16,15 +20,14 @@
+     total++; \
+     method_result r = parse_method((uint8_t *)(input), (ilen)); \
+     if (r.mr_code == (exp_code) && r.mr_end == (exp_end)) { \
+-        printf("  PASS: %s (code=%u end=%u)\n", (name), r.mr_code, r.mr_end); \
++        printf("  PASS: %s (code=%u end=%u)\n", (name), (unsigned)(r.mr_code), (unsigned)(r.mr_end)); \
+         pass++; \
+     } else { \
+-        printf("  FAIL: %s (expected code=%u end=%u, got code=%u end=%u)\n", \
+-               (name), (uint8_t)(exp_code), (uint32_t)(exp_end), r.mr_code, r.mr_end); \
++        printf("  FAIL: %s (expected code=%u end=%u, got code=%u end=%u)\n", (name), (unsigned)((uint8_t)(exp_code)), (unsigned)((uint32_t)(exp_end)), (unsigned)(r.mr_code), (unsigned)(r.mr_end)); \
+     } \
+ } while(0)
+ 
+-int main(void)
++static int run_original_suite_method(void)
+ {
+     printf("=== parse_method test suite ===\n\n");
+ 
+@@ -60,3 +63,11 @@
+     printf("\n=== Results: %d/%d passed ===\n", pass, total);
+     return (pass == total) ? 0 : 1;
+ }
++
++void gateway_test_method(GatewayTestStats *s)
++{
++    pass = total = 0;
++    (void)run_original_suite_method();
++    s->passed += (uint32_t)pass;
++    s->total += (uint32_t)total;
++}

@@ -1,0 +1,54 @@
+--- verified/test_scan.c
++++ Gateway/SelfTest/test_scan.c
+@@ -1,3 +1,7 @@
++#include <stdio.h>
++#include "gateway_tests.h"
++#define printf gateway_test_printf
++/* Adapted test harness; original assertion logic retained. */
+ /*
+  * Test harness for F*-verified find_header_end
+  *
+@@ -21,14 +25,14 @@
+     tests_total++; \
+     uint32_t result = find_header_end((uint8_t *)(buf), (buflen)); \
+     if (result == (expected)) { \
+-        printf("  PASS: %s (result=%u)\n", (name), result); \
++        printf("  PASS: %s (result=%u)\n", (name), (unsigned)(result)); \
+         tests_passed++; \
+     } else { \
+-        printf("  FAIL: %s (expected=%u, got=%u)\n", (name), (expected), result); \
++        printf("  FAIL: %s (expected=%u, got=%u)\n", (name), (unsigned)((expected)), (unsigned)(result)); \
+     } \
+ } while(0)
+ 
+-int main(void)
++static int run_original_suite_scan(void)
+ {
+     printf("=== find_header_end test suite ===\n\n");
+ 
+@@ -124,11 +128,10 @@
+         if (result < len &&
+             post[result] == '\r' && post[result+1] == '\n' &&
+             post[result+2] == '\r' && post[result+3] == '\n') {
+-            printf("  PASS: realistic POST (header_end=%u, body starts at %u)\n",
+-                   result, result + 4);
++            printf("  PASS: realistic POST (header_end=%u, body starts at %u)\n", (unsigned)(result), (unsigned)(result + 4));
+             tests_passed++;
+         } else {
+-            printf("  FAIL: realistic POST (result=%u, len=%u)\n", result, len);
++            printf("  FAIL: realistic POST (result=%u, len=%u)\n", (unsigned)(result), (unsigned)(len));
+         }
+         tests_total++;
+     }
+@@ -136,3 +139,11 @@
+     printf("\n=== Results: %d/%d passed ===\n", tests_passed, tests_total);
+     return (tests_passed == tests_total) ? 0 : 1;
+ }
++
++void gateway_test_scan(GatewayTestStats *s)
++{
++    tests_passed = tests_total = 0;
++    (void)run_original_suite_scan();
++    s->passed += (uint32_t)tests_passed;
++    s->total += (uint32_t)tests_total;
++}

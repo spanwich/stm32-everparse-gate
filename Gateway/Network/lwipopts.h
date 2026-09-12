@@ -1,0 +1,57 @@
+#ifndef GATEWAY_LWIPOPTS_H
+#define GATEWAY_LWIPOPTS_H
+#include "cmsis_os2.h"
+#define NO_SYS 0
+#define LWIP_NETCONN 1
+#define LWIP_SOCKET 0
+#define LWIP_NETIF_API 1
+#define LWIP_IPV4 1
+#define LWIP_IPV6 0
+#define LWIP_DHCP 0
+#define LWIP_DNS 0
+#define LWIP_UDP 0
+#define LWIP_RAW 0
+#define LWIP_ICMP 1
+#define LWIP_IGMP 0
+#define LWIP_AUTOIP 0
+#define LWIP_ETHERNET 1
+#define LWIP_ARP 1
+#define MEM_ALIGNMENT 4
+#define MEM_SIZE (16*1024)
+#define MEMP_NUM_TCP_PCB 12
+#define MEMP_NUM_TCP_PCB_LISTEN 1
+#define MEMP_NUM_NETCONN 3
+#define MEMP_NUM_TCP_SEG 24
+#define PBUF_POOL_SIZE 12
+#define TCP_MSS 1460
+#define TCP_SND_BUF (4*TCP_MSS)
+#define TCP_WND (2*TCP_MSS)
+#define TCP_QUEUE_OOSEQ 0
+#define TCP_LISTEN_BACKLOG 1
+#define LWIP_SO_RCVTIMEO 1
+#define LWIP_SO_SNDTIMEO 1
+#define LWIP_SO_LINGER 1
+#define LWIP_NETIF_LINK_CALLBACK 1
+#define LWIP_NETIF_STATUS_CALLBACK 1
+#define LWIP_STATS 1
+#define LWIP_STATS_DISPLAY 0
+#define MEM_STATS 1
+#define MEMP_STATS 1
+#define SYS_STATS 0
+#define TCPIP_THREAD_NAME "TCP/IP"
+#define TCPIP_THREAD_STACKSIZE 4096
+#define TCPIP_THREAD_PRIO osPriorityHigh
+#define TCPIP_MBOX_SIZE 8
+#define DEFAULT_TCP_RECVMBOX_SIZE 4
+#define DEFAULT_ACCEPTMBOX_SIZE 1
+#define DEFAULT_THREAD_STACKSIZE 2048
+#define LWIP_TCPIP_CORE_LOCKING 0
+#define LWIP_SUPPORT_CUSTOM_PBUF 1
+/* Software checksums; MAC offload is disabled explicitly in ethernetif. */
+#define CHECKSUM_GEN_IP 1
+#define CHECKSUM_GEN_TCP 1
+#define CHECKSUM_GEN_ICMP 1
+#define CHECKSUM_CHECK_IP 1
+#define CHECKSUM_CHECK_TCP 1
+#define CHECKSUM_CHECK_ICMP 1
+#endif

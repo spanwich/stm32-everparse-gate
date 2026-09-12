@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>seL4 HTTP Gateway</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:2rem;max-width:600px;margin:0 auto}
+h1{font-size:1.3rem;margin-bottom:1.5rem;color:#a0c4ff}
+.card{background:#16213e;border-radius:8px;padding:1.2rem;margin-bottom:1rem}
+label{display:block;font-size:.85rem;margin-bottom:.3rem;color:#8899aa}
+input{width:100%;padding:.5rem;border:1px solid #334;border-radius:4px;background:#0f1729;color:#e0e0e0;margin-bottom:.8rem;font-size:.9rem}
+input:focus{outline:none;border-color:#a0c4ff}
+.btns{display:flex;gap:.5rem;flex-wrap:wrap}
+button{padding:.5rem 1rem;border:none;border-radius:4px;cursor:pointer;font-size:.85rem;font-weight:600}
+#btnLogin{background:#4361ee;color:#fff}
+#btnStatus{background:#3a86a0;color:#fff}
+#btnLogout{background:#6c757d;color:#fff}
+button:hover{opacity:.85}
+#result{margin-top:1rem;padding:1rem;border-radius:6px;font-family:monospace;font-size:.85rem;white-space:pre-wrap;word-break:break-word;display:none}
+.ok{background:#0a2e1a;border:1px solid #2d6a4f}
+.err{background:#2e0a0a;border:1px solid #6a2d2d}
+</style>
+</head>
+<body>
+<h1>seL4 HTTP Gateway Dashboard</h1>
+<div class="card">
+  <label for="user">Username</label>
+  <input id="user" value="admin" autocomplete="off">
+  <label for="pass">Password</label>
+  <input id="pass" type="password" value="admin456" autocomplete="off">
+  <div class="btns">
+    <button id="btnLogin">Login</button>
+    <button id="btnStatus">Check Status</button>
+    <button id="btnLogout">Logout</button>
+  </div>
+</div>
+<div id="result"></div>
+<script>
+const R=document.getElementById('result');
+function show(status,body){
+  R.style.display='block';
+  R.className=status<400?'ok':'err';
+  R.textContent='HTTP '+status+'\n'+body;
+}
+async function api(method,path,body){
+  try{
+    const opt={method};
+    if(body){opt.headers={'Content-Type':'application/json'};opt.body=JSON.stringify(body);}
+    const r=await fetch(path,opt);
+    const t=await r.text();
+    show(r.status,t);
+  }catch(e){show(0,'Network error: '+e.message);}
+}
+document.getElementById('btnLogin').onclick=()=>api('POST','/api/login',{
+  username:document.getElementById('user').value,
+  password:document.getElementById('pass').value
+});
+document.getElementById('btnStatus').onclick=()=>api('GET','/api/status');
+document.getElementById('btnLogout').onclick=()=>api('POST','/api/logout');
+</script>
+</body>
+</html>

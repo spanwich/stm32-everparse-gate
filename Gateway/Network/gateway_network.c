@@ -1,0 +1,152 @@
+#include "gateway_network.h"
+#include "gateway_http.h"
+#include "../Web/dashboard_html.h"
+_Static_assert(sizeof(gateway_dashboard)<=16384 && sizeof(gateway_dashboard_js)<=16384, "static asset bound");
+#include "gateway_platform.h"
+#include "gateway_log.h"
+#include "ethernetif.h"
+#include "main.h"
+#include "lwip/tcpip.h"
+#include "lwip/netifapi.h"
+#include "lwip/api.h"
+#include "lwip/stats.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include <stdio.h>
+#include <string.h>
+extern GatewayContext gateway_test_context;
+extern osThreadId_t gateway_tcpip_task;
+static struct netif network;
+extern GatewayHttp gateway_http_fixture;
+#define http gateway_http_fixture
+static volatile uint32_t ready, requests, rx_failures;
+static uint32_t heap_used, heap_peak, heap_errors;
+static volatile int last_status, last_send;
+static void tcp_ready(void *sem) { (void)osSemaphoreRelease(sem); }
+static void sample_heap(void *unused)
+{
+    (void)unused;
+    taskENTER_CRITICAL();
+    heap_used=lwip_stats.mem.used; heap_peak=lwip_stats.mem.max; heap_errors=lwip_stats.mem.err;
+    taskEXIT_CRITICAL();
+}
+void gateway_network_mpu(void)
+{
+    MPU_Region_InitTypeDef r={0};
+    HAL_MPU_Disable();
+    r.Enable=MPU_REGION_ENABLE; r.Number=MPU_REGION_NUMBER1;
+    r.BaseAddress=0x20070000; r.Size=MPU_REGION_SIZE_64KB;
+    r.AccessPermission=MPU_REGION_FULL_ACCESS; r.DisableExec=MPU_INSTRUCTION_ACCESS_DISABLE;
+    r.TypeExtField=MPU_TEX_LEVEL1; /* Normal, non-cacheable payload RAM. */
+    HAL_MPU_ConfigRegion(&r);
+    r.Number=MPU_REGION_NUMBER2; r.Size=MPU_REGION_SIZE_1KB;
+    r.TypeExtField=MPU_TEX_LEVEL0; r.IsBufferable=MPU_ACCESS_BUFFERABLE;
+    r.IsShareable=MPU_ACCESS_SHAREABLE; /* Device descriptors. */
+    HAL_MPU_ConfigRegion(&r);
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+void gateway_network_diagnostics(void)
+{
+    if(!ready) return;
+    (void)tcpip_try_callback(sample_heap,NULL);
+    uint32_t t=(uint32_t)uxTaskGetStackHighWaterMark(gateway_tcpip_task)*sizeof(StackType_t);
+    uint32_t e=(uint32_t)uxTaskGetStackHighWaterMark(gateway_eth_task)*sizeof(StackType_t);
+    uint32_t l=(uint32_t)uxTaskGetStackHighWaterMark(gateway_link_task)*sizeof(StackType_t);
+    uint32_t used,peak,errors;
+    taskENTER_CRITICAL(); used=heap_used; peak=heap_peak; errors=heap_errors; taskEXIT_CRITICAL();
+    gateway_log("[NET] link=%lu req=%lu rx=%lu tx=%lu drop=%lu txerr=%lu stack=%lu/%lu/%lu margin=%s lwip=%lu/%lu err=%lu\n",
+        (unsigned long)gateway_link_up,(unsigned long)requests,(unsigned long)gateway_rx_packets,
+        (unsigned long)gateway_tx_packets,(unsigned long)gateway_rx_drops,(unsigned long)gateway_tx_errors,
+        (unsigned long)t,(unsigned long)e,(unsigned long)l,t>=1024 && e>=1024 && l>=512?"OK":"LOW",
+        (unsigned long)used,(unsigned long)peak,(unsigned long)errors);
+    if(t<1024 || e<1024 || l<512) HAL_GPIO_WritePin(LD3_GPIO_Port,LD3_Pin,GPIO_PIN_SET);
+}
+static void serve(struct netconn *conn)
+{
+    GatewayContext *c=&gateway_test_context;
+    gateway_begin_request(c); gateway_http_init(&http);
+    netconn_set_sendtimeout(conn,2000); netconn_set_recvtimeout(conn,250);
+    conn->linger=2;
+    uint32_t start=osKernelGetTickCount(),epoch=gateway_link_epoch;
+    int status=0;
+    while(!status) {
+        if(!gateway_link_up || epoch!=gateway_link_epoch) { ++rx_failures; return; }
+        if((uint32_t)(osKernelGetTickCount()-start)>=5000) { status=408; break; }
+        struct netbuf *buffer=NULL;
+        err_t err=netconn_recv(conn,&buffer);
+        if(err==ERR_TIMEOUT) continue;
+        if(err!=ERR_OK) { if(buffer) netbuf_delete(buffer); ++rx_failures; return; }
+        for(struct pbuf *p=buffer->p;p;p=p->next) {
+            if(status==1 && p->len) { status=400; break; }
+            status=gateway_http_feed(&http,c,p->payload,p->len);
+            if(status>1) break;
+        }
+        netbuf_delete(buffer);
+    }
+    if(status==1) status=gateway_http_process(&http,c);
+    const char *body="{\"status\":\"error\"}";
+    size_t length=strlen(body);
+    if(c->gate_len>=GATE_RESPONSE_HEADER_SIZE && (status==200 || status==400 || status==401 || status==403 || status==429)) {
+        const GateResponse *r=(const GateResponse *)c->gate;
+        if(r->body_len==c->gate_len-GATE_RESPONSE_HEADER_SIZE) { body=(const char *)r->body; length=r->body_len; }
+    }
+    const char *type="application/json";
+    if(status==200 && http.dashboard) { body=(const char *)gateway_dashboard; length=sizeof(gateway_dashboard); type="text/html; charset=utf-8"; }
+    if(status==200 && http.script) { body=(const char *)gateway_dashboard_js; length=sizeof(gateway_dashboard_js); type="application/javascript; charset=utf-8"; }
+    if(status==200 && http.demo) type="text/plain; charset=utf-8";
+    /* Raw input is no longer owned by extraction. Small responses are coalesced;
+     * larger immutable flash assets stream after the header using the same
+     * absolute send deadline. No large response allocation is required. */
+    char *response=(char *)http.raw;
+    int n=gateway_http_typed_header(response,sizeof(http.raw),status,length,type);
+    if(n>0 && gateway_link_up && epoch==gateway_link_epoch) {
+        const char *parts[2]={response,body}; size_t sizes[2]={(size_t)n,length}; unsigned count=2;
+        if(length<=sizeof(http.raw)-(size_t)n) {
+            memcpy(response+n,body,length); sizes[0]+=length; count=1;
+        }
+        uint32_t send_start=osKernelGetTickCount(); last_send=ERR_OK;
+        for(unsigned part=0;part<count && last_send==ERR_OK;++part) {
+            size_t offset=0;
+            while(offset<sizes[part]) {
+                uint32_t elapsed=osKernelGetTickCount(); elapsed-=send_start;
+                if(elapsed>=2000 || !gateway_link_up || epoch!=gateway_link_epoch) { last_send=ERR_TIMEOUT; break; }
+                netconn_set_sendtimeout(conn,2000-elapsed);
+                size_t written=0;
+                last_send=netconn_write_partly(conn,parts[part]+offset,sizes[part]-offset,NETCONN_COPY,&written);
+                if(last_send!=ERR_OK) break;
+                if(!written) { last_send=ERR_TIMEOUT; break; }
+                offset+=written;
+            }
+        }
+    }
+    last_status=status;
+    gateway_log("[HTTP] status=%d bytes=%lu header=%d send=%d\n",status,(unsigned long)http.used,n,last_send);
+    ++requests;
+}
+void gateway_network_run(void)
+{
+    gateway_init(&gateway_test_context);
+    osSemaphoreId_t sem=osSemaphoreNew(1,0,NULL);
+    if(!sem) gateway_panic(GATEWAY_FAULT_ALLOC);
+    tcpip_init(tcp_ready,sem);
+    if(osSemaphoreAcquire(sem,10000)!=osOK) gateway_panic(GATEWAY_FAULT_STARTUP);
+    (void)osSemaphoreDelete(sem);
+    ip4_addr_t ip,mask,gw;
+    IP4_ADDR(&ip,192,168,40,128); IP4_ADDR(&mask,255,255,255,0); IP4_ADDR(&gw,0,0,0,0);
+    if(netifapi_netif_add(&network,&ip,&mask,&gw,NULL,gateway_ethernet_init,tcpip_input)!=ERR_OK ||
+        netifapi_netif_set_default(&network)!=ERR_OK || netifapi_netif_set_up(&network)!=ERR_OK)
+        gateway_panic(GATEWAY_FAULT_STARTUP);
+    struct netconn *listener=netconn_new(NETCONN_TCP);
+    if(!listener || netconn_bind(listener,IP_ADDR_ANY,80)!=ERR_OK || netconn_listen_with_backlog(listener,1)!=ERR_OK)
+        gateway_panic(GATEWAY_FAULT_STARTUP);
+    netconn_set_recvtimeout(listener,250);
+    ready=1;
+    gateway_log("[HTTP] READY 192.168.40.128/24:80 lab_bearer=%u RAM policy; no TLS\n",GATEWAY_LAB_AUTH);
+    for(;;) {
+        struct netconn *conn=NULL;
+        err_t err=netconn_accept(listener,&conn);
+        if(err!=ERR_OK) { (void)osDelay(10); continue; }
+        serve(conn);
+        (void)netconn_close(conn); (void)netconn_delete(conn);
+    }
+}

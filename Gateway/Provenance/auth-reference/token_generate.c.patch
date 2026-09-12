@@ -1,0 +1,43 @@
+--- /home/iamfo470/phd/camkes-vm-examples/projects/http_gateway_x86/components/Authenticator/token_generate.c
++++ Gateway/Auth/token_generate.c
+@@ -1,7 +1,7 @@
+ /*
+  * token_generate.c -- HMAC-SHA256 token generation
+  *
+- * Token = <subject_hex>:<role_hex>:<scope_hex>:<hmac_hex>
++ * Token = <subject_hex>-<role_hex>-<scope_hex>-<hmac_hex>
+  * HMAC computed over: subject || role || scope (deterministic).
+  *
+  * SPDX-License-Identifier: BSD-2-Clause
+@@ -52,7 +52,7 @@
+     Hacl_HMAC_compute_sha2_256(hmac, (uint8_t *)SERVER_SECRET, 32,
+                                 payload, plen);
+ 
+-    /* Format: <subject_hex>:<role_hex>:<scope_hex>:<hmac_hex> */
++    /* Format: <subject_hex>-<role_hex>-<scope_hex>-<hmac_hex> */
+     uint8_t pos = 0;
+     uint8_t max = 127; /* token_buf is 128, leave room */
+ 
+@@ -60,19 +60,19 @@
+                        token_out + pos, max - pos);
+     if (n == 0) return 0;
+     pos += n;
+-    token_out[pos++] = ':';
++    token_out[pos++] = '-';
+ 
+     n = hex_encode(&role, 1, token_out + pos, max - pos);
+     if (n == 0) return 0;
+     pos += n;
+-    token_out[pos++] = ':';
++    token_out[pos++] = '-';
+ 
+     uint8_t scope_le[2] = { (uint8_t)(scope & 0xFF),
+                              (uint8_t)((scope >> 8) & 0xFF) };
+     n = hex_encode(scope_le, 2, token_out + pos, max - pos);
+     if (n == 0) return 0;
+     pos += n;
+-    token_out[pos++] = ':';
++    token_out[pos++] = '-';
+ 
+     n = hex_encode(hmac, 32, token_out + pos, max - pos);
+     if (n == 0) return 0;

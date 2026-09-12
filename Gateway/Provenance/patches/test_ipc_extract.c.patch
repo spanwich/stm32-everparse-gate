@@ -1,0 +1,75 @@
+--- verified/test_ipc_extract.c
++++ Gateway/SelfTest/test_ipc_extract.c
+@@ -1,3 +1,7 @@
++#include <stdio.h>
++#include "gateway_tests.h"
++#define printf gateway_test_printf
++/* Adapted test harness; original assertion logic retained. */
+ /*
+  * Test harness for F*-verified IPC.Extract module
+  *
+@@ -15,9 +19,7 @@
+ #include <stdint.h>
+ 
+ /*
+- * Standalone implementation matching IPC.Extract.fst.
+- * In the CAmkES build, these come from IPC_Extract.c.
+- * Here we inline them for standalone testing.
++ * The port links the active generated IPC_Extract.c implementation.
+  */
+ 
+ #define OFF_RATE_COUNT      0
+@@ -34,30 +36,9 @@
+ #define AUTH_OFF_SUB_LEN    4
+ #define AUTH_OFF_SUB_START  5
+ 
+-static void populate_auth_fields(uint8_t *out_buf, const uint8_t *auth_buf)
+-{
+-    uint8_t raw_role = auth_buf[AUTH_OFF_ROLE];
+-    uint8_t role = (raw_role > 2) ? 2 : raw_role;
+-    out_buf[OFF_ROLE] = role;
++#include "IPC_Extract.h"
+ 
+-    out_buf[OFF_SCOPE_LO] = auth_buf[AUTH_OFF_SCOPE_LO];
+-    out_buf[OFF_SCOPE_HI] = auth_buf[AUTH_OFF_SCOPE_HI];
+-
+-    uint8_t raw_sub_len = auth_buf[AUTH_OFF_SUB_LEN];
+-    uint8_t sub_len = (raw_sub_len > SUBJECT_ID_MAX) ? SUBJECT_ID_MAX : raw_sub_len;
+-    out_buf[OFF_SUBJECT_ID_LEN] = sub_len;
+-
+-    for (uint8_t i = 0; i < sub_len; i++) {
+-        out_buf[OFF_SUBJECT_ID + i] = auth_buf[AUTH_OFF_SUB_START + i];
+-    }
+-}
+-
+-static void populate_rate_field(uint8_t *out_buf, uint8_t rate_val)
+-{
+-    out_buf[OFF_RATE_COUNT] = rate_val;
+-}
+-
+-/* ============================================================ */
++/* Generated IPC implementation linked by both host and MCU builds. */
+ 
+ static int pass = 0, total = 0;
+ 
+@@ -71,7 +52,7 @@
+     } \
+ } while(0)
+ 
+-int main(void)
++static int run_original_suite_ipc_extract(void)
+ {
+     printf("=== IPC.Extract test suite ===\n\n");
+ 
+@@ -170,3 +151,11 @@
+     printf("\n=== Results: %d/%d passed ===\n", pass, total);
+     return (pass == total) ? 0 : 1;
+ }
++
++void gateway_test_ipc_extract(GatewayTestStats *s)
++{
++    pass = total = 0;
++    (void)run_original_suite_ipc_extract();
++    s->passed += (uint32_t)pass;
++    s->total += (uint32_t)total;
++}

@@ -1,0 +1,60 @@
+--- lwip/system/OS/sys_arch.c
++++ Gateway/Network/sys_arch.c
+@@ -40,6 +40,8 @@
+ #if !NO_SYS
+ 
+ #include "cmsis_os.h"
++#include "gateway_platform.h"
++osThreadId_t gateway_tcpip_task;
+ 
+ #if defined(LWIP_PROVIDE_ERRNO)
+ int errno;
+@@ -163,6 +165,8 @@
+ */
+ u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
+ {
++  void *discard;
++  if (!msg) msg = &discard;
+ #if (osCMSIS < 0x20000U)
+   osEvent event;
+   uint32_t starttime = osKernelSysTick();
+@@ -212,6 +216,8 @@
+ */
+ u32_t sys_arch_mbox_tryfetch(sys_mbox_t *mbox, void **msg)
+ {
++  void *discard;
++  if (!msg) msg = &discard;
+ #if (osCMSIS < 0x20000U)
+   osEvent event;
+ 
+@@ -381,7 +387,9 @@
+ #if (osCMSIS < 0x20000U)
+   lwip_sys_mutex = osMutexCreate(osMutex(lwip_sys_mutex));
+ #else
+-  lwip_sys_mutex = osMutexNew(NULL);
++  const osMutexAttr_t attr = {.attr_bits = osMutexRecursive | osMutexPrioInherit};
++  lwip_sys_mutex = osMutexNew(&attr);
++  if (!lwip_sys_mutex) gateway_panic(GATEWAY_FAULT_ALLOC);
+ #endif
+ }
+ /*-----------------------------------------------------------------------------------*/
+@@ -463,7 +471,9 @@
+                         .stack_size = stacksize,
+                         .priority = (osPriority_t)prio,
+                       };
+-  return osThreadNew(thread, arg, &attributes);
++  gateway_tcpip_task = osThreadNew(thread, arg, &attributes);
++  if (!gateway_tcpip_task) gateway_panic(GATEWAY_FAULT_ALLOC);
++  return gateway_tcpip_task;
+ #endif
+ }
+ 
+@@ -510,3 +520,8 @@
+ }
+ 
+ #endif /* !NO_SYS */
++
++/* This project's FreeRTOS clock is 1000 Hz; lwIP timeouts are milliseconds. */
++_Static_assert(configTICK_RATE_HZ == 1000, "Adapt sys_arch millisecond conversions when changing the RTOS tick");
++u32_t sys_now(void) { return osKernelGetTickCount(); }
++u32_t sys_jiffies(void) { return osKernelGetTickCount(); }

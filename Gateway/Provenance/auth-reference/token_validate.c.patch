@@ -1,0 +1,34 @@
+--- /home/iamfo470/phd/camkes-vm-examples/projects/http_gateway_x86/components/Authenticator/token_validate.c
++++ Gateway/Auth/token_validate.c
+@@ -1,7 +1,7 @@
+ /*
+  * token_validate.c -- HMAC-SHA256 token validation
+  *
+- * Token format: <subject_hex>:<role_hex>:<scope_hex>:<hmac_hex>
++ * Token format: <subject_hex>-<role_hex>-<scope_hex>-<hmac_hex>
+  * Validation: parse claims from token, recompute HMAC, compare.
+  *
+  * SPDX-License-Identifier: BSD-2-Clause
+@@ -44,11 +44,11 @@
+     return nbytes;
+ }
+ 
+-/* Find next ':' in token starting at pos. Returns index or -1. */
++/* Find next '-' in token starting at pos. Returns index or -1. */
+ static int find_colon(const char *token, uint8_t token_len, uint8_t start)
+ {
+     for (uint8_t i = start; i < token_len; i++) {
+-        if (token[i] == ':') return i;
++        if (token[i] == '-') return i;
+     }
+     return -1;
+ }
+@@ -57,7 +57,7 @@
+                    uint8_t *role, uint16_t *scope,
+                    char *subject, uint8_t *subject_len)
+ {
+-    /* Parse: <subject_hex>:<role_hex>:<scope_hex>:<hmac_hex> */
++    /* Parse: <subject_hex>-<role_hex>-<scope_hex>-<hmac_hex> */
+     int c1 = find_colon(token, token_len, 0);
+     if (c1 < 0) return 0;
+ 
