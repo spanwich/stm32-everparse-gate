@@ -1,0 +1,1 @@
+This partial valid-request run was stopped after 1,000 requests because the driver had not yet installed the required three-active-rule paper policy. The UART log is retained for audit; no result from this run enters the M3 summary. The corrected driver installs the 65-byte three-rule/five-sentinel policy before every scenario.

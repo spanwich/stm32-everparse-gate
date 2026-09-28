@@ -61,10 +61,14 @@ callgraph = read(root / 'm4/entrypoints-final-primary.json')
 assert len(callgraph['register_indirect_calls']) == 125
 cedar = read(root / 'm1/cedar-historical/cedar-thumb-build-result.json')
 assert cedar['exit_code'] == 101
+soaks = [read(root / f'm4/repeated-soak-primary/run-{n}/network/summary.json')
+         for n in range(1, 6)]
+assert all(row['passed'] == 34 and row['requests_in_soak'] == 1000 for row in soaks)
 
 output = {
     'schema': 'paper-evidence-r1-1',
     'firmware': {
+        'source_commit': '7000fab1440301ccb76c8c61c1ea854d1ceeb89b',
         'primary_build_parent_commit': manifest['git_commit'],
         'primary_build_dirty_tree_diff_sha256': manifest['dirty_tree_diff_sha256'],
         'primary_build_source_tree_sha256': manifest['source_tree_sha256'],
@@ -95,6 +99,10 @@ output = {
     'control_task_samples': {n: scenarios[n]['control_samples'] for n in scenarios},
     'load_requests': {n: scenarios[n]['requests'] for n in scenarios},
     'load_cpu_share_by_task': {n: scenarios[n]['cpu_share_by_task'] for n in scenarios},
+    'gate_share_of_gateway_task_runtime': {
+        n: scenarios[n]['cpu_share_gate'] / scenarios[n]['cpu_share_by_task']['gateway_core']
+        for n in scenarios
+    },
     'valid_load_gate_share_of_measured_request_processing': scenarios['valid']['decision_share_of_request_processing'],
     'flash_bytes': {n: c['flash_bytes'] for n, c in footprint['components'].items()},
     'ram_bytes': {n: c['ram_bytes'] for n, c in footprint['components'].items()},
@@ -121,6 +129,13 @@ output = {
     'm4_acceptance_count': m4['acceptance_count'],
     'm4_concurrent_pairs': m4['concurrent_pairs'],
     'm4_policy_restored': m4['policy_restored'],
+    'm4_audit_uart_log': 'm4/campaign-100000-rawsocket-final-primary/uart.log',
+    'repeated_soaks': {
+        'runs': len(soaks), 'test_groups_passed_each': [row['passed'] for row in soaks],
+        'requests_each': [row['requests_in_soak'] for row in soaks],
+        'elapsed_seconds_each': [row['soak_seconds'] for row in soaks],
+        'earlier_timeout_root_cause': None,
+    },
     'oracle_disagreements': attack['disagreements'],
     'paper_reference_corpus_cases': 12527,
     'paper_reference_corpus_failures': 0,
@@ -133,8 +148,10 @@ output = {
                                     'privilege_escalation')},
     'dma_disjoint': {
         'linked_configured_buffers': True,
-        'gate_context_start': '0x20002468',
-        'gate_context_end_exclusive': '0x20004704',
+        'primary_gate_context_start': '0x20002450',
+        'primary_gate_context_end_exclusive': '0x200046ec',
+        'control_variant_gate_context_start': '0x20002468',
+        'control_variant_gate_context_end_exclusive': '0x20004704',
         'ethernet_reserved_start': '0x20070000',
         'ethernet_reserved_end_exclusive': '0x20080000',
         'arbitrary_dma_write_excluded': False,
