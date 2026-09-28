@@ -11,7 +11,9 @@ out.mkdir(parents=True, exist_ok=True)
 subprocess.run(['python3', str(root / 'Gateway/tools/check_project.py')], check=True)
 compiler = '/opt/st/stm32cubeide_2.0.0/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.linux64_1.0.100.202509120712/tools/bin'
 env = os.environ.copy(); env['PATH'] = compiler + os.pathsep + env['PATH']
-cmd = ['/opt/st/stm32cubeide_2.0.0/headless-build.sh', '-data', str(out / 'ide-workspace'),
+cmd = ['/opt/st/stm32cubeide_2.0.0/headless-build.sh',
+       '-configuration', str(out / 'ide-configuration'),
+       '-data', str(out / 'ide-workspace'),
        '-import', str(root), '-cleanBuild', 'policy_gate/Debug', '-cleanBuild', 'policy_gate/Release']
 print('Build log:', out / 'build.log', flush=True)
 with (out / 'build.log').open('w') as log:

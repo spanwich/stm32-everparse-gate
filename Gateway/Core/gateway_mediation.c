@@ -4,6 +4,7 @@
 #include "gateway_mediation.h"
 #include "gateway_login.h"
 #include "gateway_clear.h"
+#include "gateway_audit.h"
 #include "gateway_routes.h"
 #include "../Generated/Mediation/Mediation_Wrapper.h"
 #include "../Generated/Mediation/Mediation_Extern.h"
@@ -18,8 +19,9 @@ bool gateway_mediation_check(uint8_t kind, uint8_t *bytes, uint32_t length);
 bool Mediation_Extern_check(uint8_t kind, uint32_t length, uint8_t *request,
                           uint8_t *policy, uint8_t *login, uint8_t *envelope)
 {
-    (void)request; (void)policy; (void)login;
-    return gateway_mediation_check(kind,envelope,length);
+    bool accepted=gateway_mediation_check(kind,envelope,length);
+    if(accepted) gateway_audit_accept(kind,length,request,policy,login);
+    return accepted;
 }
 
 static void unpack_policy(Policy *out, const uint8_t *in)
@@ -58,8 +60,8 @@ static int message(GatewayContext *c, unsigned status, const char *text)
 uint32_t Mediation_Extern_invoke(uint8_t kind, uint32_t length, uint8_t *request,
                                uint8_t *policy, uint8_t *login, uint8_t *context)
 {
-    (void)length; (void)login; (void)policy;
     GatewayContext *c=(GatewayContext *)context;
+    gateway_audit_effect(kind,length,request,policy,login,c);
     const SecurityParamsWire *p=(const SecurityParamsWire *)request;
     if(kind==GATEWAY_PUBLIC) {
         c->dispatch_count++; c->result=GATEWAY_DISPATCHED;

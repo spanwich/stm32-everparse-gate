@@ -9,6 +9,7 @@ p.add_argument('--config',choices=['Debug','Release'],default='Debug')
 a=p.add_mutually_exclusive_group(required=True); a.add_argument('--flash',action='store_true'); a.add_argument('--reset',action='store_true')
 p.add_argument('--output',type=Path,required=True)
 p.add_argument('--seconds',type=float,default=25)
+p.add_argument('--expected-selftests',type=int)
 args=p.parse_args(); root=Path(__file__).resolve().parents[2]; out=args.output.resolve(); out.mkdir(parents=True,exist_ok=True)
 cli='/opt/st/stm32cubeide_2.0.0/plugins/com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.linux64_2.2.300.202508131133/tools/bin/STM32_Programmer_CLI'
 elf=root/args.config/'policy_gate.elf'
@@ -16,7 +17,10 @@ if args.flash:
  subprocess.run(['python3',str(root/'Gateway/tools/check_firmware.py'),str(elf)],check=True)
  staged=out/'policy_gate.elf';shutil.copy2(elf,staged);elf=staged
 image_hash=hashlib.sha256(elf.read_bytes()).hexdigest()
-fd=os.open('/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066FFF555567894967085545-if02',os.O_RDONLY|os.O_NONBLOCK|os.O_NOCTTY)
+serial='/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066FFF555567894967085545-if02'
+if subprocess.run(['fuser','-s','/dev/ttyACM1'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:
+ raise SystemExit('/dev/ttyACM1 is already open; close minicom or other serial readers before resetting the board')
+fd=os.open(serial,os.O_RDONLY|os.O_NONBLOCK|os.O_NOCTTY)
 attr=termios.tcgetattr(fd); attr[0]=attr[1]=attr[3]=0; attr[2]=termios.CS8|termios.CREAD|termios.CLOCAL
 attr[4]=attr[5]=termios.B115200; attr[6][termios.VMIN]=0; attr[6][termios.VTIME]=0
 termios.tcsetattr(fd,termios.TCSANOW,attr); termios.tcflush(fd,termios.TCIFLUSH)
@@ -47,6 +51,8 @@ finally:
  (out/('elf.sha256' if args.flash else 'workspace-elf-unverified.sha256')).write_text(image_hash+'\n')
 m=re.search(r'\[CORE SELFTEST\] PASS (\d+)/(\d+)',log)
 assert m and int(m[1])>=193 and m[1]==m[2], 'Fresh core test acceptance missing'
+if args.expected_selftests is not None:
+ assert int(m[1])==args.expected_selftests, 'Self-test count differs from the pinned image expectation'
 assert '[HTTP] READY' in log, 'Listener startup missing'
 assert len(re.findall(r'\[HEARTBEAT\] PASS',log))>=5, 'Insufficient heartbeats'
 assert 'margin=LOW' not in log and re.search(r'log_drops=[1-9]',log) is None, 'Stack/log acceptance failed'

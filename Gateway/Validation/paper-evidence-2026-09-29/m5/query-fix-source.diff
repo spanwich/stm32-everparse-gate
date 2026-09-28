@@ -1,0 +1,30 @@
+diff --git a/Gateway/Core/gateway_http.c b/Gateway/Core/gateway_http.c
+index 7681bab..5a439ed 100644
+--- a/Gateway/Core/gateway_http.c
++++ b/Gateway/Core/gateway_http.c
+@@ -40,7 +40,10 @@ static int headers(GatewayHttp *h, GatewayContext *c)
+     bool post=a==4 && !memcmp(p,"POST",4);
+     bool put=a==3 && !memcmp(p,"PUT",3);
+     if (!get && !post && !put) return 400;
+-    for(size_t i=a+1;i<b;++i) if(p[i]<=32 || p[i]>=127) return 400;
++    /* This gateway has no query or fragment semantics. Keep the request target
++     * exact so the extractor cannot authorize a path prefix before '?'. */
++    for(size_t i=a+1;i<b;++i)
++        if(p[i]<=32 || p[i]>=127 || p[i]=='?' || p[i]=='#') return 400;
+     bool v11=e-b-1==8 && !memcmp(p+b+1,"HTTP/1.1",8);
+     if (!v11 && !(e-b-1==8 && !memcmp(p+b+1,"HTTP/1.0",8))) return 400;
+     h->dashboard=get && b-a-1==1 && p[a+1]=='/';
+diff --git a/Gateway/SelfTest/test_http.c b/Gateway/SelfTest/test_http.c
+index 22b5246..ef1b699 100644
+--- a/Gateway/SelfTest/test_http.c
++++ b/Gateway/SelfTest/test_http.c
+@@ -42,6 +42,9 @@ void gateway_test_http(GatewayTestStats *s)
+       {"GET /api/policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",403},
+       {"GET /api/policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-admin\r\n\r\n",200},
+       {"GET /api/status HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-admin\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",400},
++      {"GET /api/status?api/policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",400},
++      {"GET /api/login?next=/api/policy HTTP/1.1\r\nHost: b\r\n\r\n",400},
++      {"GET /api/status#policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",400},
+       {"GET /api/status HTTP/1.1\r\nHost: b\r\nContent-Length: 0\r\ncontent-length: 0\r\n\r\n",400},
+       {"GET /api/status HTTP/1.1\r\nHost: b\r\nTransfer-Encoding: chunked\r\n\r\n",400},
+       {"GET /api/status HTTP/1.1\r\nHost: b\r\nExpect: 100-continue\r\n\r\n",417},

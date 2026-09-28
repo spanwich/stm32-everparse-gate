@@ -40,7 +40,10 @@ static int headers(GatewayHttp *h, GatewayContext *c)
     bool post=a==4 && !memcmp(p,"POST",4);
     bool put=a==3 && !memcmp(p,"PUT",3);
     if (!get && !post && !put) return 400;
-    for(size_t i=a+1;i<b;++i) if(p[i]<=32 || p[i]>=127) return 400;
+    /* This gateway has no query or fragment semantics. Keep the request target
+     * exact so the extractor cannot authorize a path prefix before '?'. */
+    for(size_t i=a+1;i<b;++i)
+        if(p[i]<=32 || p[i]>=127 || p[i]=='?' || p[i]=='#') return 400;
     bool v11=e-b-1==8 && !memcmp(p+b+1,"HTTP/1.1",8);
     if (!v11 && !(e-b-1==8 && !memcmp(p+b+1,"HTTP/1.0",8))) return 400;
     h->dashboard=get && b-a-1==1 && p[a+1]=='/';

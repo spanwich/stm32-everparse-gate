@@ -1,5 +1,6 @@
 #include "gateway_network.h"
 #include "gateway_http.h"
+#include "gateway_audit.h"
 #include "../Web/dashboard_html.h"
 _Static_assert(sizeof(gateway_dashboard)<=16384 && sizeof(gateway_dashboard_js)<=16384, "static asset bound");
 #include "gateway_platform.h"
@@ -65,17 +66,18 @@ static void serve(struct netconn *conn)
 {
     GatewayContext *c=&gateway_test_context;
     gateway_begin_request(c); gateway_http_init(&http);
+    gateway_audit_begin(c);
     netconn_set_sendtimeout(conn,2000); netconn_set_recvtimeout(conn,250);
     conn->linger=2;
     uint32_t start=osKernelGetTickCount(),epoch=gateway_link_epoch;
     int status=0;
     while(!status) {
-        if(!gateway_link_up || epoch!=gateway_link_epoch) { ++rx_failures; return; }
+        if(!gateway_link_up || epoch!=gateway_link_epoch) { ++rx_failures; (void)gateway_audit_finish(); return; }
         if((uint32_t)(osKernelGetTickCount()-start)>=5000) { status=408; break; }
         struct netbuf *buffer=NULL;
         err_t err=netconn_recv(conn,&buffer);
         if(err==ERR_TIMEOUT) continue;
-        if(err!=ERR_OK) { if(buffer) netbuf_delete(buffer); ++rx_failures; return; }
+        if(err!=ERR_OK) { if(buffer) netbuf_delete(buffer); ++rx_failures; (void)gateway_audit_finish(); return; }
         for(struct pbuf *p=buffer->p;p;p=p->next) {
             if(status==1 && p->len) { status=400; break; }
             status=gateway_http_feed(&http,c,p->payload,p->len);
@@ -84,6 +86,7 @@ static void serve(struct netconn *conn)
         netbuf_delete(buffer);
     }
     if(status==1) status=gateway_http_process(&http,c);
+    GatewayAuditRecord audit=gateway_audit_finish();
     const char *body="{\"status\":\"error\"}";
     size_t length=strlen(body);
     if(c->gate_len>=GATE_RESPONSE_HEADER_SIZE && (status==200 || status==400 || status==401 || status==403 || status==429)) {
@@ -99,6 +102,13 @@ static void serve(struct netconn *conn)
      * absolute send deadline. No large response allocation is required. */
     char *response=(char *)http.raw;
     int n=gateway_http_typed_header(response,sizeof(http.raw),status,length,type);
+    if(n>=2) {
+        int extra=snprintf(response+n-2,sizeof(http.raw)-(size_t)(n-2),
+            "X-PG-Audit-Id: %lu\r\nX-PG-Audit-Accepts: %lu\r\nX-PG-Audit-Effects: %lu\r\nX-PG-Audit-Violations: %lu\r\n\r\n",
+            (unsigned long)audit.request_id,(unsigned long)audit.acceptances,
+            (unsigned long)audit.effects,(unsigned long)audit.violations);
+        n=extra>=0 && (size_t)extra<sizeof(http.raw)-(size_t)(n-2)?n-2+extra:-1;
+    }
     if(n>0 && gateway_link_up && epoch==gateway_link_epoch) {
         const char *parts[2]={response,body}; size_t sizes[2]={(size_t)n,length}; unsigned count=2;
         if(length<=sizeof(http.raw)-(size_t)n) {

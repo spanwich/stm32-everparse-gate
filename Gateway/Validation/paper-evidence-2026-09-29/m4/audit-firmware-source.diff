@@ -1,0 +1,216 @@
+diff --git a/Gateway/Core/gateway_http.c b/Gateway/Core/gateway_http.c
+index 7681bab..5a439ed 100644
+--- a/Gateway/Core/gateway_http.c
++++ b/Gateway/Core/gateway_http.c
+@@ -40,7 +40,10 @@ static int headers(GatewayHttp *h, GatewayContext *c)
+     bool post=a==4 && !memcmp(p,"POST",4);
+     bool put=a==3 && !memcmp(p,"PUT",3);
+     if (!get && !post && !put) return 400;
+-    for(size_t i=a+1;i<b;++i) if(p[i]<=32 || p[i]>=127) return 400;
++    /* This gateway has no query or fragment semantics. Keep the request target
++     * exact so the extractor cannot authorize a path prefix before '?'. */
++    for(size_t i=a+1;i<b;++i)
++        if(p[i]<=32 || p[i]>=127 || p[i]=='?' || p[i]=='#') return 400;
+     bool v11=e-b-1==8 && !memcmp(p+b+1,"HTTP/1.1",8);
+     if (!v11 && !(e-b-1==8 && !memcmp(p+b+1,"HTTP/1.0",8))) return 400;
+     h->dashboard=get && b-a-1==1 && p[a+1]=='/';
+diff --git a/Gateway/Core/gateway_mediation.c b/Gateway/Core/gateway_mediation.c
+index 26c4731..08e48c3 100644
+--- a/Gateway/Core/gateway_mediation.c
++++ b/Gateway/Core/gateway_mediation.c
+@@ -4,6 +4,7 @@
+ #include "gateway_mediation.h"
+ #include "gateway_login.h"
+ #include "gateway_clear.h"
++#include "gateway_audit.h"
+ #include "gateway_routes.h"
+ #include "../Generated/Mediation/Mediation_Wrapper.h"
+ #include "../Generated/Mediation/Mediation_Extern.h"
+@@ -18,8 +19,9 @@ bool gateway_mediation_check(uint8_t kind, uint8_t *bytes, uint32_t length);
+ bool Mediation_Extern_check(uint8_t kind, uint32_t length, uint8_t *request,
+                           uint8_t *policy, uint8_t *login, uint8_t *envelope)
+ {
+-    (void)request; (void)policy; (void)login;
+-    return gateway_mediation_check(kind,envelope,length);
++    bool accepted=gateway_mediation_check(kind,envelope,length);
++    if(accepted) gateway_audit_accept(kind,length,request,policy,login);
++    return accepted;
+ }
+ 
+ static void unpack_policy(Policy *out, const uint8_t *in)
+@@ -58,8 +60,8 @@ static int message(GatewayContext *c, unsigned status, const char *text)
+ uint32_t Mediation_Extern_invoke(uint8_t kind, uint32_t length, uint8_t *request,
+                                uint8_t *policy, uint8_t *login, uint8_t *context)
+ {
+-    (void)length; (void)login; (void)policy;
+     GatewayContext *c=(GatewayContext *)context;
++    gateway_audit_effect(kind,length,request,policy,login,c);
+     const SecurityParamsWire *p=(const SecurityParamsWire *)request;
+     if(kind==GATEWAY_PUBLIC) {
+         c->dispatch_count++; c->result=GATEWAY_DISPATCHED;
+diff --git a/Gateway/Network/gateway_network.c b/Gateway/Network/gateway_network.c
+index c8f8e13..05ac5a3 100644
+--- a/Gateway/Network/gateway_network.c
++++ b/Gateway/Network/gateway_network.c
+@@ -1,5 +1,6 @@
+ #include "gateway_network.h"
+ #include "gateway_http.h"
++#include "gateway_audit.h"
+ #include "../Web/dashboard_html.h"
+ _Static_assert(sizeof(gateway_dashboard)<=16384 && sizeof(gateway_dashboard_js)<=16384, "static asset bound");
+ #include "gateway_platform.h"
+@@ -65,17 +66,18 @@ static void serve(struct netconn *conn)
+ {
+     GatewayContext *c=&gateway_test_context;
+     gateway_begin_request(c); gateway_http_init(&http);
++    gateway_audit_begin(c);
+     netconn_set_sendtimeout(conn,2000); netconn_set_recvtimeout(conn,250);
+     conn->linger=2;
+     uint32_t start=osKernelGetTickCount(),epoch=gateway_link_epoch;
+     int status=0;
+     while(!status) {
+-        if(!gateway_link_up || epoch!=gateway_link_epoch) { ++rx_failures; return; }
++        if(!gateway_link_up || epoch!=gateway_link_epoch) { ++rx_failures; (void)gateway_audit_finish(); return; }
+         if((uint32_t)(osKernelGetTickCount()-start)>=5000) { status=408; break; }
+         struct netbuf *buffer=NULL;
+         err_t err=netconn_recv(conn,&buffer);
+         if(err==ERR_TIMEOUT) continue;
+-        if(err!=ERR_OK) { if(buffer) netbuf_delete(buffer); ++rx_failures; return; }
++        if(err!=ERR_OK) { if(buffer) netbuf_delete(buffer); ++rx_failures; (void)gateway_audit_finish(); return; }
+         for(struct pbuf *p=buffer->p;p;p=p->next) {
+             if(status==1 && p->len) { status=400; break; }
+             status=gateway_http_feed(&http,c,p->payload,p->len);
+@@ -84,6 +86,7 @@ static void serve(struct netconn *conn)
+         netbuf_delete(buffer);
+     }
+     if(status==1) status=gateway_http_process(&http,c);
++    GatewayAuditRecord audit=gateway_audit_finish();
+     const char *body="{\"status\":\"error\"}";
+     size_t length=strlen(body);
+     if(c->gate_len>=GATE_RESPONSE_HEADER_SIZE && (status==200 || status==400 || status==401 || status==403 || status==429)) {
+@@ -99,6 +102,13 @@ static void serve(struct netconn *conn)
+      * absolute send deadline. No large response allocation is required. */
+     char *response=(char *)http.raw;
+     int n=gateway_http_typed_header(response,sizeof(http.raw),status,length,type);
++    if(n>=2) {
++        int extra=snprintf(response+n-2,sizeof(http.raw)-(size_t)(n-2),
++            "X-PG-Audit-Id: %lu\r\nX-PG-Audit-Accepts: %lu\r\nX-PG-Audit-Effects: %lu\r\nX-PG-Audit-Violations: %lu\r\n\r\n",
++            (unsigned long)audit.request_id,(unsigned long)audit.acceptances,
++            (unsigned long)audit.effects,(unsigned long)audit.violations);
++        n=extra>=0 && (size_t)extra<sizeof(http.raw)-(size_t)(n-2)?n-2+extra:-1;
++    }
+     if(n>0 && gateway_link_up && epoch==gateway_link_epoch) {
+         const char *parts[2]={response,body}; size_t sizes[2]={(size_t)n,length}; unsigned count=2;
+         if(length<=sizeof(http.raw)-(size_t)n) {
+diff --git a/Gateway/SelfTest/test_http.c b/Gateway/SelfTest/test_http.c
+index 22b5246..ef1b699 100644
+--- a/Gateway/SelfTest/test_http.c
++++ b/Gateway/SelfTest/test_http.c
+@@ -42,6 +42,9 @@ void gateway_test_http(GatewayTestStats *s)
+       {"GET /api/policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",403},
+       {"GET /api/policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-admin\r\n\r\n",200},
+       {"GET /api/status HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-admin\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",400},
++      {"GET /api/status?api/policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",400},
++      {"GET /api/login?next=/api/policy HTTP/1.1\r\nHost: b\r\n\r\n",400},
++      {"GET /api/status#policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",400},
+       {"GET /api/status HTTP/1.1\r\nHost: b\r\nContent-Length: 0\r\ncontent-length: 0\r\n\r\n",400},
+       {"GET /api/status HTTP/1.1\r\nHost: b\r\nTransfer-Encoding: chunked\r\n\r\n",400},
+       {"GET /api/status HTTP/1.1\r\nHost: b\r\nExpect: 100-continue\r\n\r\n",417},
+diff --git a/Gateway/Core/gateway_audit.c b/Gateway/Core/gateway_audit.c
+new file mode 100644
+index 0000000..f9de0f6
+--- /dev/null
++++ b/Gateway/Core/gateway_audit.c
+@@ -0,0 +1,61 @@
++/* M4/M5 instrumented-image observation. No heap, callbacks or retained input
++ * pointers. A mismatch is counted, not suppressed, so tests can see failures. */
++#include "gateway_audit.h"
++#include "gateway_clear.h"
++#include <string.h>
++
++static struct {
++    GatewayAuditRecord record;
++    GatewayContext *context;
++    uint8_t request[1536];
++    uint8_t policy[65];
++    uint8_t login[106];
++    uint8_t kind;
++    uint32_t length;
++    bool active;
++} audit;
++static uint32_t next_request_id;
++
++void gateway_audit_begin(GatewayContext *context)
++{
++    audit.record=(GatewayAuditRecord){.request_id=++next_request_id};
++    audit.context=context;
++    audit.active=true;
++}
++
++void gateway_audit_accept(uint8_t kind, uint32_t length,
++                          const uint8_t request[1536], const uint8_t policy[65],
++                          const uint8_t login[106])
++{
++    if (!audit.active) return;
++    if (++audit.record.acceptances!=1) ++audit.record.violations;
++    audit.kind=kind; audit.length=length;
++    memcpy(audit.request,request,sizeof(audit.request));
++    memcpy(audit.policy,policy,sizeof(audit.policy));
++    memcpy(audit.login,login,sizeof(audit.login));
++}
++
++void gateway_audit_effect(uint8_t kind, uint32_t length,
++                          const uint8_t request[1536], const uint8_t policy[65],
++                          const uint8_t login[106], const GatewayContext *context)
++{
++    if (!audit.active) return;
++    if (++audit.record.effects!=1 || audit.record.acceptances!=1 ||
++        context!=audit.context || kind!=audit.kind || length!=audit.length ||
++        memcmp(request,audit.request,sizeof(audit.request)) ||
++        memcmp(policy,audit.policy,sizeof(audit.policy)) ||
++        memcmp(login,audit.login,sizeof(audit.login)))
++        ++audit.record.violations;
++}
++
++GatewayAuditRecord gateway_audit_finish(void)
++{
++    GatewayAuditRecord result=audit.record;
++    if (result.effects>result.acceptances) ++result.violations;
++    audit.active=false;
++    audit.context=NULL;
++    gateway_clear(audit.request,sizeof(audit.request));
++    gateway_clear(audit.policy,sizeof(audit.policy));
++    gateway_clear(audit.login,sizeof(audit.login));
++    return result;
++}
+diff --git a/Gateway/Inc/gateway_audit.h b/Gateway/Inc/gateway_audit.h
+new file mode 100644
+index 0000000..7819b2b
+--- /dev/null
++++ b/Gateway/Inc/gateway_audit.h
+@@ -0,0 +1,25 @@
++#ifndef GATEWAY_AUDIT_H
++#define GATEWAY_AUDIT_H
++#include <stdbool.h>
++#include <stdint.h>
++#include "gateway_core.h"
++
++/* Research observation only. This state is trusted C outside the Low* model.
++ * The gateway task owns an active record from begin through finish. */
++typedef struct {
++    uint32_t request_id;
++    uint32_t acceptances;
++    uint32_t effects;
++    uint32_t violations;
++} GatewayAuditRecord;
++
++void gateway_audit_begin(GatewayContext *context);
++void gateway_audit_accept(uint8_t kind, uint32_t length,
++                          const uint8_t request[1536], const uint8_t policy[65],
++                          const uint8_t login[106]);
++void gateway_audit_effect(uint8_t kind, uint32_t length,
++                          const uint8_t request[1536], const uint8_t policy[65],
++                          const uint8_t login[106], const GatewayContext *context);
++GatewayAuditRecord gateway_audit_finish(void);
++
++#endif
