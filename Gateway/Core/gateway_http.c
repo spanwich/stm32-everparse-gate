@@ -40,22 +40,26 @@ static int headers(GatewayHttp *h, GatewayContext *c)
     bool post=a==4 && !memcmp(p,"POST",4);
     bool put=a==3 && !memcmp(p,"PUT",3);
     if (!get && !post && !put) return 400;
-    /* This gateway has no query or fragment semantics. Keep the request target
-     * exact so the extractor cannot authorize a path prefix before '?'. */
+    /* Match the reference extractor: '?' ends the authorization path, while
+     * '#' is an ordinary path byte and therefore never aliases a known path. */
     for(size_t i=a+1;i<b;++i)
-        if(p[i]<=32 || p[i]>=127 || p[i]=='?' || p[i]=='#') return 400;
+        if(p[i]<=32 || p[i]>=127) return 400;
+    size_t path_end=a+1;
+    while(path_end<b && p[path_end]!='?') ++path_end;
+    size_t path_len=path_end-(a+1);
     bool v11=e-b-1==8 && !memcmp(p+b+1,"HTTP/1.1",8);
     if (!v11 && !(e-b-1==8 && !memcmp(p+b+1,"HTTP/1.0",8))) return 400;
-    h->dashboard=get && b-a-1==1 && p[a+1]=='/';
-    h->script=get && b-a-1==13 && !memcmp(p+a+1,"/dashboard.js",13);
-    h->demo=b-a-1==5 && !memcmp(p+a+1,"/demo",5);
+    h->dashboard=get && path_len==1 && p[a+1]=='/';
+    h->script=get && path_len==13 && !memcmp(p+a+1,"/dashboard.js",13);
+    h->demo=path_len==5 && !memcmp(p+a+1,"/demo",5);
     if(h->demo && !get) return 400;
     c->request_len=0;
     /* The verified extractor retains its original fixed route set. This exact,
      * bounded alias lets it extract headers/body; the distinct route ID below
      * is supplied by handwritten integration, never by a client attribute. */
     if(h->demo) {
-        if(!append(c,"GET /api/status",15) || !append(c,p+b,e+2-b)) return 413;
+        if(!append(c,"GET /api/status",15) ||
+           !append(c,p+path_end,b-path_end) || !append(c,p+b,e+2-b)) return 413;
     } else if(!append(c,p,e+2)) return 413;
     size_t pos=e+2; unsigned auth=0, content=0, host=0;
     while(pos+2<end) {

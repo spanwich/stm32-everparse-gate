@@ -23,11 +23,16 @@
 #define PATH_STATUS   0x33333333u
 #define PATH_POLICY   0x44444444u
 #define DEAD_HASH     0xDEADDEADu  /* unused rule slot sentinel */
+#define INACTIVE_PATH_ID DEAD_HASH
 
 /* HTTP method codes */
-#define METHOD_GET    1
-#define METHOD_POST   2
-#define METHOD_PUT    3
+#define METHOD_GET    0x01u
+#define METHOD_POST   0x02u
+#define METHOD_PUT    0x04u
+#define METHOD_DELETE 0x08u
+#define METHOD_PATCH  0x10u
+#define METHOD_HEAD   0x20u
+#define METHOD_MASK_ALL 0x3fu
 
 /* Role levels */
 #define ROLE_NONE     0

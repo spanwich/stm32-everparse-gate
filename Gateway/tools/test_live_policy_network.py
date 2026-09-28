@@ -58,7 +58,8 @@ try:
     check('Admin can upload custom test rule',req('PUT','/api/policy',admin,encode(attack))[0]==200)
     check('Operator update still forbidden with permissive rule',req('PUT','/api/policy',operator,encode(original))[0]==403)
     check('Rejected update preserves custom policy',read()==attack)
-    for path in ['/demo/','/demo?x=1','/Demo','/demo%00','/dashboard.js/']:
+    check('Demo query uses same denied policy decision',req('GET','/demo?x=1',operator)[0]==req('GET','/demo',operator)[0]==403)
+    for path in ['/demo/','/Demo','/demo%00','/dashboard.js/']:
         check('No route alias bypass '+path,req('GET',path,operator)[0]==400)
     check('Demo POST rejected',req('POST','/demo',admin,b'{}')[0]==400)
 finally:

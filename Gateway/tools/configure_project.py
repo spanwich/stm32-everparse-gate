@@ -4,8 +4,11 @@ Run after CubeMX regeneration. Does not edit any generated Debug/Release makefil
 """
 from pathlib import Path
 import copy
+import re
 import xml.etree.ElementTree as ET
 root = Path(__file__).resolve().parents[2]
+paper_flags = (root / 'Gateway/Inc/paper_experiment.h').read_text()
+paper_alloc = bool(re.search(r'^#define\s+GATEWAY_PAPER_ALLOC\s+1\b', paper_flags, re.M))
 path = root / '.cproject'
 tree = ET.parse(path)
 for cfg in tree.findall('.//configuration'):
@@ -13,9 +16,9 @@ for cfg in tree.findall('.//configuration'):
     if entries is None:
         continue
     if not any(e.get('name') == 'Gateway' for e in entries):
-        ET.SubElement(entries, 'entry', {'excluding': 'tools|Provenance', 'flags': 'VALUE_WORKSPACE_PATH|RESOLVED', 'kind': 'sourcePath', 'name': 'Gateway'})
+        ET.SubElement(entries, 'entry', {'excluding': 'tools|Provenance|Validation', 'flags': 'VALUE_WORKSPACE_PATH|RESOLVED', 'kind': 'sourcePath', 'name': 'Gateway'})
     gateway_entry = next(e for e in entries if e.get('name') == 'Gateway')
-    gateway_entry.set('excluding', 'tools|Provenance|Network')
+    gateway_entry.set('excluding', 'tools|Provenance|Network|Validation')
     network_entries = {
         'Gateway/Network': 'lwip|lan8742',
         'Gateway/Network/lan8742': '',
@@ -29,6 +32,21 @@ for cfg in tree.findall('.//configuration'):
             entry = ET.SubElement(entries, 'entry', {'flags': 'VALUE_WORKSPACE_PATH|RESOLVED', 'kind': 'sourcePath', 'name': name})
         entry.set('excluding', excludes)
     base = next(f for f in cfg.findall('folderInfo') if f.get('resourcePath') == '')
+    for tool in base.findall('.//tool'):
+        if tool.get('superClass') != 'com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker':
+            continue
+        option = next((o for o in tool.findall('option') if o.get('superClass', '').endswith('.tool.c.linker.option.otherflags')), None)
+        if paper_alloc:
+            flags = ' '.join('-Wl,--wrap=' + name for name in
+                             ('pvPortMalloc', 'malloc', '_malloc_r', 'mem_malloc', 'memp_malloc'))
+            if option is None:
+                option = ET.SubElement(tool, 'option', {'id': 'policy_gate.paper.alloc.wrap',
+                    'name': 'Other flags',
+                    'superClass': 'com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.otherflags',
+                    'valueType': 'string'})
+            option.set('value', flags)
+        elif option is not None and option.get('id') == 'policy_gate.paper.alloc.wrap':
+            tool.remove(option)
     for tool in base.findall('.//tool'):
         if tool.get('superClass') != 'com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler':
             continue

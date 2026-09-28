@@ -19,9 +19,16 @@ let pol (i:U32.t) = {which=2uy;offset=i;literal=0uy}
 let cred (i:U32.t) = {which=3uy;offset=i;literal=0uy}
 let lit (x:U8.t) = {which=0uy;offset=0ul;literal=x}
 
-(* Executable byte layout. Slots beyond num_rules have method=0 and cannot
-   match supported request methods 1..3. Public slots are fixed, not supplied
-   by the mutable policy. No pointer arithmetic occurs outside these bounds. *)
+(* The reference AccessRequest evaluates all eight slots. Unused slots carry
+   INACTIVE_PATH_ID=0xDEADDEAD and method=0. For the access path, policy holds
+   all eight uploaded slots exactly; count is metadata, not a match bound.
+   Public slots are fixed, not supplied by the mutable policy. *)
+let inactive (i:U32.t{4 <= U32.v i /\ U32.v i < 68}) : Tot source =
+ let slotbyte=U32.rem (U32.sub i 4ul) 8ul in
+ if slotbyte=0ul || slotbyte=2ul then lit 0xaduy
+ else if slotbyte=1ul || slotbyte=3ul then lit 0xdeuy
+ else zero
+
 let select (k:kind) (count:U8.t) (i:U32.t{U32.v i < 106})
  : Tot (s:source{(s.which=1uy ==> U32.v s.offset < 1536) /\
                  (s.which=2uy ==> U32.v s.offset < 65) /\
@@ -44,9 +51,8 @@ let select (k:kind) (count:U8.t) (i:U32.t{U32.v i < 106})
          let slotbyte=U32.rem (U32.sub i 4ul) 8ul in
          if U32.lt slotbyte 4ul then lit (if U32.lt i 12ul then 0x66uy else 0x77uy)
          else if slotbyte=4ul then lit 1uy else zero
-       else zero
-     else if U32.lt (U32.div (U32.sub i 4ul) 8ul) (Cast.uint8_to_uint32 count) then pol (U32.sub i 3ul)
-     else zero
+       else inactive i
+     else pol (U32.sub i 3ul)
    else if U32.lt i 72ul then req (U32.sub i 67ul)
    else if i=72ul then req 5ul else zero
 

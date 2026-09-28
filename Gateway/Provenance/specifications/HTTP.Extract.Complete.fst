@@ -142,31 +142,34 @@ let extract_security_params http_buf http_len out_buf out_len =
       extract_malformed
     end
     else begin
-      (* Step 3: Extract path hash *)
-      let pr = extract_path_hash http_buf mr.mr_end hdr_end in
+      (* Step 3: Extract path id *)
+      let pr = extract_path_id http_buf mr.mr_end hdr_end in
 
       (* Step 3b: Handle root path (dashboard) *)
       if pr.pr_is_root then begin
         (* Dashboard request: write minimal SecurityParamsWire *)
         fill_zero out_buf 0ul secparams_header_size;
         (* rate_count = 0 (already zeroed) *)
-        (* path_hash = 0 (already zeroed) *)
+        (* path_id = 0 (already zeroed) *)
         B.upd out_buf off_method mr.mr_code;
         (* body_len = 0 (already zeroed) *)
         B.upd out_len 0ul secparams_header_size;
         extract_ok
       end
-      else if U32.eq pr.pr_hash 0ul then begin
+      else if U32.eq pr.pr_id 0ul then begin
         (* Unknown or rejected path → check if it was path traversal *)
         (* Re-check traversal to distinguish from unknown endpoint *)
         let path_start = mr.mr_end in
         let path_end = find_path_end http_buf hdr_end path_start in
         let trav_safe = check_no_traversal http_buf path_start path_end path_start in
+        let null_safe = check_no_null http_buf path_end path_start in
         B.upd out_len 0ul 0ul;
         if not trav_safe then
           extract_path_traversal
+        else if not null_safe then
+          extract_malformed
         else
-          extract_malformed  (* Unknown endpoint *)
+          extract_path_unknown
       end
       else begin
         (* Step 4: Parse Content-Length *)
@@ -197,7 +200,7 @@ let extract_security_params http_buf http_len out_buf out_len =
             (* Step 6: Write SecurityParamsWire header *)
             fill_zero out_buf 0ul secparams_header_size;
             (* rate_count = 0 — already zeroed *)
-            write_u32_le out_buf off_path_hash pr.pr_hash;
+            write_u32_le out_buf off_path_id pr.pr_id;
             B.upd out_buf off_method mr.mr_code;
 
             (* Step 6b: Extract bearer token into token region *)

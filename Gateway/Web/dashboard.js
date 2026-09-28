@@ -24,12 +24,12 @@ function readRules(r){
  if(!Array.isArray(rules)||rules.length<1||rules.length>8)throw Error('Invalid policy response');
  for(const rule of rules){
   for(const key of ['id','method','min_role','scope'])if(!Number.isInteger(rule[key]))throw Error('Invalid policy rule');
-  if(rule.id<0||rule.id>0xffffffff||rule.method<0||rule.method>3||rule.min_role<0||rule.min_role>2||rule.scope<0||rule.scope>65535)throw Error('Invalid policy bounds');
+  if(rule.id<0||rule.id>0xffffffff||rule.method<0||rule.method>63||rule.min_role<0||rule.min_role>2||rule.scope<0||rule.scope>65535)throw Error('Invalid policy bounds');
  }
  return rules;
 }
 function displayPolicy(rules){
- for(const path of paths)path.input.checked=rules.some(r=>r.id===path.id&&r.method===1&&r.min_role<=1&&(r.scope&3)===r.scope);
+ for(const path of paths)path.input.checked=rules.some(r=>r.id===path.id&&(r.method&1)===1&&r.min_role<=1&&(r.scope&3)===r.scope);
  $('policy').hidden=false;
  $('policyState').textContent=paths.map(p=>p.name+': operator '+(p.input.checked?'allowed':'denied')).join(' · ');
 }
@@ -42,6 +42,7 @@ function encodePolicy(rules){
  if(rules.length<1||rules.length>8)throw Error('Policy has no free rule slots');
  const bytes=new Uint8Array(65),view=new DataView(bytes.buffer);bytes[0]=rules.length;
  rules.forEach((r,i)=>{const n=1+i*8;view.setUint32(n,r.id,true);bytes[n+4]=r.method;bytes[n+5]=r.min_role;view.setUint16(n+6,r.scope,true);});
+ for(let i=rules.length;i<8;i++)view.setUint32(1+i*8,0xDEADDEAD,true);
  return bytes;
 }
 async function run(work){
@@ -72,8 +73,17 @@ for(const path of paths)path.input.onchange=()=>{
   try{
    // Read current rules immediately before changing only this GET path.
    const current=readRules(await api('GET','/api/policy'));
-   const rules=current.filter(r=>!(r.id===path.id&&r.method===1));
-   rules.push({id:path.id,method:1,min_role:allow?1:2,scope:1});
+   const rules=[];
+   for(const rule of current){
+    const grantsOperator=rule.id===path.id&&(rule.method&1)===1&&rule.min_role<=1&&(rule.scope&3)===rule.scope;
+    if(!allow&&grantsOperator){
+     const narrowed={...rule,method:rule.method&~1};
+     if(narrowed.method)rules.push(narrowed);
+    }else rules.push(rule);
+   }
+   const grants=(role,scope)=>rules.some(r=>r.id===path.id&&(r.method&1)===1&&r.min_role<=role&&(r.scope&scope)===r.scope);
+   if(allow&&!grants(1,3))rules.push({id:path.id,method:1,min_role:1,scope:1});
+   if(!allow&&!grants(2,0x3f))rules.push({id:path.id,method:1,min_role:2,scope:1});
    const r=await api('PUT','/api/policy',encodePolicy(rules));
    if(r.status!==200)throw Error('Policy update rejected: HTTP '+r.status);
    await loadPolicy();show(200,path.name+': operator access '+(allow?'allowed':'denied')+'.');

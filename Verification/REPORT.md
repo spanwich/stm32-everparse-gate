@@ -1,5 +1,11 @@
 # Mandatory gateway mediation: reuse audit and experiment
 
+**Historical scope:** this report records the original verified-mediation
+experiment based on `1069e4b`, before board deployment and the paper-reference
+R1 validator migration. The current firmware results, including on-board tests,
+timing, complete-mediation limits and MPU feasibility, are in
+[the R1 evidence report](../Gateway/Validation/paper-evidence-r1-2026-09-29/REPORT.md).
+
 ## Result and scope
 
 The existing generated core is reusable. This branch adds a **proved Low*

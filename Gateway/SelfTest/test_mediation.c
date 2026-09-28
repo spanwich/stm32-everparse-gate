@@ -27,8 +27,8 @@ void gateway_test_mediation(GatewayTestStats *s)
     c->policy.num_rules=1;c->policy.rules[0]=(PolicyRule){PATH_LOGOUT,METHOD_POST,ROLE_OPERATOR,0};
     c->policy.rules[1]=(PolicyRule){PATH_STATUS,METHOD_GET,ROLE_OPERATOR,0};
     Policy old=c->policy;
-    CHECK("Mediation inactive matching rule denied",gateway_mediate(c,GATEWAY_ACCESS)==403 && c->dispatch_count==0 && !memcmp(&old,&c->policy,sizeof(old)));
-    CHECK("Mediation denied decision cannot dispatch",!gateway_dispatch(c));
+    CHECK("Mediation stored slot matches despite count one",gateway_mediate(c,GATEWAY_ACCESS)==200 && c->dispatch_count==1 && !memcmp(&old,&c->policy,sizeof(old)));
+    CHECK("Mediation decision cannot dispatch twice",!gateway_dispatch(c));
     SecurityParamsWire *p=prepare(PATH_POLICY,METHOD_PUT,ROLE_OPERATOR);
     p->body_len=65;c->security_len+=65;memset(p->body,0,65);p->body[0]=1;
     old=c->policy;

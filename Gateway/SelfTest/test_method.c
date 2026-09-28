@@ -34,17 +34,17 @@ static int run_original_suite_method(void)
     /* Recognized methods */
     TEST("GET request",  "GET / HTTP/1.1\r\n", 16, 1, 4);
     TEST("POST request", "POST /api/login HTTP/1.1\r\n", 26, 2, 5);
-    TEST("PUT request",  "PUT /api/policy HTTP/1.1\r\n", 26, 3, 4);
+    TEST("PUT request",  "PUT /api/policy HTTP/1.1\r\n", 26, 4, 4);
 
     /* Minimum valid */
     TEST("GET minimal",  "GET ", 4, 1, 4);
-    TEST("PUT minimal",  "PUT ", 4, 3, 4);
+    TEST("PUT minimal",  "PUT ", 4, 4, 4);
     TEST("POST minimal", "POST ", 5, 2, 5);
 
-    /* Unknown methods */
-    TEST("DELETE",  "DELETE /foo HTTP/1.1", 20, 0, 0);
-    TEST("HEAD",    "HEAD / HTTP/1.1", 16, 0, 0);
-    TEST("PATCH",   "PATCH /foo HTTP/1.1", 19, 0, 0);
+    /* The reference extractor recognizes all six one-bit methods. */
+    TEST("DELETE",  "DELETE /foo HTTP/1.1", 20, 8, 7);
+    TEST("HEAD",    "HEAD / HTTP/1.1", 16, 32, 5);
+    TEST("PATCH",   "PATCH /foo HTTP/1.1", 19, 16, 6);
     TEST("OPTIONS", "OPTIONS * HTTP/1.1", 18, 0, 0);
 
     /* Too short */

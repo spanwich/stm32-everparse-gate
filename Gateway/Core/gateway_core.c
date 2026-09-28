@@ -54,11 +54,12 @@ GatewayResult gateway_evaluate(GatewayContext *c)
     if (p->body_len > MAX_INLINE_BODY ||
         c->security_len != SECPARAMS_HEADER_SIZE + p->body_len ||
         p->subject_id_len > SUBJECT_ID_MAX || p->token_len > AUTH_TOKEN_MAX ||
-        p->role > ROLE_ADMIN || p->method < METHOD_GET || p->method > METHOD_PUT ||
+        p->role > ROLE_ADMIN || p->method < METHOD_GET || p->method > METHOD_HEAD ||
+        (p->method & (p->method - 1U)) != 0U ||
         c->policy.num_rules == 0 || c->policy.num_rules > MAX_RULES)
         return reject(c);
     for (unsigned i = 0; i < MAX_RULES; ++i)
-        if (c->policy.rules[i].method > METHOD_PUT || c->policy.rules[i].min_role > ROLE_ADMIN)
+        if (c->policy.rules[i].method > METHOD_MASK_ALL || c->policy.rules[i].min_role > ROLE_ADMIN)
             return reject(c);
     /* Transactional update: an error or denial cannot mutate the live policy. */
     Policy candidate = c->policy;

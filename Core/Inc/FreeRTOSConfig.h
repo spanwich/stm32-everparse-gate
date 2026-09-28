@@ -54,6 +54,15 @@
 #endif
 #define configENABLE_FPU                         0
 #define configENABLE_MPU                         0
+#include "../../Gateway/Inc/paper_experiment.h"
+#if GATEWAY_PAPER_CONTROL
+#define INCLUDE_xTaskGetIdleTaskHandle           1
+extern void gateway_runtime_init(void);
+extern uint32_t gateway_runtime_counter(void);
+#define configGENERATE_RUN_TIME_STATS 1
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() gateway_runtime_init()
+#define portGET_RUN_TIME_COUNTER_VALUE() gateway_runtime_counter()
+#endif
 
 #define configUSE_PREEMPTION                     1
 #define configSUPPORT_STATIC_ALLOCATION          1

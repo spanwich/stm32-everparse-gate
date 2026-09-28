@@ -66,9 +66,9 @@ static void write_rule(uint8_t *buf, int offset, const PolicyRule *r)
 static void write_rules(uint8_t *buf, int offset, const Policy *p)
 {
     for (int i = 0; i < MAX_RULES; i++) {
-        /* AccessRequest has no num_rules field: neutralize unused slots. */
-        const PolicyRule unused = { DEAD_HASH, 0, 0, 0 };
-        write_rule(buf, offset + i * 8, i < p->num_rules ? &p->rules[i] : &unused);
+        /* The reference validator evaluates all eight slots, even when
+         * num_rules is smaller. The wire carries the complete slot table. */
+        write_rule(buf, offset + i * 8, &p->rules[i]);
     }
 }
 
@@ -178,10 +178,6 @@ static int handle_policy_update(Policy *p,
     /* Policy format valid and uploader is ADMIN — update active policy */
     p->num_rules = num_rules;
     for (int i = 0; i < MAX_RULES; i++) {
-        if (i >= p->num_rules) {
-            p->rules[i] = (PolicyRule){ DEAD_HASH, 0, 0, 0 };
-            continue;
-        }
         int off = 1 + i * 8;
         p->rules[i].path_hash =
             (uint32_t)body[off + 0] |

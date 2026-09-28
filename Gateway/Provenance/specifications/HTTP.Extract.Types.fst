@@ -14,20 +14,26 @@ module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 
 (* ============================================================
- * HTTP method codes — must match extract.c
+ * HTTP method bitmask codes — must match path_ids.h
+ * One bit per method; request always has exactly one bit set.
  * ============================================================ *)
-inline_for_extraction let method_get:  U8.t = 1uy
-inline_for_extraction let method_post: U8.t = 2uy
-inline_for_extraction let method_put:  U8.t = 3uy
+inline_for_extraction let method_get:    U8.t = 1uy    (* 0x01 *)
+inline_for_extraction let method_post:   U8.t = 2uy    (* 0x02 *)
+inline_for_extraction let method_put:    U8.t = 4uy    (* 0x04 *)
+inline_for_extraction let method_delete: U8.t = 8uy    (* 0x08 *)
+inline_for_extraction let method_patch:  U8.t = 16uy   (* 0x10 *)
+inline_for_extraction let method_head:   U8.t = 32uy   (* 0x20 *)
 
 (* ============================================================
- * Path hash sentinel constants — must match control_pipeline.h
- * These are NOT DJB2 hashes. They are fixed lookup values.
+ * Path id sentinel constants — must match control_pipeline.h
+ * These are NOT computed hashes. They are fixed sentinel lookup values.
  * ============================================================ *)
 inline_for_extraction let path_login:  U32.t = 0x11111111ul
 inline_for_extraction let path_logout: U32.t = 0x22222222ul
 inline_for_extraction let path_status: U32.t = 0x33333333ul
 inline_for_extraction let path_policy: U32.t = 0x44444444ul
+inline_for_extraction let path_demo: U32.t = 0x55555555ul
+inline_for_extraction let path_reports: U32.t = 0x66666666ul
 
 (* ============================================================
  * SecurityParamsWire format — must match security_params_wire.h
@@ -37,7 +43,7 @@ inline_for_extraction let max_inline_body: U32.t = 1361ul  (* 1536 - 175 *)
 
 (* Field offsets within SecurityParamsWire *)
 inline_for_extraction let off_rate_count:     U32.t = 0ul
-inline_for_extraction let off_path_hash:      U32.t = 1ul
+inline_for_extraction let off_path_id:      U32.t = 1ul
 inline_for_extraction let off_method:         U32.t = 5ul
 inline_for_extraction let off_role:           U32.t = 6ul
 inline_for_extraction let off_scope_lo:       U32.t = 7ul
@@ -61,19 +67,20 @@ inline_for_extraction let extract_malformed:      U8.t = 2uy
 inline_for_extraction let extract_body_too_large: U8.t = 3uy
 inline_for_extraction let extract_path_traversal: U8.t = 4uy
 inline_for_extraction let extract_method_unknown: U8.t = 5uy
+inline_for_extraction let extract_path_unknown:   U8.t = 6uy
 
 (* ============================================================
  * Method parse result (returned by parse_method)
  * ============================================================ *)
 type method_result = {
-  mr_code: U8.t;   (* 0 = unknown, 1 = GET, 2 = POST, 3 = PUT *)
+  mr_code: U8.t;   (* 0 = unknown, 0x01=GET, 0x02=POST, 0x04=PUT, 0x08=DELETE, 0x10=PATCH, 0x20=HEAD *)
   mr_end: U32.t;   (* offset after method + space; 0 if unknown *)
 }
 
 (* ============================================================
- * Path extraction result (returned by extract_path_hash)
+ * Path extraction result (returned by extract_path_id)
  * ============================================================ *)
 type path_result = {
-  pr_hash: U32.t;   (* sentinel hash, 0 = unknown/rejected *)
+  pr_id: U32.t;   (* sentinel id, 0 = unknown/rejected *)
   pr_is_root: bool;  (* true if path is exactly "/" *)
 }

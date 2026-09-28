@@ -67,8 +67,8 @@ void gateway_test_boundaries(GatewayTestStats *s)
     request(fragmented);
     CHECK("complete fragmented request accepted", gateway_extract(&ctx) == GATEWAY_EXTRACTED && ctx.security_len == SECPARAMS_HEADER_SIZE + 4);
 
-    const char *bad[] = {"DELETE /api/status HTTP/1.1\r\n\r\n", "GET /api/../status HTTP/1.1\r\n\r\n", "GET /unknown HTTP/1.1\r\n\r\n"};
-    const uint8_t expected[] = {EXTRACT_METHOD_UNKNOWN, EXTRACT_PATH_TRAVERSAL, EXTRACT_MALFORMED};
+    const char *bad[] = {"OPTIONS /api/status HTTP/1.1\r\n\r\n", "GET /api/../status HTTP/1.1\r\n\r\n", "GET /unknown HTTP/1.1\r\n\r\n"};
+    const uint8_t expected[] = {EXTRACT_METHOD_UNKNOWN, EXTRACT_PATH_TRAVERSAL, EXTRACT_PATH_UNKNOWN};
     for (unsigned i = 0; i < 3; ++i) {
         request(bad[i]);
         CHECK("malformed request classification", gateway_extract(&ctx) == GATEWAY_REJECTED && ctx.extraction_code == expected[i] && ctx.security_len == 0);

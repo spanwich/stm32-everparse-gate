@@ -5,6 +5,13 @@
 _Static_assert(sizeof(gateway_dashboard)<=16384 && sizeof(gateway_dashboard_js)<=16384, "static asset bound");
 #include "gateway_platform.h"
 #include "gateway_log.h"
+#include "paper_experiment.h"
+#if GATEWAY_PAPER_CONTROL
+#include "paper_control.h"
+#endif
+#if GATEWAY_PAPER_ALLOC
+#include "paper_alloc.h"
+#endif
 #include "ethernetif.h"
 #include "main.h"
 #include "lwip/tcpip.h"
@@ -15,14 +22,20 @@ _Static_assert(sizeof(gateway_dashboard)<=16384 && sizeof(gateway_dashboard_js)<
 #include "task.h"
 #include <stdio.h>
 #include <string.h>
-extern GatewayContext gateway_test_context;
+static GatewayContext gateway_network_context;
 extern osThreadId_t gateway_tcpip_task;
 static struct netif network;
-extern GatewayHttp gateway_http_fixture;
-#define http gateway_http_fixture
+static GatewayHttp http;
 static volatile uint32_t ready, requests, rx_failures;
 static uint32_t heap_used, heap_peak, heap_errors;
 static volatile int last_status, last_send;
+#if GATEWAY_PAPER_CONTROL
+static uint32_t request_cycles, request_calls;
+#endif
+#if GATEWAY_PAPER_ALLOC
+static volatile uint32_t decision_allocations;
+static uint32_t decision_allocations_total, decision_allocations_checked;
+#endif
 static void tcp_ready(void *sem) { (void)osSemaphoreRelease(sem); }
 static void sample_heap(void *unused)
 {
@@ -60,11 +73,28 @@ void gateway_network_diagnostics(void)
         (unsigned long)gateway_tx_packets,(unsigned long)gateway_rx_drops,(unsigned long)gateway_tx_errors,
         (unsigned long)t,(unsigned long)e,(unsigned long)l,t>=1024 && e>=1024 && l>=512?"OK":"LOW",
         (unsigned long)used,(unsigned long)peak,(unsigned long)errors);
+#if GATEWAY_PAPER_CONTROL
+    PaperGateCycles gate=gateway_paper_gate_take();
+    uint32_t cycles=request_cycles,calls=request_calls;
+    request_cycles=0;request_calls=0;
+    gateway_log("[GATECPU] decision_cycles=%lu decision_calls=%lu request_cycles=%lu request_calls=%lu\n",
+        (unsigned long)gate.cycles,(unsigned long)gate.calls,
+        (unsigned long)cycles,(unsigned long)calls);
+#endif
+#if GATEWAY_PAPER_ALLOC
+    gateway_log("[ALLOC] decision_path_calls=%lu allocations=%lu\n",
+        (unsigned long)decision_allocations_checked,
+        (unsigned long)decision_allocations_total);
+    decision_allocations_checked=0;decision_allocations_total=0;
+#endif
     if(t<1024 || e<1024 || l<512) HAL_GPIO_WritePin(LD3_GPIO_Port,LD3_Pin,GPIO_PIN_SET);
 }
 static void serve(struct netconn *conn)
 {
-    GatewayContext *c=&gateway_test_context;
+    GatewayContext *c=&gateway_network_context;
+#if GATEWAY_PAPER_ALLOC
+    decision_allocations=0;
+#endif
     gateway_begin_request(c); gateway_http_init(&http);
     gateway_audit_begin(c);
     netconn_set_sendtimeout(conn,2000); netconn_set_recvtimeout(conn,250);
@@ -85,7 +115,24 @@ static void serve(struct netconn *conn)
         }
         netbuf_delete(buffer);
     }
-    if(status==1) status=gateway_http_process(&http,c);
+    if(status==1) {
+#if GATEWAY_PAPER_ALLOC
+        paper_alloc_begin();
+#endif
+#if GATEWAY_PAPER_CONTROL
+        uint32_t start_cycles=DWT->CYCCNT;
+#endif
+        status=gateway_http_process(&http,c);
+#if GATEWAY_PAPER_CONTROL
+        request_cycles+=DWT->CYCCNT-start_cycles;++request_calls;
+#endif
+#if GATEWAY_PAPER_ALLOC
+        PaperAllocCounts alloc=paper_alloc_end();
+        decision_allocations=alloc.freertos+alloc.libc+alloc.newlib+alloc.lwip_heap+alloc.lwip_pool;
+        decision_allocations_total+=decision_allocations;
+        ++decision_allocations_checked;
+#endif
+    }
     GatewayAuditRecord audit=gateway_audit_finish();
     const char *body="{\"status\":\"error\"}";
     size_t length=strlen(body);
@@ -104,9 +151,17 @@ static void serve(struct netconn *conn)
     int n=gateway_http_typed_header(response,sizeof(http.raw),status,length,type);
     if(n>=2) {
         int extra=snprintf(response+n-2,sizeof(http.raw)-(size_t)(n-2),
-            "X-PG-Audit-Id: %lu\r\nX-PG-Audit-Accepts: %lu\r\nX-PG-Audit-Effects: %lu\r\nX-PG-Audit-Violations: %lu\r\n\r\n",
+            "X-PG-Audit-Id: %lu\r\nX-PG-Audit-Accepts: %lu\r\nX-PG-Audit-Effects: %lu\r\nX-PG-Audit-Violations: %lu\r\n"
+#if GATEWAY_PAPER_ALLOC
+            "X-PG-Decision-Allocations: %lu\r\n"
+#endif
+            "\r\n",
             (unsigned long)audit.request_id,(unsigned long)audit.acceptances,
-            (unsigned long)audit.effects,(unsigned long)audit.violations);
+            (unsigned long)audit.effects,(unsigned long)audit.violations
+#if GATEWAY_PAPER_ALLOC
+            ,(unsigned long)decision_allocations
+#endif
+            );
         n=extra>=0 && (size_t)extra<sizeof(http.raw)-(size_t)(n-2)?n-2+extra:-1;
     }
     if(n>0 && gateway_link_up && epoch==gateway_link_epoch) {
@@ -135,7 +190,7 @@ static void serve(struct netconn *conn)
 }
 void gateway_network_run(void)
 {
-    gateway_init(&gateway_test_context);
+    gateway_init(&gateway_network_context);
     osSemaphoreId_t sem=osSemaphoreNew(1,0,NULL);
     if(!sem) gateway_panic(GATEWAY_FAULT_ALLOC);
     tcpip_init(tcp_ready,sem);

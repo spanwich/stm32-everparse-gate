@@ -2,6 +2,7 @@
 #include "gateway_network.h"
 #include "gateway_log.h"
 #include "gateway_tests.h"
+#include "paper_experiment.h"
 #include "main.h"
 #include "cmsis_os2.h"
 #include "FreeRTOS.h"
@@ -13,7 +14,11 @@
 #include <errno.h>
 
 #define GATEWAY_STACK_BYTES 8192U
+#if GATEWAY_PAPER_CONTROL
+#define DIAGNOSTIC_STACK_BYTES 4096U
+#else
 #define DIAGNOSTIC_STACK_BYTES 2048U
+#endif
 #ifndef GATEWAY_FAULT_INJECT
 #define GATEWAY_FAULT_INJECT 0
 #endif
@@ -23,6 +28,10 @@ static _Alignas(8) StackType_t diagnostic_stack[DIAGNOSTIC_STACK_BYTES / sizeof(
 static StaticTask_t gateway_tcb, diagnostic_tcb;
 static StaticSemaphore_t log_mutex_cb;
 static osThreadId_t gateway_task, diagnostic_task;
+#if GATEWAY_PAPER_CONTROL
+TaskHandle_t gateway_paper_core_task(void) { return (TaskHandle_t)gateway_task; }
+TaskHandle_t gateway_paper_diagnostics_task(void) { return (TaskHandle_t)diagnostic_task; }
+#endif
 static osMutexId_t log_mutex;
 static volatile uint32_t log_drops;
 static volatile uint32_t tests_complete;
@@ -81,6 +90,17 @@ int gateway_log_write(const char *text, size_t length)
     if (status != HAL_OK) { dropped(); return -1; }
     return (int)length;
 }
+int gateway_log_binary(const void *bytes, size_t length)
+{
+    if (__get_IPSR() != 0U || !bytes || length > UINT16_MAX ||
+        osKernelGetState() != osKernelRunning || !log_mutex ||
+        osMutexAcquire(log_mutex, 1000U) != osOK) return -1;
+    HAL_StatusTypeDef result = HAL_UART_Transmit(&huart3, (uint8_t *)bytes,
+                                                  (uint16_t)length, 15000U);
+    if (osMutexRelease(log_mutex) != osOK) gateway_panic(GATEWAY_FAULT_ASSERT);
+    if (result != HAL_OK) { dropped(); return -1; }
+    return (int)length;
+}
 void gateway_log(const char *format, ...)
 {
     char line[256];
@@ -120,6 +140,10 @@ static void run_core(void *argument)
     vApplicationStackOverflowHook(xTaskGetCurrentTaskHandle(), NULL);
 #endif
     GatewayTestStats stats = gateway_tests_run();
+#if GATEWAY_PAPER_TIMING
+    extern void gateway_paper_timing_run(void);
+    if (stats.passed == stats.total) gateway_paper_timing_run();
+#endif
     taskENTER_CRITICAL();
     completed_stats = stats;
     tests_complete = 1U;
@@ -149,6 +173,10 @@ static void run_diagnostics(void *argument)
         if (!margin) HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
         HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
         gateway_network_diagnostics();
+#if GATEWAY_PAPER_CONTROL
+        extern void gateway_paper_control_diagnostics(void);
+        gateway_paper_control_diagnostics();
+#endif
         next += osKernelGetTickFreq();
         (void)osDelayUntil(next);
     }
@@ -168,10 +196,15 @@ void gateway_platform_start(void)
     const osThreadAttr_t core_attr = {.name = "gateway_core", .priority = osPriorityNormal,
         .cb_mem = &gateway_tcb, .cb_size = sizeof(gateway_tcb),
         .stack_mem = gateway_stack, .stack_size = sizeof(gateway_stack)};
-    const osThreadAttr_t diag_attr = {.name = "gateway_diag", .priority = osPriorityLow,
+    const osThreadAttr_t diag_attr = {.name = "gateway_diag",
+        .priority = GATEWAY_PAPER_CONTROL ? osPriorityAboveNormal : osPriorityLow,
         .cb_mem = &diagnostic_tcb, .cb_size = sizeof(diagnostic_tcb),
         .stack_mem = diagnostic_stack, .stack_size = sizeof(diagnostic_stack)};
     gateway_task = osThreadNew(run_core, NULL, &core_attr);
     diagnostic_task = osThreadNew(run_diagnostics, NULL, &diag_attr);
     if (!gateway_task || !diagnostic_task) gateway_panic(GATEWAY_FAULT_STARTUP);
+#if GATEWAY_PAPER_CONTROL
+    extern void gateway_paper_control_start(void);
+    gateway_paper_control_start();
+#endif
 }

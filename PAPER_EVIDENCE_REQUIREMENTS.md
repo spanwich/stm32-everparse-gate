@@ -281,3 +281,84 @@ Put everything under a new dated directory, e.g.
   limits (no protection against a malicious privileged task or hardware faults).
 - Lab credentials and plaintext HTTP remain demonstration settings, not
   production authentication.
+
+---
+
+## 9. Revision after first results (2026-09-29, paper side)
+
+Reviewed `Gateway/Validation/paper-evidence-2026-09-29/`. The results so far
+are good and kept as they are: gate path ≈12.4 KB of flash; Cedar 4.12.0 fails to
+build no_std; 100,000 requests with every effect matched to one acceptance;
+12,527/12,527 agreement with the oracle; 0 fail-open among 31 attacks. Decisions
+and changes follow. They override §4 where they differ.
+
+### R1 — Run the same validator as the seL4 gateway (new, required before M2/M5 re-runs)
+
+The firmware runs the legacy CAmkES-era specification
+(`Gateway/Provenance/specifications/RbacPolicy.3d`: method IDs compared by
+equality, inactive slots marked by method 0; `RbacPolicy.c` SHA-256
+`b1b91cea…`). The paper's policy language, and the seL4 gateway it measures,
+use method **bit masks with subset matching** (request method ∈ {1,2,4,8,16,32};
+a rule mask may combine them) and the inactive-slot path sentinel
+`0xDEADDEAD`. The paper claims that one verified mechanism runs on both
+platforms, so the MCU must run the same one.
+
+- Reference, papers repository
+  `experiments/http-acl-x86/source` @ `353666b`:
+  - `vendor/everparse/RbacPolicy.3d` — SHA-256 `1fc9d6d5…096a1d`
+  - `engines/everparse/generated/RbacPolicy.c` — SHA-256 `6186ee3a…06f63c`
+  - `engines/everparse/generated/RbacPolicy.h` — SHA-256 `026705fa…a1d7d3`
+  - F* extractor sources in `verified/HTTP.Extract.*.fst`
+- **Required:** the MCU build links the reference `RbacPolicy.c`/`.h`
+  **byte-identically** (verify by hash), or regenerates them from the reference
+  `.3d` with a recorded, hash-identical result. Do not edit generated code.
+- Adapt the handwritten integration (method encoding, rule-slot encoding,
+  inactive-slot sentinel, policy-update wire format, dashboard encoding) to the
+  new layout. Update the Low* `Mediation.Format` specification to the new 75-byte
+  AccessRequest layout, and re-prove it: the serializer must still be proved
+  byte-for-byte equal to its specification, now matching the reference `.3d`.
+- Record the old image's results as a labelled historical baseline; do not mix
+  them with results from the new image.
+- **Expected:** all existing suites pass on the new image. M5's differential then
+  **replays the seL4 12,527-case corpus unchanged** (its generator/oracle is the
+  `make differential-test` target, `host_tests/test_equivalence.c`, in the
+  reference tree), with 0 disagreements, plus boundary fixtures for rate 49/50/255,
+  role 0, path 0 and inactive slots.
+
+### R2 — Query semantics: the query is ignored, as on seL4
+
+Decision: both gateways use the seL4 extractor's semantics. The path ends at the
+first space, `?` or CR; the query never creates a separate resource identifier
+and never changes which rule applies.
+
+- Revert the "query-target fix" (rejecting `?`/`#` with 400) in
+  `Gateway/Core/gateway_http.c`. Keep its evidence as a labelled historical image.
+- Match the reference extractor's behaviour exactly for `?`, `#`, `..` and
+  unknown spellings; list any remaining difference explicitly.
+- **Change the attack expectation.** The property is: for every role, path and
+  query suffix, the decision on `path?query` equals the decision on `path`, and a
+  query can never turn a denied request into an allowed one. `GET
+  /api/status?api/policy` as operator is therefore *expected* to return 200 with
+  no policy effect — not a fail-open. The baseline result for request 14 is a
+  test-expectation mismatch, not a bypass; re-label it that way.
+
+### R3 — Remaining work, in priority order
+
+1. **R1** (validator parity), then **R2**.
+2. **M2/M3 (H2)** on the R1 image — the evidence the paper most needs: DWT cycles
+   for the seven cases over five fresh boots, the handwritten C baseline, the
+   empty-measurement overhead, then the 1 kHz control task under idle, valid load,
+   denied flood and malformed flood.
+3. **Decision-path allocation counters (H1).**
+4. **Indirect calls (H3):** resolve all 125 register-indirect sites, starting
+   with the 8 reachable from `serve` before `Mediation_Wrapper_run`, or remove
+   them from the architecture.
+5. **Soak timeout:** find the cause of the first 1,000-request soak stopping at
+   600 (it passed on repeat). An unexplained stall matters for the availability
+   and control-task claims; reproduce and explain it, or show it came from the
+   host/network side.
+6. **Larger attack corpus:** at least 20 generated variants per class (currently
+   1–10), keeping the per-request CSV format.
+7. **M6 (H4):** split the global context shared by self-tests and network
+   operation, reconcile FreeRTOS MPU regions with the Ethernet regions, then the
+   MPU variant and the five fault injections.

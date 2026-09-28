@@ -1,5 +1,11 @@
 # Gateway mediation experiment
 
+**Current R1 board evidence:** [Gateway/Validation/paper-evidence-r1-2026-09-29/REPORT.md](../Gateway/Validation/paper-evidence-r1-2026-09-29/REPORT.md).
+The report below describes the earlier `1069e4b` experiment and its then-unflashed
+image. R1 was subsequently built, flashed and tested on the NUCLEO-F767ZI. R1
+also replaces the legacy access validator and extractor with the paper reference
+versions; use the dated R1 report for current claims and limits.
+
 This is an implementation and verification experiment on
 `research/verified-mediation`, based on `1069e4b`. It changes the HTTP path in this
 checkout but has **not been deployed**. `main` and the installed firmware remain

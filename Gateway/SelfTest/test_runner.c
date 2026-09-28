@@ -4,6 +4,7 @@ GatewayContext gateway_test_context;
 #include "gateway_log.h"
 #include <stdarg.h>
 #include <stdio.h>
+int paper_equivalence_board_run(void);
 int gateway_test_printf(const char *format, ...)
 {
     char line[256];
@@ -28,6 +29,7 @@ GatewayTestStats gateway_tests_run(void)
     gateway_test_header(&s); gateway_test_extractor(&s); gateway_test_ipc_extract(&s);
     gateway_test_printf("[Legacy vectors] %lu/%lu\n", (unsigned long)s.passed, (unsigned long)s.total);
     gateway_test_boundaries(&s); gateway_test_policy(&s); gateway_test_http(&s); gateway_test_login(&s); gateway_test_live_policy(&s); gateway_test_mediation(&s);
+    gateway_test_check(&s, "paper reference 12527-case equivalence", paper_equivalence_board_run() == 0);
     gateway_test_printf("[CORE SELFTEST] %s %lu/%lu; synthetic identity only\n",
                         s.passed == s.total ? "PASS" : "FAIL",
                         (unsigned long)s.passed, (unsigned long)s.total);

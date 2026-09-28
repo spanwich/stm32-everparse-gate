@@ -28,7 +28,7 @@ static void update(uint8_t role, uint8_t rate, uint8_t count, uint8_t method, ui
     memset(body, 0, body_len);
     body[0] = count;
     put32(body + 1, PATH_STATUS); body[5] = method; body[6] = min_role; body[7] = 1;
-    /* A second uploaded slot must not grant access when num_rules is one. */
+    /* The reference engine evaluates all eight stored slots, regardless of num_rules. */
     put32(body + 9, PATH_POLICY); body[13] = METHOD_GET; body[14] = ROLE_NONE;
     ctx.request_len = (uint32_t)head + body_len;
     (void)gateway_extract(&ctx); identify(role, 0xFFFF, rate);
@@ -75,7 +75,7 @@ void gateway_test_policy(GatewayTestStats *s)
     CHECK("zero rules rejected unchanged", gateway_evaluate(&ctx) == GATEWAY_DENIED && memcmp(&before, &ctx.policy, sizeof(before)) == 0);
     update(ROLE_ADMIN, 1, 9, METHOD_GET, ROLE_OPERATOR, 65);
     CHECK("nine rules rejected unchanged", gateway_evaluate(&ctx) == GATEWAY_DENIED && memcmp(&before, &ctx.policy, sizeof(before)) == 0);
-    update(ROLE_ADMIN, 1, 1, 4, ROLE_OPERATOR, 65);
+    update(ROLE_ADMIN, 1, 1, 0x40, ROLE_OPERATOR, 65);
     CHECK("invalid rule method rejected unchanged", gateway_evaluate(&ctx) == GATEWAY_DENIED && memcmp(&before, &ctx.policy, sizeof(before)) == 0);
     update(ROLE_ADMIN, 1, 1, METHOD_GET, 3, 65);
     CHECK("invalid rule role rejected unchanged", gateway_evaluate(&ctx) == GATEWAY_DENIED && memcmp(&before, &ctx.policy, sizeof(before)) == 0);
@@ -86,11 +86,11 @@ void gateway_test_policy(GatewayTestStats *s)
     update(ROLE_ADMIN, 49, 1, METHOD_GET, ROLE_OPERATOR, 65);
     CHECK("valid policy update commits", gateway_evaluate(&ctx) == GATEWAY_POLICY_UPDATED && ctx.policy.num_rules == 1 && ctx.gate[1] == GATE_STATUS_OK);
     CHECK("policy update does not dispatch", !gateway_dispatch(&ctx) && ctx.dispatch_count == 0 && ctx.app_len == 0);
-    CHECK("inactive policy slots neutralized", ctx.policy.rules[1].path_hash == DEAD_HASH && ctx.policy.rules[1].method == 0);
+    CHECK("stored policy slot preserved", ctx.policy.rules[1].path_hash == PATH_POLICY && ctx.policy.rules[1].method == METHOD_GET);
     start("GET", "/api/status", ROLE_OPERATOR, 1, 1);
     CHECK("updated active rule works", gateway_evaluate(&ctx) == GATEWAY_FORWARD);
     start("GET", "/api/policy", ROLE_ADMIN, 0xFFFF, 1);
-    CHECK("inactive uploaded rule cannot authorize", gateway_evaluate(&ctx) == GATEWAY_DENIED);
+    CHECK("stored slot matches despite count one", gateway_evaluate(&ctx) == GATEWAY_FORWARD);
     CHECK("policy tests retain buffer guards", gateway_guards_ok(&ctx));
 
     /* Direct generated validators, independent of handwritten rate prechecks. */

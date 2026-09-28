@@ -38,7 +38,7 @@ def exchange(data,split=None):
    for i in range(0,len(data),split):s.sendall(data[i:i+split]);time.sleep(.001)
   return receive(s)
 def policy(rules):
- return bytes([len(rules)])+b''.join(struct.pack('<IBBH',*r) for r in rules)+bytes(8*(8-len(rules)))
+ return bytes([len(rules)])+b''.join(struct.pack('<IBBH',*r) for r in rules)+struct.pack('<IBBH',0xDEADDEAD,0,0,0)*(8-len(rules))
 # Reference sentinel values, asserted by the source and exercised on the board.
 PATH_STATUS=0x11111111
 # Read exact constants from the maintained header, rather than invent hashes.

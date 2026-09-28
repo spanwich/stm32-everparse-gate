@@ -1,13 +1,13 @@
 (*
- * HTTP.Extract.Path - Verified URL path extraction and sentinel hash lookup
+ * HTTP.Extract.Path - Verified URL path extraction and sentinel path id lookup
  *
  * Extracts the URL path from an HTTP request line, validates it (no path
- * traversal, no null bytes), and maps to sentinel hash constants.
+ * traversal, no null bytes), and maps to sentinel path id constants.
  *
  * VERIFIED PROPERTIES:
  *   1. All buffer reads within bounds
  *   2. Path traversal ("..") and null bytes rejected
- *   3. Sentinel hash only returned for known endpoints
+ *   3. Sentinel id only returned for known endpoints
  *   4. Read-only: buffer never modified
  *   5. Termination for all loops
  *
@@ -118,6 +118,27 @@ let is_root_path
   end else
     false
 
+(* Check 9-byte path: /api/demo *)
+let is_path_demo
+  (buf: B.buffer U8.t)
+  (ps: U32.t{U32.v ps + 9 <= B.length buf})
+  : Stack bool
+    (requires fun h -> B.live h buf)
+    (ensures fun h0 result h1 -> h0 == h1)
+  =
+  let b0 = B.index buf ps in
+  let b1 = B.index buf (U32.add ps 1ul) in
+  let b2 = B.index buf (U32.add ps 2ul) in
+  let b3 = B.index buf (U32.add ps 3ul) in
+  let b4 = B.index buf (U32.add ps 4ul) in
+  let b5 = B.index buf (U32.add ps 5ul) in
+  let b6 = B.index buf (U32.add ps 6ul) in
+  let b7 = B.index buf (U32.add ps 7ul) in
+  let b8 = B.index buf (U32.add ps 8ul) in
+  U8.eq b0 0x2Fuy && U8.eq b1 0x61uy && U8.eq b2 0x70uy &&
+  U8.eq b3 0x69uy && U8.eq b4 0x2Fuy && U8.eq b5 0x64uy &&
+  U8.eq b6 0x65uy && U8.eq b7 0x6Duy && U8.eq b8 0x6Fuy
+
 (*
  * Check 10-byte path: /api/login
  * Bytes: 2F 61 70 69 2F 6C 6F 67 69 6E
@@ -225,20 +246,45 @@ let is_path_policy
   U8.eq b6 0x6Fuy && U8.eq b7 0x6Cuy && U8.eq b8 0x69uy &&
   U8.eq b9 0x63uy && U8.eq b10 0x79uy
 
+(* Check 12-byte path: /api/reports *)
+let is_path_reports
+  (buf: B.buffer U8.t)
+  (ps: U32.t{U32.v ps + 12 <= B.length buf})
+  : Stack bool
+    (requires fun h -> B.live h buf)
+    (ensures fun h0 result h1 -> h0 == h1)
+  =
+  let b0 = B.index buf ps in
+  let b1 = B.index buf (U32.add ps 1ul) in
+  let b2 = B.index buf (U32.add ps 2ul) in
+  let b3 = B.index buf (U32.add ps 3ul) in
+  let b4 = B.index buf (U32.add ps 4ul) in
+  let b5 = B.index buf (U32.add ps 5ul) in
+  let b6 = B.index buf (U32.add ps 6ul) in
+  let b7 = B.index buf (U32.add ps 7ul) in
+  let b8 = B.index buf (U32.add ps 8ul) in
+  let b9 = B.index buf (U32.add ps 9ul) in
+  let b10 = B.index buf (U32.add ps 10ul) in
+  let b11 = B.index buf (U32.add ps 11ul) in
+  U8.eq b0 0x2Fuy && U8.eq b1 0x61uy && U8.eq b2 0x70uy &&
+  U8.eq b3 0x69uy && U8.eq b4 0x2Fuy && U8.eq b5 0x72uy &&
+  U8.eq b6 0x65uy && U8.eq b7 0x70uy && U8.eq b8 0x6Fuy &&
+  U8.eq b9 0x72uy && U8.eq b10 0x74uy && U8.eq b11 0x73uy
+
 (* ============================================================
- * extract_path_hash: main entry point
+ * extract_path_id: main entry point
  *
  * Given an HTTP request buffer, method_end offset, and header_end offset:
  * 1. Find end of path (space, '?', or '\r')
  * 2. Reject path traversal (..)
  * 3. Reject null bytes
- * 4. Map to sentinel hash constant
+ * 4. Map to sentinel path id constant
  *
  * Returns path_result with:
- *   pr_hash = sentinel constant (0 if unknown/rejected)
+ *   pr_id = sentinel constant (0 if unknown/rejected)
  *   pr_is_root = true if path is exactly "/"
  * ============================================================ *)
-val extract_path_hash:
+val extract_path_id:
   buf: B.buffer U8.t ->
   method_end: U32.t ->
   header_end: U32.t{U32.v method_end <= U32.v header_end /\
@@ -247,14 +293,16 @@ val extract_path_hash:
     (requires fun h -> B.live h buf)
     (ensures fun h0 result h1 ->
       h0 == h1 /\
-      (* If hash is non-zero, path was safe (no traversal) *)
-      (U32.v result.pr_hash > 0 ==>
-        result.pr_hash = path_login \/
-        result.pr_hash = path_logout \/
-        result.pr_hash = path_status \/
-        result.pr_hash = path_policy))
+      (* If id is non-zero, path was safe (no traversal) *)
+      (U32.v result.pr_id > 0 ==>
+        result.pr_id = path_login \/
+        result.pr_id = path_logout \/
+        result.pr_id = path_status \/
+        result.pr_id = path_policy \/
+        result.pr_id = path_demo \/
+        result.pr_id = path_reports))
 
-let extract_path_hash buf method_end header_end =
+let extract_path_id buf method_end header_end =
   (* Step 1: Find path end delimiter *)
   let path_start = method_end in
   let path_end = find_path_end buf header_end path_start in
@@ -262,29 +310,41 @@ let extract_path_hash buf method_end header_end =
 
   (* Step 2: Check for path traversal *)
   if not (check_no_traversal buf path_start path_end path_start) then
-    { pr_hash = 0ul; pr_is_root = false }
+    { pr_id = 0ul; pr_is_root = false }
   (* Step 3: Check for null bytes *)
   else if not (check_no_null buf path_end path_start) then
-    { pr_hash = 0ul; pr_is_root = false }
+    { pr_id = 0ul; pr_is_root = false }
   (* Step 4: Check for root path *)
   else if is_root_path buf path_start path_end then
-    { pr_hash = 0ul; pr_is_root = true }
-  (* Step 5: Map to sentinel hash — check exact path strings *)
+    { pr_id = 0ul; pr_is_root = true }
+  (* Step 5: Map to sentinel path id — check exact path strings *)
+  else if U32.eq path_len 9ul then begin
+    if is_path_demo buf path_start then
+      { pr_id = path_demo; pr_is_root = false }
+    else
+      { pr_id = 0ul; pr_is_root = false }
+  end
   else if U32.eq path_len 10ul then begin
     if is_path_login buf path_start then
-      { pr_hash = path_login; pr_is_root = false }
+      { pr_id = path_login; pr_is_root = false }
     else
-      { pr_hash = 0ul; pr_is_root = false }
+      { pr_id = 0ul; pr_is_root = false }
   end
   else if U32.eq path_len 11ul then begin
     if is_path_logout buf path_start then
-      { pr_hash = path_logout; pr_is_root = false }
+      { pr_id = path_logout; pr_is_root = false }
     else if is_path_status buf path_start then
-      { pr_hash = path_status; pr_is_root = false }
+      { pr_id = path_status; pr_is_root = false }
     else if is_path_policy buf path_start then
-      { pr_hash = path_policy; pr_is_root = false }
+      { pr_id = path_policy; pr_is_root = false }
     else
-      { pr_hash = 0ul; pr_is_root = false }
+      { pr_id = 0ul; pr_is_root = false }
+  end
+  else if U32.eq path_len 12ul then begin
+    if is_path_reports buf path_start then
+      { pr_id = path_reports; pr_is_root = false }
+    else
+      { pr_id = 0ul; pr_is_root = false }
   end
   else
-    { pr_hash = 0ul; pr_is_root = false }  (* Unknown endpoint *)
+    { pr_id = 0ul; pr_is_root = false }  (* Unknown endpoint *)

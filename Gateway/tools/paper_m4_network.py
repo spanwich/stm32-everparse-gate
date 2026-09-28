@@ -11,10 +11,10 @@ import argparse
 import atexit
 import csv
 import hashlib
-import http.client
 import json
 import os
 import select
+import socket
 import struct
 import subprocess
 import termios
@@ -72,39 +72,52 @@ limited = 'pg-lab-limited'
 
 
 def encode(rules):
+    inactive = {'id': 0xDEADDEAD, 'method': 0, 'min_role': 0, 'scope': 0}
     return bytes([len(rules)]) + b''.join(struct.pack('<IBBH',
-        r['id'], r['method'], r['min_role'], r['scope']) for r in rules) + bytes(8 * (8 - len(rules)))
+        r['id'], r['method'], r['min_role'], r['scope'])
+        for r in rules + [inactive] * (8 - len(rules)))
 
 
 def exchange(method, path, token=None, body=None):
-    conn = http.client.HTTPConnection(a.host, 80, timeout=8)
-    headers = {'Authorization': 'Bearer ' + token} if token else {}
+    auth = b'Authorization: Bearer ' + token.encode() + b'\r\n' if token else b''
+    payload = method.encode() + b' ' + path.encode() + b' HTTP/1.1\r\nHost: board\r\n' + auth
     if body is not None:
-        headers['Content-Type'] = 'application/octet-stream'
-    try:
-        conn.request(method, path, body=body, headers=headers)
-        response = conn.getresponse()
-        status = response.status
-        fields = {key.lower(): value for key, value in response.getheaders()}
-        response.read()
-        return status, fields
-    finally:
-        conn.close()
+        payload += b'Content-Type: application/octet-stream\r\nContent-Length: ' + str(len(body)).encode() + b'\r\n'
+    payload += b'\r\n' + (body or b'')
+    with socket.create_connection((a.host, 80), timeout=8) as conn:
+        conn.settimeout(8)
+        conn.sendall(payload)
+        received = bytearray()
+        while True:
+            part = conn.recv(4096)
+            if not part:
+                break
+            received.extend(part)
+            if len(received) > 16384:
+                raise AssertionError('response exceeded bound')
+            if b'\r\n\r\n' in received:
+                header, response_body = bytes(received).split(b'\r\n\r\n', 1)
+                lengths = [line.split(b':', 1)[1].strip() for line in header.split(b'\r\n')[1:]
+                           if line.lower().startswith(b'content-length:')]
+                if len(lengths) == 1 and len(response_body) >= int(lengths[0]):
+                    break
+    header, response_body = bytes(received).split(b'\r\n\r\n', 1)
+    lines = header.split(b'\r\n')
+    status = int(lines[0].split()[1])
+    fields = {line.split(b':', 1)[0].lower().decode(): line.split(b':', 1)[1].strip().decode()
+              for line in lines[1:] if b':' in line}
+    assert len(response_body) == int(fields['content-length'])
+    return status, fields, response_body
 
 
 def policy_read():
-    conn = http.client.HTTPConnection(a.host, 80, timeout=8)
-    try:
-        conn.request('GET', '/api/policy', headers={'Authorization': 'Bearer ' + admin})
-        response = conn.getresponse()
-        assert response.status == 200
-        return json.loads(response.read())['rules']
-    finally:
-        conn.close()
+    status, _, body = exchange('GET', '/api/policy', admin)
+    assert status == 200
+    return json.loads(body)['rules']
 
 
 def policy_write(rules):
-    status, headers = exchange('PUT', '/api/policy', admin, encode(rules))
+    status, headers, _ = exchange('PUT', '/api/policy', admin, encode(rules))
     assert status == 200 and int(headers['x-pg-audit-violations']) == 0
 
 
@@ -127,7 +140,7 @@ cases = (
     ('no-credential', 'GET', '/api/status', None, None, 401, 0),
     ('public-asset', 'GET', '/', None, None, 200, 1),
     ('login', 'POST', '/api/login', None, login, 200, 1),
-    ('malformed-query', 'GET', '/api/status?api/policy', operator, None, 400, 0),
+    ('query-same-resource', 'GET', '/api/status?api/policy', operator, None, 200, 1),
     ('operator-update-deny', 'PUT', '/api/policy', operator, encode(policy_a), 403, 0),
     ('policy-update', 'PUT', '/api/policy', admin, None, 200, 1),
 )
@@ -174,7 +187,7 @@ with output.open('w', newline='') as file:
                                expected_status=expected_status,
                                policy_sha256=hashlib.sha256(encode(active)).hexdigest())
                     try:
-                        status, headers = future.result()
+                        status, headers, _ = future.result()
                         audit_id, accepts, effects, violations = (int(headers[name]) for name in header_names)
                         unique = audit_id not in observed_ids
                         observed_ids.add(audit_id)

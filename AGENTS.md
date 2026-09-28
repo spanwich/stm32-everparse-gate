@@ -1,4 +1,17 @@
-# Verified mediation research branch — 2026-09-12
+# Paper-reference R1 evidence — 2026-09-29
+
+The current branch now links the paper-reference EverParse access validator and
+F* HTTP extractor, with method-bit masks and `0xDEADDEAD` inactive slots. The
+earlier statement that all original generated cores are unchanged applies to
+the 2026-09-12 baseline, not R1. Read
+`Gateway/Validation/paper-evidence-r1-2026-09-29/REPORT.md` and `summary.json`
+for the current on-board evidence and its no-go conclusion. Do not hand-edit
+generated mediation C; use `Verification/tools/prove.py --extract`. The final
+primary R1 image was flashed and tested on the NUCLEO-F767ZI; instrumentation
+variants have separate ELF hashes. The proof/board/call-graph/MPU boundaries in
+the R1 report govern any new claim.
+
+# Verified mediation research branch — 2026-09-12 (historical)
 
 This branch adds `Verification/` and generated Low* mediation code under
 `Gateway/Generated/Mediation`. Read `Verification/README.md` and

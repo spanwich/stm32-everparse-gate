@@ -6,15 +6,22 @@ from pathlib import Path
 import argparse, hashlib, os, re, select, shutil, subprocess, termios, threading, time
 p=argparse.ArgumentParser()
 p.add_argument('--config',choices=['Debug','Release'],default='Debug')
+p.add_argument('--elf',type=Path,help='explicit reviewed variant ELF to flash')
 a=p.add_mutually_exclusive_group(required=True); a.add_argument('--flash',action='store_true'); a.add_argument('--reset',action='store_true')
 p.add_argument('--output',type=Path,required=True)
 p.add_argument('--seconds',type=float,default=25)
 p.add_argument('--expected-selftests',type=int)
 args=p.parse_args(); root=Path(__file__).resolve().parents[2]; out=args.output.resolve(); out.mkdir(parents=True,exist_ok=True)
 cli='/opt/st/stm32cubeide_2.0.0/plugins/com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.linux64_2.2.300.202508131133/tools/bin/STM32_Programmer_CLI'
-elf=root/args.config/'policy_gate.elf'
+elf=args.elf.resolve() if args.elf else root/args.config/'policy_gate.elf'
 if args.flash:
- subprocess.run(['python3',str(root/'Gateway/tools/check_firmware.py'),str(elf)],check=True)
+ if args.elf:
+  manifest=elf.parent/'source-manifest.json'; build_log=elf.parent/'build.log'
+  assert manifest.is_file() and build_log.is_file(), 'Variant provenance is missing'
+  assert __import__('json').loads(manifest.read_text())['elf_sha256']==hashlib.sha256(elf.read_bytes()).hexdigest(), 'Variant ELF hash differs from manifest'
+  assert 'Gateway post-link checks PASS' in build_log.read_text(), 'Variant post-link acceptance missing'
+ else:
+  subprocess.run(['python3',str(root/'Gateway/tools/check_firmware.py'),str(elf)],check=True)
  staged=out/'policy_gate.elf';shutil.copy2(elf,staged);elf=staged
 image_hash=hashlib.sha256(elf.read_bytes()).hexdigest()
 serial='/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066FFF555567894967085545-if02'

@@ -28,6 +28,7 @@ static uint8_t out[1536];
 #define EXTRACT_BODY_TOO_LARGE  3
 #define EXTRACT_PATH_TRAVERSAL  4
 #define EXTRACT_METHOD_UNKNOWN  5
+#define EXTRACT_PATH_UNKNOWN    6
 
 /* Constants matching security_params_wire.h */
 #define SECPARAMS_HEADER_SIZE   175
@@ -57,6 +58,7 @@ static const char *result_name(uint8_t code)
         case EXTRACT_BODY_TOO_LARGE: return "BODY_TOO_LARGE";
         case EXTRACT_PATH_TRAVERSAL: return "PATH_TRAVERSAL";
         case EXTRACT_METHOD_UNKNOWN: return "METHOD_UNKNOWN";
+        case EXTRACT_PATH_UNKNOWN:   return "PATH_UNKNOWN";
         default:                     return "UNKNOWN";
     }
 }
@@ -126,7 +128,7 @@ static int run_original_suite_extractor(void)
 
     TEST_WIRE("PUT /api/policy with body",
               "PUT /api/policy HTTP/1.1\r\nContent-Length: 5\r\n\r\nABCDE",
-              PATH_POLICY, 3, 5);
+              PATH_POLICY, 4, 5);
 
     /* --- Dashboard (root path) --- */
     printf("\n--- Dashboard ---\n");
@@ -142,13 +144,12 @@ static int run_original_suite_extractor(void)
                 "GET /api/status HTTP/1.1",
                 EXTRACT_INCOMPLETE);
 
-    TEST_RESULT("unknown method",
-                "DELETE /api/status HTTP/1.1\r\n\r\n",
-                EXTRACT_METHOD_UNKNOWN);
-
-    TEST_RESULT("HEAD method unknown",
-                "HEAD /api/status HTTP/1.1\r\n\r\n",
-                EXTRACT_METHOD_UNKNOWN);
+    TEST_WIRE("DELETE method code",
+              "DELETE /api/status HTTP/1.1\r\n\r\n",
+              PATH_STATUS, 8, 0);
+    TEST_WIRE("HEAD method code",
+              "HEAD /api/status HTTP/1.1\r\n\r\n",
+              PATH_STATUS, 32, 0);
 
     TEST_RESULT("path traversal",
                 "GET /../etc/passwd HTTP/1.1\r\n\r\n",
@@ -160,11 +161,11 @@ static int run_original_suite_extractor(void)
 
     TEST_RESULT("unknown endpoint",
                 "GET /api/unknown HTTP/1.1\r\n\r\n",
-                EXTRACT_MALFORMED);
+                EXTRACT_PATH_UNKNOWN);
 
     TEST_RESULT("unknown short path",
                 "GET /x HTTP/1.1\r\n\r\n",
-                EXTRACT_MALFORMED);
+                EXTRACT_PATH_UNKNOWN);
 
     TEST_RESULT("body too large",
                 "POST /api/login HTTP/1.1\r\nContent-Length: 9999\r\n\r\n",

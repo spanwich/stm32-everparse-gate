@@ -34,7 +34,7 @@ void gateway_test_live_policy(GatewayTestStats *s)
     CHECK("Public JavaScript with fragmented headers",request("GET","/dashboard.js",NULL,NULL,0)==200 && gateway_http_fixture.script);
     CHECK("Demo GET requires authentication",request("GET","/demo",NULL,NULL,0)==401);
     CHECK("Demo rejects non-GET",request("POST","/demo",NULL,NULL,0)==400);
-    CHECK("Demo alias is exact",request("GET","/demo?other",NULL,NULL,0)==400);
+    CHECK("Demo query retains alias",request("GET","/demo?other",NULL,NULL,0)==401);
 #if !GATEWAY_LAB_AUTH
     CHECK("Disabled auth denies demo",request("GET","/demo","pg-lab-admin",NULL,0)==401);
     return;

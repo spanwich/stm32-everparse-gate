@@ -22,8 +22,11 @@ with tempfile.TemporaryDirectory(prefix='mediation-proof-') as tmp:
         if r.returncode: raise SystemExit(r.stdout)
         print(log, 'PASS', flush=True)
     if a.replay:
+        # R1 imports the paper extractor, whose Complete module needs the
+        # paper's F*/Z3 release. The old pinned F* still checks retained IPC.
+        subprocess.run(['python3', str(root/'tools/prove_reference_extractor.py')], check=True)
         specs=root.parent/'Gateway/Provenance/specifications'
-        modules=['HTTP.Extract.'+n+'.fst' for n in ['Types','Scan','Method','Path','Header','Bearer','Complete']] + ['IPC.Extract.fst']
+        modules=['HTTP.Extract.Types.fst','IPC.Extract.fst']
         # Sequential checks make dependency .checked files available for extraction.
         for name in modules:
             run(flags+['--include',str(specs),str(specs/name)], 'replay-'+name+'.log')

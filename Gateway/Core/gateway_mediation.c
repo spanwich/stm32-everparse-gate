@@ -6,6 +6,13 @@
 #include "gateway_clear.h"
 #include "gateway_audit.h"
 #include "gateway_routes.h"
+#include "paper_experiment.h"
+#if GATEWAY_PAPER_CONTROL
+#include "paper_control.h"
+#include "main.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#endif
 #include "../Generated/Mediation/Mediation_Wrapper.h"
 #include "../Generated/Mediation/Mediation_Extern.h"
 #include <string.h>
@@ -13,6 +20,18 @@
 
 _Static_assert(sizeof(GatewayContext)==8860 || sizeof(GatewayContext)==8864,
                "update the Low* context size contract for this ABI");
+#if GATEWAY_PAPER_CONTROL
+static volatile uint32_t decision_start, decision_end, decision_end_valid;
+static volatile uint32_t decision_cycles, decision_calls;
+PaperGateCycles gateway_paper_gate_take(void)
+{
+    taskENTER_CRITICAL();
+    PaperGateCycles result={decision_cycles,decision_calls};
+    decision_cycles=0;decision_calls=0;
+    taskEXIT_CRITICAL();
+    return result;
+}
+#endif
 
 bool gateway_mediation_check(uint8_t kind, uint8_t *bytes, uint32_t length);
 
@@ -27,7 +46,7 @@ bool Mediation_Extern_check(uint8_t kind, uint32_t length, uint8_t *request,
 static void unpack_policy(Policy *out, const uint8_t *in)
 {
     memset(out,0,sizeof(*out)); out->num_rules=in[0];
-    for(unsigned i=0;i<out->num_rules;++i) {
+    for(unsigned i=0;i<MAX_RULES;++i) {
         const uint8_t *b=in+1+8*i;
         out->rules[i]=(PolicyRule){(uint32_t)b[0]|((uint32_t)b[1]<<8)|
             ((uint32_t)b[2]<<16)|((uint32_t)b[3]<<24),b[4],b[5],
@@ -37,7 +56,7 @@ static void unpack_policy(Policy *out, const uint8_t *in)
 static void pack_policy(uint8_t out[65], const Policy *in)
 {
     memset(out,0,65); out[0]=in->num_rules;
-    for(unsigned i=0;i<in->num_rules;++i) {
+    for(unsigned i=0;i<MAX_RULES;++i) {
         const PolicyRule *r=&in->rules[i]; uint8_t *b=out+1+8*i;
         b[0]=(uint8_t)r->path_hash; b[1]=(uint8_t)(r->path_hash>>8);
         b[2]=(uint8_t)(r->path_hash>>16); b[3]=(uint8_t)(r->path_hash>>24);
@@ -60,6 +79,9 @@ static int message(GatewayContext *c, unsigned status, const char *text)
 uint32_t Mediation_Extern_invoke(uint8_t kind, uint32_t length, uint8_t *request,
                                uint8_t *policy, uint8_t *login, uint8_t *context)
 {
+#if GATEWAY_PAPER_CONTROL
+    decision_end=DWT->CYCCNT;decision_end_valid=1;
+#endif
     GatewayContext *c=(GatewayContext *)context;
     gateway_audit_effect(kind,length,request,policy,login,c);
     const SecurityParamsWire *p=(const SecurityParamsWire *)request;
@@ -100,7 +122,9 @@ int gateway_mediate(GatewayContext *c, unsigned kind)
     const SecurityParamsWire *p=(const SecurityParamsWire *)c->security;
     if(p->body_len>MAX_INLINE_BODY || c->security_len!=SECPARAMS_HEADER_SIZE+p->body_len ||
        p->role>ROLE_ADMIN || p->subject_id_len>SUBJECT_ID_MAX || p->token_len>AUTH_TOKEN_MAX ||
-       p->method<METHOD_GET || p->method>METHOD_PUT || c->policy.num_rules<1 || c->policy.num_rules>8)
+       p->method<METHOD_GET || p->method>METHOD_HEAD ||
+       (p->method & (p->method-1U))!=0U ||
+       c->policy.num_rules<1 || c->policy.num_rules>8)
         return 400;
     bool public_route=(p->path_hash==GATEWAY_PATH_DASHBOARD || p->path_hash==GATEWAY_PATH_SCRIPT) && p->method==METHOD_GET;
     bool login_route=p->path_hash==PATH_LOGIN && p->method==METHOD_POST;
@@ -119,7 +143,14 @@ int gateway_mediate(GatewayContext *c, unsigned kind)
         gateway_clear(request,sizeof(request)); gateway_clear(login,sizeof(login));
         return 400;
     }
+#if GATEWAY_PAPER_CONTROL
+    decision_end_valid=0;decision_start=DWT->CYCCNT;
+#endif
     Mediation_Wrapper_result result=Mediation_Wrapper_run((uint8_t)kind,length,request,policy,login,(uint8_t *)c,envelope);
+#if GATEWAY_PAPER_CONTROL
+    decision_cycles+=(decision_end_valid?decision_end:DWT->CYCCNT)-decision_start;
+    ++decision_calls;
+#endif
     gateway_clear(request,sizeof(request)); gateway_clear(login,sizeof(login)); gateway_clear(envelope,sizeof(envelope));
     if(!result.invoked) {
         c->result=GATEWAY_DENIED;

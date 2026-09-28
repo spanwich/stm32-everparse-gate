@@ -9,22 +9,27 @@
  * All three are entrypoints in a single file.
  *
  * Phase 5: Added per-rule req_scope (UINT16) and auth_scope (UINT16).
- * Match predicate is now a 4-way conjunction:
+ * Match predicate is a 4-way conjunction per rule:
  *   path_match AND method_match AND role_sufficient AND scope_sufficient
- * where scope_sufficient = (auth_scope & req_scope) == req_scope
+ * where method_match  = (r_method & req_method) == req_method  (bitmask subset)
+ *       scope_sufficient = (auth_scope & req_scope) == req_scope (bitmask subset)
  */
 
-/* Path hashes */
+/* Path identifiers */
 #define PATH_LOGIN    0x11111111ul
 #define PATH_LOGOUT   0x22222222ul
 #define PATH_STATUS   0x33333333ul
 #define PATH_POLICY   0x44444444ul
-#define DEAD_HASH     0xDEADDEADul
+#define INACTIVE_PATH_ID     0xDEADDEADul
 
-/* HTTP methods */
-#define METHOD_GET    1
-#define METHOD_POST   2
-#define METHOD_PUT    3
+/* HTTP method bitmask (one bit per method; rules carry masks) */
+#define METHOD_GET       1
+#define METHOD_POST      2
+#define METHOD_PUT       4
+#define METHOD_DELETE    8
+#define METHOD_PATCH     16
+#define METHOD_HEAD      32
+#define METHOD_MASK_ALL  63
 
 /* Role levels */
 #define ROLE_NONE     0
@@ -39,7 +44,7 @@
  * Validator 1: LoginRequest
  *
  * Buffer layout:
- *   [auth_state:1][rate_count:1][path_hash:4][method:1][_check:1]
+ *   [auth_state:1][rate_count:1][path_id:4][method:1][_check:1]
  *   [username_len:1][username:N][password_len:1][password:M]
  *
  * Login is allowed at any auth_state. Rate limited.
@@ -50,12 +55,12 @@ typedef struct _LoginRequest
 {
     UINT8  auth_state;
     UINT8  rate_count;
-    UINT32 path_hash;
+    UINT32 path_id;
     UINT8  method;
     UINT8  _check
     {
-        path_hash == PATH_LOGIN &&
-        method == METHOD_POST &&
+        path_id == PATH_LOGIN &&
+        (method & METHOD_POST) == METHOD_POST &&
         rate_count < MAX_RATE
     };
     UINT8  username_len { username_len >= 1 && username_len <= 32 };
@@ -74,7 +79,7 @@ typedef struct _LoginRequest
  *   [auth_state:1][rate_count:1][num_rules:1]
  *   [rule_0:8][rule_1:8]...[rule_7:8]  (always 8 slots = 64 bytes)
  *
- * Each rule: [path_hash:4][method:1][min_role:1][req_scope:2]
+ * Each rule: [path_id:4][method:1][min_role:1][req_scope:2]
  *
  * Total: 3 + 64 + 3 = 70 bytes
  *
@@ -82,7 +87,7 @@ typedef struct _LoginRequest
  *   - auth_state >= ADMIN (admin only)
  *   - rate_count < MAX_RATE
  *   - 1 <= num_rules <= 8
- *   - Each rule: method in {0..3}, min_role in {0..2}
+ *   - Each rule: method bitmask in {0..63}, min_role in {0..2}
  *     (Enforced per-field by EverParse constraints)
  */
 entrypoint
@@ -93,50 +98,50 @@ typedef struct _PolicyBlob
     UINT8 num_rules;
 
     /* Rule 0 */
-    UINT32 r0_path_hash;
-    UINT8  r0_method   { r0_method <= 3 };
+    UINT32 r0_path_id;
+    UINT8  r0_method   { r0_method <= METHOD_MASK_ALL };
     UINT8  r0_min_role { r0_min_role <= 2 };
     UINT16 r0_req_scope;
 
     /* Rule 1 */
-    UINT32 r1_path_hash;
-    UINT8  r1_method   { r1_method <= 3 };
+    UINT32 r1_path_id;
+    UINT8  r1_method   { r1_method <= METHOD_MASK_ALL };
     UINT8  r1_min_role { r1_min_role <= 2 };
     UINT16 r1_req_scope;
 
     /* Rule 2 */
-    UINT32 r2_path_hash;
-    UINT8  r2_method   { r2_method <= 3 };
+    UINT32 r2_path_id;
+    UINT8  r2_method   { r2_method <= METHOD_MASK_ALL };
     UINT8  r2_min_role { r2_min_role <= 2 };
     UINT16 r2_req_scope;
 
     /* Rule 3 */
-    UINT32 r3_path_hash;
-    UINT8  r3_method   { r3_method <= 3 };
+    UINT32 r3_path_id;
+    UINT8  r3_method   { r3_method <= METHOD_MASK_ALL };
     UINT8  r3_min_role { r3_min_role <= 2 };
     UINT16 r3_req_scope;
 
     /* Rule 4 */
-    UINT32 r4_path_hash;
-    UINT8  r4_method   { r4_method <= 3 };
+    UINT32 r4_path_id;
+    UINT8  r4_method   { r4_method <= METHOD_MASK_ALL };
     UINT8  r4_min_role { r4_min_role <= 2 };
     UINT16 r4_req_scope;
 
     /* Rule 5 */
-    UINT32 r5_path_hash;
-    UINT8  r5_method   { r5_method <= 3 };
+    UINT32 r5_path_id;
+    UINT8  r5_method   { r5_method <= METHOD_MASK_ALL };
     UINT8  r5_min_role { r5_min_role <= 2 };
     UINT16 r5_req_scope;
 
     /* Rule 6 */
-    UINT32 r6_path_hash;
-    UINT8  r6_method   { r6_method <= 3 };
+    UINT32 r6_path_id;
+    UINT8  r6_method   { r6_method <= METHOD_MASK_ALL };
     UINT8  r6_min_role { r6_min_role <= 2 };
     UINT16 r6_req_scope;
 
     /* Rule 7 */
-    UINT32 r7_path_hash;
-    UINT8  r7_method   { r7_method <= 3 };
+    UINT32 r7_path_id;
+    UINT8  r7_method   { r7_method <= METHOD_MASK_ALL };
     UINT8  r7_min_role { r7_min_role <= 2 };
     UINT16 r7_req_scope;
 
@@ -154,7 +159,7 @@ typedef struct _PolicyBlob
  * Buffer layout:
  *   [auth_state:1][rate_count:1][auth_scope:2]
  *   [rule_0:8][rule_1:8]...[rule_7:8]  (8 rules = 64 bytes)
- *   [req_path_hash:4][req_method:1]
+ *   [req_path_id:4][req_method:1]
  *   [_rate_ok:1][_access_ok:1]
  *
  * Total: 4 + 64 + 5 + 2 = 75 bytes
@@ -171,55 +176,55 @@ typedef struct _AccessRequest
     UINT16 auth_scope;
 
     /* Rule 0 */
-    UINT32 r0_path_hash;
+    UINT32 r0_path_id;
     UINT8  r0_method;
     UINT8  r0_min_role;
     UINT16 r0_req_scope;
 
     /* Rule 1 */
-    UINT32 r1_path_hash;
+    UINT32 r1_path_id;
     UINT8  r1_method;
     UINT8  r1_min_role;
     UINT16 r1_req_scope;
 
     /* Rule 2 */
-    UINT32 r2_path_hash;
+    UINT32 r2_path_id;
     UINT8  r2_method;
     UINT8  r2_min_role;
     UINT16 r2_req_scope;
 
     /* Rule 3 */
-    UINT32 r3_path_hash;
+    UINT32 r3_path_id;
     UINT8  r3_method;
     UINT8  r3_min_role;
     UINT16 r3_req_scope;
 
     /* Rule 4 */
-    UINT32 r4_path_hash;
+    UINT32 r4_path_id;
     UINT8  r4_method;
     UINT8  r4_min_role;
     UINT16 r4_req_scope;
 
     /* Rule 5 */
-    UINT32 r5_path_hash;
+    UINT32 r5_path_id;
     UINT8  r5_method;
     UINT8  r5_min_role;
     UINT16 r5_req_scope;
 
     /* Rule 6 */
-    UINT32 r6_path_hash;
+    UINT32 r6_path_id;
     UINT8  r6_method;
     UINT8  r6_min_role;
     UINT16 r6_req_scope;
 
     /* Rule 7 */
-    UINT32 r7_path_hash;
+    UINT32 r7_path_id;
     UINT8  r7_method;
     UINT8  r7_min_role;
     UINT16 r7_req_scope;
 
     /* Request */
-    UINT32 req_path_hash;
+    UINT32 req_path_id;
     UINT8  req_method;
 
     /* Rate limit (CNF) */
@@ -228,13 +233,13 @@ typedef struct _AccessRequest
     /* Access control (DNF): at least one rule must match (4-way conjunction) */
     UINT8 _access_ok
     {
-        (r0_path_hash == req_path_hash && r0_method == req_method && auth_state >= r0_min_role && (auth_scope & r0_req_scope) == r0_req_scope) ||
-        (r1_path_hash == req_path_hash && r1_method == req_method && auth_state >= r1_min_role && (auth_scope & r1_req_scope) == r1_req_scope) ||
-        (r2_path_hash == req_path_hash && r2_method == req_method && auth_state >= r2_min_role && (auth_scope & r2_req_scope) == r2_req_scope) ||
-        (r3_path_hash == req_path_hash && r3_method == req_method && auth_state >= r3_min_role && (auth_scope & r3_req_scope) == r3_req_scope) ||
-        (r4_path_hash == req_path_hash && r4_method == req_method && auth_state >= r4_min_role && (auth_scope & r4_req_scope) == r4_req_scope) ||
-        (r5_path_hash == req_path_hash && r5_method == req_method && auth_state >= r5_min_role && (auth_scope & r5_req_scope) == r5_req_scope) ||
-        (r6_path_hash == req_path_hash && r6_method == req_method && auth_state >= r6_min_role && (auth_scope & r6_req_scope) == r6_req_scope) ||
-        (r7_path_hash == req_path_hash && r7_method == req_method && auth_state >= r7_min_role && (auth_scope & r7_req_scope) == r7_req_scope)
+        (r0_path_id == req_path_id && (r0_method & req_method) == req_method && auth_state >= r0_min_role && (auth_scope & r0_req_scope) == r0_req_scope) ||
+        (r1_path_id == req_path_id && (r1_method & req_method) == req_method && auth_state >= r1_min_role && (auth_scope & r1_req_scope) == r1_req_scope) ||
+        (r2_path_id == req_path_id && (r2_method & req_method) == req_method && auth_state >= r2_min_role && (auth_scope & r2_req_scope) == r2_req_scope) ||
+        (r3_path_id == req_path_id && (r3_method & req_method) == req_method && auth_state >= r3_min_role && (auth_scope & r3_req_scope) == r3_req_scope) ||
+        (r4_path_id == req_path_id && (r4_method & req_method) == req_method && auth_state >= r4_min_role && (auth_scope & r4_req_scope) == r4_req_scope) ||
+        (r5_path_id == req_path_id && (r5_method & req_method) == req_method && auth_state >= r5_min_role && (auth_scope & r5_req_scope) == r5_req_scope) ||
+        (r6_path_id == req_path_id && (r6_method & req_method) == req_method && auth_state >= r6_min_role && (auth_scope & r6_req_scope) == r6_req_scope) ||
+        (r7_path_id == req_path_id && (r7_method & req_method) == req_method && auth_state >= r7_min_role && (auth_scope & r7_req_scope) == r7_req_scope)
     };
 } AccessRequest;

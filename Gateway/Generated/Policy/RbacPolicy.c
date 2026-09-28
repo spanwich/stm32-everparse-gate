@@ -110,7 +110,7 @@ RbacPolicyValidateLoginRequest(
   else
   {
     ErrorHandlerFn("_LoginRequest",
-      "path_hash",
+      "path_id",
       EverParseErrorReasonOfResult(positionAfterLoginRequest1),
       EverParseGetValidatorErrorKind(positionAfterLoginRequest1),
       Ctxt,
@@ -181,7 +181,7 @@ RbacPolicyValidateLoginRequest(
     KRML_MAYBE_UNUSED_VAR(check);
     BOOLEAN
     checkConstraintIsOk =
-      pathHash == RBACPOLICY____PATH_LOGIN && method == RBACPOLICY____METHOD_POST &&
+      pathHash == RBACPOLICY____PATH_LOGIN && (method & RBACPOLICY____METHOD_POST) == RBACPOLICY____METHOD_POST &&
         rateCount < RBACPOLICY____MAX_RATE;
     uint64_t
     positionAfterCheck1 = EverParseCheckConstraintOk(checkConstraintIsOk, positionAfterCheck);
@@ -494,7 +494,7 @@ RbacPolicyValidatePolicyBlob(
     return positionAfternumRules;
   }
   uint8_t numRules = Input[(uint32_t)positionAfterrateCount];
-  /* Validating field r0_path_hash */
+  /* Validating field r0_path_id */
   /* Checking that we have enough space for a UINT32, i.e., 4 bytes */
   BOOLEAN hasBytes3 = 4ULL <= (InputLength - positionAfternumRules);
   uint64_t positionAfterPolicyBlob2;
@@ -516,7 +516,7 @@ RbacPolicyValidatePolicyBlob(
   else
   {
     ErrorHandlerFn("_PolicyBlob",
-      "r0_path_hash",
+      "r0_path_id",
       EverParseErrorReasonOfResult(positionAfterPolicyBlob2),
       EverParseGetValidatorErrorKind(positionAfterPolicyBlob2),
       Ctxt,
@@ -550,7 +550,7 @@ RbacPolicyValidatePolicyBlob(
   else
   {
     uint8_t r0Method = Input[(uint32_t)positionAfterr0PathHash];
-    BOOLEAN r0MethodConstraintIsOk = r0Method <= 3U;
+    BOOLEAN r0MethodConstraintIsOk = r0Method <= 63U;
     uint64_t
     positionAfterr0Method1 =
       EverParseCheckConstraintOk(r0MethodConstraintIsOk,
@@ -630,7 +630,7 @@ RbacPolicyValidatePolicyBlob(
           }
           else
           {
-            /* Validating field r1_path_hash */
+            /* Validating field r1_path_id */
             /* Checking that we have enough space for a UINT32, i.e., 4 bytes */
             BOOLEAN hasBytes7 = 4ULL <= (InputLength - positionAfterr0ReqScope);
             uint64_t positionAfterPolicyBlob6;
@@ -652,7 +652,7 @@ RbacPolicyValidatePolicyBlob(
             else
             {
               ErrorHandlerFn("_PolicyBlob",
-                "r1_path_hash",
+                "r1_path_id",
                 EverParseErrorReasonOfResult(positionAfterPolicyBlob6),
                 EverParseGetValidatorErrorKind(positionAfterPolicyBlob6),
                 Ctxt,
@@ -688,7 +688,7 @@ RbacPolicyValidatePolicyBlob(
               else
               {
                 uint8_t r1Method = Input[(uint32_t)positionAfterr1PathHash];
-                BOOLEAN r1MethodConstraintIsOk = r1Method <= 3U;
+                BOOLEAN r1MethodConstraintIsOk = r1Method <= 63U;
                 uint64_t
                 positionAfterr1Method1 =
                   EverParseCheckConstraintOk(r1MethodConstraintIsOk,
@@ -768,7 +768,7 @@ RbacPolicyValidatePolicyBlob(
                       }
                       else
                       {
-                        /* Validating field r2_path_hash */
+                        /* Validating field r2_path_id */
                         /* Checking that we have enough space for a UINT32, i.e., 4 bytes */
                         BOOLEAN hasBytes11 = 4ULL <= (InputLength - positionAfterr1ReqScope);
                         uint64_t positionAfterPolicyBlob10;
@@ -790,7 +790,7 @@ RbacPolicyValidatePolicyBlob(
                         else
                         {
                           ErrorHandlerFn("_PolicyBlob",
-                            "r2_path_hash",
+                            "r2_path_id",
                             EverParseErrorReasonOfResult(positionAfterPolicyBlob10),
                             EverParseGetValidatorErrorKind(positionAfterPolicyBlob10),
                             Ctxt,
@@ -826,7 +826,7 @@ RbacPolicyValidatePolicyBlob(
                           else
                           {
                             uint8_t r2Method = Input[(uint32_t)positionAfterr2PathHash];
-                            BOOLEAN r2MethodConstraintIsOk = r2Method <= 3U;
+                            BOOLEAN r2MethodConstraintIsOk = r2Method <= 63U;
                             uint64_t
                             positionAfterr2Method1 =
                               EverParseCheckConstraintOk(r2MethodConstraintIsOk,
@@ -907,7 +907,7 @@ RbacPolicyValidatePolicyBlob(
                                   }
                                   else
                                   {
-                                    /* Validating field r3_path_hash */
+                                    /* Validating field r3_path_id */
                                     /* Checking that we have enough space for a UINT32, i.e., 4 bytes */
                                     BOOLEAN
                                     hasBytes15 = 4ULL <= (InputLength - positionAfterr2ReqScope);
@@ -930,7 +930,7 @@ RbacPolicyValidatePolicyBlob(
                                     else
                                     {
                                       ErrorHandlerFn("_PolicyBlob",
-                                        "r3_path_hash",
+                                        "r3_path_id",
                                         EverParseErrorReasonOfResult(positionAfterPolicyBlob14),
                                         EverParseGetValidatorErrorKind(positionAfterPolicyBlob14),
                                         Ctxt,
@@ -967,7 +967,7 @@ RbacPolicyValidatePolicyBlob(
                                       else
                                       {
                                         uint8_t r3Method = Input[(uint32_t)positionAfterr3PathHash];
-                                        BOOLEAN r3MethodConstraintIsOk = r3Method <= 3U;
+                                        BOOLEAN r3MethodConstraintIsOk = r3Method <= 63U;
                                         uint64_t
                                         positionAfterr3Method1 =
                                           EverParseCheckConstraintOk(r3MethodConstraintIsOk,
@@ -1053,7 +1053,7 @@ RbacPolicyValidatePolicyBlob(
                                               }
                                               else
                                               {
-                                                /* Validating field r4_path_hash */
+                                                /* Validating field r4_path_id */
                                                 /* Checking that we have enough space for a UINT32, i.e., 4 bytes */
                                                 BOOLEAN
                                                 hasBytes19 =
@@ -1078,7 +1078,7 @@ RbacPolicyValidatePolicyBlob(
                                                 else
                                                 {
                                                   ErrorHandlerFn("_PolicyBlob",
-                                                    "r4_path_hash",
+                                                    "r4_path_id",
                                                     EverParseErrorReasonOfResult(positionAfterPolicyBlob18),
                                                     EverParseGetValidatorErrorKind(positionAfterPolicyBlob18),
                                                     Ctxt,
@@ -1121,7 +1121,7 @@ RbacPolicyValidatePolicyBlob(
                                                     uint8_t
                                                     r4Method =
                                                       Input[(uint32_t)positionAfterr4PathHash];
-                                                    BOOLEAN r4MethodConstraintIsOk = r4Method <= 3U;
+                                                    BOOLEAN r4MethodConstraintIsOk = r4Method <= 63U;
                                                     uint64_t
                                                     positionAfterr4Method1 =
                                                       EverParseCheckConstraintOk(r4MethodConstraintIsOk,
@@ -1223,7 +1223,7 @@ RbacPolicyValidatePolicyBlob(
                                                           }
                                                           else
                                                           {
-                                                            /* Validating field r5_path_hash */
+                                                            /* Validating field r5_path_id */
                                                             /* Checking that we have enough space for a UINT32, i.e., 4 bytes */
                                                             BOOLEAN
                                                             hasBytes23 =
@@ -1253,7 +1253,7 @@ RbacPolicyValidatePolicyBlob(
                                                             else
                                                             {
                                                               ErrorHandlerFn("_PolicyBlob",
-                                                                "r5_path_hash",
+                                                                "r5_path_id",
                                                                 EverParseErrorReasonOfResult(positionAfterPolicyBlob22),
                                                                 EverParseGetValidatorErrorKind(positionAfterPolicyBlob22),
                                                                 Ctxt,
@@ -1307,7 +1307,7 @@ RbacPolicyValidatePolicyBlob(
                                                                   Input[(uint32_t)positionAfterr5PathHash];
                                                                 BOOLEAN
                                                                 r5MethodConstraintIsOk =
-                                                                  r5Method <= 3U;
+                                                                  r5Method <= 63U;
                                                                 uint64_t
                                                                 positionAfterr5Method1 =
                                                                   EverParseCheckConstraintOk(r5MethodConstraintIsOk,
@@ -1427,7 +1427,7 @@ RbacPolicyValidatePolicyBlob(
                                                                       }
                                                                       else
                                                                       {
-                                                                        /* Validating field r6_path_hash */
+                                                                        /* Validating field r6_path_id */
                                                                         /* Checking that we have enough space for a UINT32, i.e., 4 bytes */
                                                                         BOOLEAN
                                                                         hasBytes27 =
@@ -1462,7 +1462,7 @@ RbacPolicyValidatePolicyBlob(
                                                                         else
                                                                         {
                                                                           ErrorHandlerFn("_PolicyBlob",
-                                                                            "r6_path_hash",
+                                                                            "r6_path_id",
                                                                             EverParseErrorReasonOfResult(positionAfterPolicyBlob26),
                                                                             EverParseGetValidatorErrorKind(positionAfterPolicyBlob26),
                                                                             Ctxt,
@@ -1521,7 +1521,7 @@ RbacPolicyValidatePolicyBlob(
                                                                               Input[(uint32_t)positionAfterr6PathHash];
                                                                             BOOLEAN
                                                                             r6MethodConstraintIsOk =
-                                                                              r6Method <= 3U;
+                                                                              r6Method <= 63U;
                                                                             uint64_t
                                                                             positionAfterr6Method1 =
                                                                               EverParseCheckConstraintOk(r6MethodConstraintIsOk,
@@ -1651,7 +1651,7 @@ RbacPolicyValidatePolicyBlob(
                                                                                   }
                                                                                   else
                                                                                   {
-                                                                                    /* Validating field r7_path_hash */
+                                                                                    /* Validating field r7_path_id */
                                                                                     /* Checking that we have enough space for a UINT32, i.e., 4 bytes */
                                                                                     BOOLEAN
                                                                                     hasBytes31 =
@@ -1687,7 +1687,7 @@ RbacPolicyValidatePolicyBlob(
                                                                                     else
                                                                                     {
                                                                                       ErrorHandlerFn("_PolicyBlob",
-                                                                                        "r7_path_hash",
+                                                                                        "r7_path_id",
                                                                                         EverParseErrorReasonOfResult(positionAfterPolicyBlob30),
                                                                                         EverParseGetValidatorErrorKind(positionAfterPolicyBlob30),
                                                                                         Ctxt,
@@ -1753,7 +1753,7 @@ RbacPolicyValidatePolicyBlob(
                                                                                         BOOLEAN
                                                                                         r7MethodConstraintIsOk =
                                                                                           r7Method
-                                                                                          <= 3U;
+                                                                                          <= 63U;
                                                                                         uint64_t
                                                                                         positionAfterr7Method1 =
                                                                                           EverParseCheckConstraintOk(r7MethodConstraintIsOk,
@@ -2633,7 +2633,7 @@ RbacPolicyValidateAccessRequest(
   else
   {
     ErrorHandlerFn("_AccessRequest",
-      "r0_path_hash",
+      "r0_path_id",
       EverParseErrorReasonOfResult(positionAfterAccessRequest2),
       EverParseGetValidatorErrorKind(positionAfterAccessRequest2),
       Ctxt,
@@ -2770,7 +2770,7 @@ RbacPolicyValidateAccessRequest(
   else
   {
     ErrorHandlerFn("_AccessRequest",
-      "r1_path_hash",
+      "r1_path_id",
       EverParseErrorReasonOfResult(positionAfterAccessRequest6),
       EverParseGetValidatorErrorKind(positionAfterAccessRequest6),
       Ctxt,
@@ -2907,7 +2907,7 @@ RbacPolicyValidateAccessRequest(
   else
   {
     ErrorHandlerFn("_AccessRequest",
-      "r2_path_hash",
+      "r2_path_id",
       EverParseErrorReasonOfResult(positionAfterAccessRequest10),
       EverParseGetValidatorErrorKind(positionAfterAccessRequest10),
       Ctxt,
@@ -3044,7 +3044,7 @@ RbacPolicyValidateAccessRequest(
   else
   {
     ErrorHandlerFn("_AccessRequest",
-      "r3_path_hash",
+      "r3_path_id",
       EverParseErrorReasonOfResult(positionAfterAccessRequest14),
       EverParseGetValidatorErrorKind(positionAfterAccessRequest14),
       Ctxt,
@@ -3181,7 +3181,7 @@ RbacPolicyValidateAccessRequest(
   else
   {
     ErrorHandlerFn("_AccessRequest",
-      "r4_path_hash",
+      "r4_path_id",
       EverParseErrorReasonOfResult(positionAfterAccessRequest18),
       EverParseGetValidatorErrorKind(positionAfterAccessRequest18),
       Ctxt,
@@ -3318,7 +3318,7 @@ RbacPolicyValidateAccessRequest(
   else
   {
     ErrorHandlerFn("_AccessRequest",
-      "r5_path_hash",
+      "r5_path_id",
       EverParseErrorReasonOfResult(positionAfterAccessRequest22),
       EverParseGetValidatorErrorKind(positionAfterAccessRequest22),
       Ctxt,
@@ -3455,7 +3455,7 @@ RbacPolicyValidateAccessRequest(
   else
   {
     ErrorHandlerFn("_AccessRequest",
-      "r6_path_hash",
+      "r6_path_id",
       EverParseErrorReasonOfResult(positionAfterAccessRequest26),
       EverParseGetValidatorErrorKind(positionAfterAccessRequest26),
       Ctxt,
@@ -3592,7 +3592,7 @@ RbacPolicyValidateAccessRequest(
   else
   {
     ErrorHandlerFn("_AccessRequest",
-      "r7_path_hash",
+      "r7_path_id",
       EverParseErrorReasonOfResult(positionAfterAccessRequest30),
       EverParseGetValidatorErrorKind(positionAfterAccessRequest30),
       Ctxt,
@@ -3729,7 +3729,7 @@ RbacPolicyValidateAccessRequest(
   else
   {
     ErrorHandlerFn("_AccessRequest",
-      "req_path_hash",
+      "req_path_id",
       EverParseErrorReasonOfResult(positionAfterAccessRequest34),
       EverParseGetValidatorErrorKind(positionAfterAccessRequest34),
       Ctxt,
@@ -3834,28 +3834,28 @@ RbacPolicyValidateAccessRequest(
         /* start: checking constraint */
         BOOLEAN
         accessOk_refinementConstraintIsOk =
-          (r0PathHash == reqPathHash && r0Method == reqMethod && authState >= r0MinRole &&
+          (r0PathHash == reqPathHash && (r0Method & reqMethod) == reqMethod && authState >= r0MinRole &&
             ((uint32_t)authScope & (uint32_t)r0ReqScope) == r0ReqScope)
           ||
-            (r1PathHash == reqPathHash && r1Method == reqMethod && authState >= r1MinRole &&
+            (r1PathHash == reqPathHash && (r1Method & reqMethod) == reqMethod && authState >= r1MinRole &&
               ((uint32_t)authScope & (uint32_t)r1ReqScope) == r1ReqScope)
           ||
-            (r2PathHash == reqPathHash && r2Method == reqMethod && authState >= r2MinRole &&
+            (r2PathHash == reqPathHash && (r2Method & reqMethod) == reqMethod && authState >= r2MinRole &&
               ((uint32_t)authScope & (uint32_t)r2ReqScope) == r2ReqScope)
           ||
-            (r3PathHash == reqPathHash && r3Method == reqMethod && authState >= r3MinRole &&
+            (r3PathHash == reqPathHash && (r3Method & reqMethod) == reqMethod && authState >= r3MinRole &&
               ((uint32_t)authScope & (uint32_t)r3ReqScope) == r3ReqScope)
           ||
-            (r4PathHash == reqPathHash && r4Method == reqMethod && authState >= r4MinRole &&
+            (r4PathHash == reqPathHash && (r4Method & reqMethod) == reqMethod && authState >= r4MinRole &&
               ((uint32_t)authScope & (uint32_t)r4ReqScope) == r4ReqScope)
           ||
-            (r5PathHash == reqPathHash && r5Method == reqMethod && authState >= r5MinRole &&
+            (r5PathHash == reqPathHash && (r5Method & reqMethod) == reqMethod && authState >= r5MinRole &&
               ((uint32_t)authScope & (uint32_t)r5ReqScope) == r5ReqScope)
           ||
-            (r6PathHash == reqPathHash && r6Method == reqMethod && authState >= r6MinRole &&
+            (r6PathHash == reqPathHash && (r6Method & reqMethod) == reqMethod && authState >= r6MinRole &&
               ((uint32_t)authScope & (uint32_t)r6ReqScope) == r6ReqScope)
           ||
-            (r7PathHash == reqPathHash && r7Method == reqMethod && authState >= r7MinRole &&
+            (r7PathHash == reqPathHash && (r7Method & reqMethod) == reqMethod && authState >= r7MinRole &&
               ((uint32_t)authScope & (uint32_t)r7ReqScope) == r7ReqScope);
         /* end: checking constraint */
         positionAfterAccessRequest37 =
