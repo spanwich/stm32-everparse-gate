@@ -16,6 +16,7 @@ def require(condition, message):
 symbols = run('nm', '--defined-only', elf)
 required = ['extract_security_params', 'populate_auth_fields', 'populate_rate_field',
             'RbacPolicyValidateAccessRequest', 'RbacPolicyValidatePolicyBlob',
+            'RbacPolicyValidateLoginRequest', 'Mediation_Wrapper_run', 'Mediation_Extern_invoke', 'gateway_mediate',
             'gateway_platform_start', 'run_core', 'run_diagnostics',
             'vApplicationMallocFailedHook', 'vApplicationStackOverflowHook', 'gateway_assert_failed']
 for symbol in required:
@@ -36,6 +37,9 @@ for name in ['gateway_http_feed', 'gateway_http_process', 'gateway_bearer_check'
 
 objects = sorted((build / 'Gateway/Generated/Extractor').glob('*.o'))
 require(len(objects) == 8, 'expected all eight generated extractor/IPC objects')
+mediation_objects = sorted((build / 'Gateway/Generated/Mediation').glob('*.o'))
+require(len(mediation_objects) == 2, 'expected both verified mediation objects')
+objects += mediation_objects
 makefile = build / 'Gateway/Generated/subdir.mk'
 # CubeIDE generates leaf makefiles; never modify them here.
 makefiles = list((build / 'Gateway/Generated').rglob('subdir.mk'))
@@ -71,6 +75,20 @@ for line in disassembly.splitlines():
             edges[fn].add(name)
     elif op in ('bl', 'blx', 'bl.w', 'blx.w') or (op in ('bx', 'bx.w') and operands.strip() != 'lr'):
         indirect.add(fn)
+# Call-graph admission evidence, conditional on no hidden indirect handler
+# references. This is not a machine-code control-flow or memory-isolation proof.
+def reachable_without(start, barrier):
+    reached=set(); pending=[start]
+    while pending:
+        name=pending.pop()
+        if name in reached or name==barrier: continue
+        reached.add(name); pending.extend(edges.get(name,()))
+    return reached
+protected_effects={'Mediation_Extern_invoke','gateway_dispatch','gateway_login','gateway_evaluate','pipeline_process'}
+require(not (reachable_without('gateway_http_process','Mediation_Wrapper_run') & protected_effects),
+        'HTTP handler call path bypasses verified wrapper')
+require(not (reachable_without('Mediation_Extern_check','') & protected_effects),
+        'validator bridge reaches a handler')
 seen = set(); active = set()
 def visit(fn):
     require(fn not in active, 'recursive extractor call cycle at ' + fn)
@@ -99,8 +117,9 @@ def chain(fn, path=()):
 report = {
     'elf': str(elf), 'compiler': run('gcc', '--version').splitlines()[0],
     'generated_optimization': '-Os', 'extractor_recursive_calls': False,
+    'mediation_recursive_calls': False, 'http_direct_call_graph_mediation': True,
     'extractor_linked_functions': sorted(extractor_names & linked),
-    'known_frame_chain_bytes': {n: chain(n) for n in ['run_core', 'run_diagnostics', 'extract_security_params', 'gateway_evaluate', 'gateway_dispatch', 'gateway_login', 'gateway_login_validate']},
+    'known_frame_chain_bytes': {n: chain(n) for n in ['run_core', 'run_diagnostics', 'extract_security_params', 'gateway_evaluate', 'gateway_dispatch', 'gateway_login', 'gateway_login_validate', 'gateway_mediate', 'Mediation_Wrapper_run', 'Mediation_Format_build', 'gateway_http_process']},
     'largest_frames': sorted(({'function': n, **v} for n, v in frames.items()), key=lambda x: x['bytes'], reverse=True)[:20],
     'unmeasured_callees_from_measured_code': sorted({t for f, ts in edges.items() if f in frames for t in ts if t not in frames}),
     'indirect_calls_in_measured_code': sorted(indirect & frames.keys()),

@@ -1,3 +1,7 @@
+> **Research branch:** this checkout contains the [verified mediation experiment](Verification/README.md).
+> Its [report](Verification/REPORT.md) distinguishes proved, model-checked, tested,
+> and trusted properties. These changes have not been flashed to the board.
+
 # STM32 EverParse Policy Gate
 
 An HTTP policy gateway running on the **NUCLEO-F767ZI with FreeRTOS**. It ports the

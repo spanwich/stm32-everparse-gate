@@ -54,3 +54,7 @@ for item in auth['files']:
 import subprocess
 subprocess.run(['python3', str(root / 'Gateway/tools/embed_dashboard.py'), '--check'], check=True)
 print('Authentication provenance and dashboard embedding PASS')
+
+# Research wrapper has its own proof/extraction manifest; imported cores above
+# retain their original provenance unchanged.
+subprocess.run(["python3", str(root / "Verification/tools/check_generated.py")], check=True)

@@ -1,0 +1,21 @@
+/* Small trusted FFI bridge. Generated EverParse runtime stays in a separate
+ * translation unit from KaRaMeL's runtime headers. */
+#include <stdbool.h>
+#include <stdint.h>
+#include "../Generated/Policy/RbacPolicyWrapper.h"
+bool gateway_mediation_check(uint8_t kind, uint8_t *bytes, uint32_t length)
+{
+    if(kind==0 || kind==2)
+        return length==75 && RbacPolicyCheckAccessRequest(bytes,length);
+    if(kind==3)
+        return length==70 && RbacPolicyCheckPolicyBlob(bytes,length);
+    if(kind==1) {
+        /* The generated wrapper accepts a valid prefix. Require exact framing. */
+        if(length<12 || length>106 || bytes[8]<1 || bytes[8]>32) return false;
+        unsigned password_offset=9U+bytes[8];
+        if(password_offset>=length || bytes[password_offset]<1 || bytes[password_offset]>64 ||
+           password_offset+1U+bytes[password_offset]!=length) return false;
+        return RbacPolicyCheckLoginRequest(bytes,length);
+    }
+    return false;
+}

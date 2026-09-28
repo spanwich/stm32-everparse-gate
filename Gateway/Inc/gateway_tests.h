@@ -18,4 +18,5 @@ void gateway_test_policy(GatewayTestStats *);
 void gateway_test_live_policy(GatewayTestStats *);
 void gateway_test_login(GatewayTestStats *);
 void gateway_test_http(GatewayTestStats *);
+void gateway_test_mediation(GatewayTestStats *);
 #endif

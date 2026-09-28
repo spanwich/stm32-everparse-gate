@@ -1,3 +1,14 @@
+# Verified mediation research branch — 2026-09-12
+
+This branch adds `Verification/` and generated Low* mediation code under
+`Gateway/Generated/Mediation`. Read `Verification/README.md` and
+`Verification/REPORT.md` for the exact claims, trusted FFI contracts, replay gap,
+and reproducible tools. HTTP now admits public assets and login through the gate
+as well as protected APIs and policy updates. The original generated cores are
+unchanged. Do not hand-edit the new generated C; use `Verification/tools/prove.py
+--extract`. The installed board firmware and `main` have not been changed by this
+experiment. Host tests and ARM builds do not authorize or establish deployment.
+
 # Live policy editing — current
 
 The dashboard now exposes admin-only operator-access toggles for `/demo` and

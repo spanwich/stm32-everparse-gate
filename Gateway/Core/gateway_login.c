@@ -1,5 +1,6 @@
 /* Handwritten bounded login adapter, owned by the gateway task. Demo accounts/key. */
 #include "gateway_login.h"
+#include "gateway_mediation.h"
 #include "gateway_http.h"
 #include "gateway_clear.h"
 #include "credential_store.h"
@@ -69,6 +70,23 @@ static bool credentials(const uint8_t *body, size_t length, char *user, uint8_t 
     }
     if(!take(&j,'}')) return false;
     space(&j); return seen==3 && j.i==j.n;
+}
+bool gateway_login_prepare(const uint8_t *body, size_t length,
+                           uint8_t envelope[106], uint32_t *envelope_length)
+{
+    char user[33]={0}, pass[65]={0};
+    uint8_t ulen=0, plen=0;
+    memset(envelope,0,106); *envelope_length=0;
+    bool ok=credentials(body,length,user,&ulen,pass,&plen);
+    if(ok) {
+        envelope[8]=ulen;
+        memcpy(envelope+9,user,ulen);
+        envelope[9+ulen]=plen;
+        memcpy(envelope+10+ulen,pass,plen);
+        *envelope_length=10U+ulen+plen;
+    }
+    gateway_clear(user,sizeof(user)); gateway_clear(pass,sizeof(pass));
+    return ok;
 }
 int gateway_login(const uint8_t *body, size_t length, char *response, size_t capacity)
 {

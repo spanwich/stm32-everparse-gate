@@ -3,6 +3,7 @@
 #include "gateway_login.h"
 #include "gateway_clear.h"
 #include "gateway_routes.h"
+#include "gateway_mediation.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -150,16 +151,19 @@ int gateway_http_process(GatewayHttp *h,GatewayContext *c)
 {
     if(h->status!=1) return h->status?h->status:400;
     h->status=400; /* Consume transport authorization exactly once. */
-    if(h->dashboard || h->script) return 200;
+    if(h->dashboard || h->script) {
+        SecurityParamsWire *public_request=(SecurityParamsWire *)c->security;
+        memset(c->security,0,sizeof(c->security));
+        public_request->path_hash=h->script?GATEWAY_PATH_SCRIPT:GATEWAY_PATH_DASHBOARD;
+        public_request->method=METHOD_GET;
+        c->security_len=SECPARAMS_HEADER_SIZE; c->result=GATEWAY_EXTRACTED;
+        return gateway_mediate(c,GATEWAY_PUBLIC);
+    }
     if(gateway_extract(c)!=GATEWAY_EXTRACTED) return 400;
     SecurityParamsWire *p=(SecurityParamsWire *)c->security;
     if(h->demo) p->path_hash=GATEWAY_PATH_DEMO;
     if(p->path_hash==PATH_LOGIN && p->method==METHOD_POST) {
-        GateResponse *r=(GateResponse *)c->gate;
-        int status=gateway_login(p->body,p->body_len,(char *)r->body,sizeof(c->gate)-GATE_RESPONSE_HEADER_SIZE);
-        r->status=status==200?GATE_STATUS_OK:GATE_STATUS_NO_AUTH;
-        r->body_len=(uint32_t)strlen((const char *)r->body);
-        c->gate_len=GATE_RESPONSE_HEADER_SIZE+r->body_len;
+        int status=gateway_mediate(c,GATEWAY_LOGIN);
         gateway_clear(c->request,sizeof(c->request));
         gateway_clear(c->security,sizeof(c->security));
         gateway_clear(h->raw,sizeof(h->raw));
@@ -169,13 +173,8 @@ int gateway_http_process(GatewayHttp *h,GatewayContext *c)
     if(!gateway_bearer_check(p->token,p->token_len,&identity,&rate)) return 401;
     if(p->path_hash==PATH_POLICY && p->method==METHOD_GET && identity.role!=ROLE_ADMIN) return 403;
     if(gateway_set_identity(c,&identity,rate)!=GATEWAY_IDENTIFIED) return 500;
-    GatewayResult r=gateway_evaluate(c);
-    if(r==GATEWAY_FORWARD && !gateway_dispatch(c)) return 500;
-    if(c->gate_len<GATE_RESPONSE_HEADER_SIZE || c->gate_len>sizeof(c->gate)) return 500;
-    const GateResponse *response=(const GateResponse *)c->gate;
-    if(response->body_len!=c->gate_len-GATE_RESPONSE_HEADER_SIZE) return 500;
-    static const unsigned codes[]={500,200,403,429,401,404,500};
-    return response->status<sizeof(codes)/sizeof(codes[0])?(int)codes[response->status]:500;
+    return gateway_mediate(c,p->path_hash==PATH_POLICY && p->method==METHOD_PUT?
+                           GATEWAY_UPDATE:GATEWAY_ACCESS);
 }
 int gateway_http_typed_header(char *out,size_t cap,int status,size_t n,const char *type)
 {
