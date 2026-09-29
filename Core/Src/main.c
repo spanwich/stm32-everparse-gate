@@ -96,8 +96,12 @@ int main(void) {
 
 	/* USER CODE BEGIN 1 */
     extern uint8_t __privileged_data_start__[], __privileged_data_end__[];
+    extern uint8_t __privileged_init_start__[], __privileged_init_end__[];
+    extern uint8_t __privileged_init_load__[];
     memset(__privileged_data_start__, 0,
            (size_t)(__privileged_data_end__-__privileged_data_start__));
+    memcpy(__privileged_init_start__, __privileged_init_load__,
+           (size_t)(__privileged_init_end__-__privileged_init_start__));
 
 	/* USER CODE END 1 */
 

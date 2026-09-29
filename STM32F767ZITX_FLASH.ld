@@ -44,8 +44,9 @@ _Min_Stack_Size = 0x1000; /* required amount of stack */
 /* Memories definition */
 MEMORY
 {
-  RAM_PRIV (xrw) : ORIGIN = 0x20000000,   LENGTH = 64K
-  RAM    (xrw)    : ORIGIN = 0x20010000,   LENGTH = 384K
+  RAM_PRIV (xrw) : ORIGIN = 0x20000000,   LENGTH = 128K
+  RAM_APP (xrw)  : ORIGIN = 0x20020000,   LENGTH = 16K
+  RAM    (xrw)    : ORIGIN = 0x20024000,   LENGTH = 304K
   FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 2048K
 }
 
@@ -68,13 +69,13 @@ SECTIONS
     *(privileged_data)
     . = ALIGN(8);
   } >RAM_PRIV
-  .gateway_app 0x2000c000 (NOLOAD) : {
+  .gateway_app (NOLOAD) : {
     . = ALIGN(8);
     *(.gateway_app*)
     . = ALIGN(8);
-  } >RAM_PRIV
+  } >RAM_APP
   __privileged_data_end__ = ORIGIN(RAM_PRIV) + LENGTH(RAM_PRIV);
-  ASSERT(SIZEOF(.privileged_data) <= 49152, "gate/kernel privileged RAM overflow")
+  ASSERT(SIZEOF(.privileged_data) <= 131072, "gate/kernel privileged RAM overflow")
   ASSERT(SIZEOF(.gateway_app) <= 16384, "application MPU subregion overflow")
   .eth_desc (NOLOAD) : {
     . = ALIGN(32); KEEP(*(.RxDecripSection))
@@ -93,16 +94,24 @@ SECTIONS
     . = ALIGN(4);
   } >FLASH
 
+  __privileged_functions_start__ = ORIGIN(FLASH);
   .privileged_functions : {
     . = ALIGN(4);
     *(privileged_functions)
     /* The port rounds this region up to a power of two. Pad before .text,
        otherwise the rounded privileged region traps unprivileged code. */
-    . = ALIGN(32768);
+    . = ALIGN(65536);
     __privileged_functions_end__ = .;
   } >FLASH
   ASSERT(__privileged_functions_end__ - ORIGIN(FLASH) <= 65536,
          "privileged flash MPU region exceeds 64 KiB")
+
+  .freertos_system_calls : {
+    __syscalls_flash_start__ = .;
+    *(freertos_system_calls)
+    . = ALIGN(4);
+    __syscalls_flash_end__ = .;
+  } >FLASH
 
   /* The program code and other data into "FLASH" Rom type memory */
   .text :
@@ -129,6 +138,18 @@ SECTIONS
     *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
     . = ALIGN(4);
   } >FLASH
+
+  /* V11 syscall dispatch has nonzero initializers and must survive the
+     explicit privileged-RAM clear performed before scheduler startup. */
+  .privileged_data_init : {
+    __privileged_init_start__ = .;
+    *(privileged_data_init)
+    . = ALIGN(4);
+    __privileged_init_end__ = .;
+  } >RAM_PRIV AT>FLASH
+  __privileged_init_load__ = LOADADDR(.privileged_data_init);
+  ASSERT(__privileged_init_end__ <= ORIGIN(RAM_PRIV) + LENGTH(RAM_PRIV),
+         "initialized privileged RAM overflow")
 
   .ARM.extab (READONLY) : /* The "READONLY" keyword is only supported in GCC11 and later, remove it if using GCC10 or earlier. */
   {

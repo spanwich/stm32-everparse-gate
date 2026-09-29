@@ -67,15 +67,19 @@ static void rx_free(struct pbuf *p)
     RxBuffer *b=(RxBuffer *)p;
     size_t i=(size_t)(b-rx);
     configASSERT(i<RX_COUNT);
-    taskENTER_CRITICAL(); rx_state[i]=0; taskEXIT_CRITICAL();
+    /* The final pbuf release owns this slot. A byte store is atomic on M7;
+     * the privileged allocator protects its scan separately. This callback
+     * can run in the unprivileged network task, which cannot enter a kernel
+     * critical section directly under MPU wrappers v2. */
+    __atomic_store_n(&rx_state[i],0,__ATOMIC_RELEASE);
     (void)osSemaphoreRelease(rx_sem);
 }
 void HAL_ETH_RxAllocateCallback(uint8_t **buffer)
 {
     *buffer=NULL;
     taskENTER_CRITICAL();
-    for(unsigned i=0;i<RX_COUNT;++i) if(!rx_state[i]) {
-        rx_state[i]=1; rx[i].custom.custom_free_function=rx_free;
+    for(unsigned i=0;i<RX_COUNT;++i) if(!__atomic_load_n(&rx_state[i],__ATOMIC_ACQUIRE)) {
+        __atomic_store_n(&rx_state[i],1,__ATOMIC_RELEASE); rx[i].custom.custom_free_function=rx_free;
         pbuf_alloced_custom(PBUF_RAW,0,PBUF_REF,&rx[i].custom,rx[i].bytes,FRAME_BYTES);
         *buffer=rx[i].bytes; break;
     }
@@ -86,7 +90,7 @@ void HAL_ETH_RxLinkCallback(void **first,void **last,uint8_t *buffer,uint16_t le
     RxBuffer *b=(RxBuffer *)(buffer - offsetof(RxBuffer,bytes));
     struct pbuf *p=&b->custom.pbuf;
     configASSERT((size_t)(b-rx)<RX_COUNT && length<=FRAME_BYTES);
-    rx_state[b-rx]=2;
+    __atomic_store_n(&rx_state[b-rx],2,__ATOMIC_RELEASE);
     p->next=NULL; p->len=length; p->tot_len=0;
     if(!*first) *first=p; else ((struct pbuf *)*last)->next=p;
     *last=p;
@@ -108,7 +112,8 @@ static bool reset_mac(void)
     __HAL_RCC_ETHMAC_FORCE_RESET(); __DSB(); __HAL_RCC_ETHMAC_RELEASE_RESET(); __DSB();
     if(heth.RxDescList.pRxStart) pbuf_free(heth.RxDescList.pRxStart);
     taskENTER_CRITICAL();
-    for(unsigned i=0;i<RX_COUNT;++i) if(rx_state[i]==1) rx_state[i]=0;
+    for(unsigned i=0;i<RX_COUNT;++i) if(__atomic_load_n(&rx_state[i],__ATOMIC_ACQUIRE)==1)
+        __atomic_store_n(&rx_state[i],0,__ATOMIC_RELEASE);
     taskEXIT_CRITICAL();
     memset(&heth.RxDescList,0,sizeof(heth.RxDescList));
     memset(&heth.TxDescList,0,sizeof(heth.TxDescList));

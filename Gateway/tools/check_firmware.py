@@ -21,7 +21,12 @@ required = ['extract_security_params', 'populate_auth_fields', 'populate_rate_fi
             'RbacPolicyValidateAccessRequest', 'RbacPolicyValidatePolicyBlob',
             'RbacPolicyValidateLoginRequest', 'Mediation_Wrapper_run', 'Mediation_Extern_invoke', 'gateway_mediate',
             'gateway_platform_start', 'run_core', 'run_diagnostics',
-            'vApplicationMallocFailedHook', 'vApplicationStackOverflowHook', 'gateway_assert_failed']
+            'vApplicationMallocFailedHook', 'gateway_assert_failed']
+# V11 MPU ports keep task context in the TCB and rely on MPU faults for
+# unprivileged stack overruns; stack_macros.h does not call this hook.
+if 'configUSE_MPU_WRAPPERS_V1                 0' not in (
+        Path(__file__).resolve().parents[2] / 'Core/Inc/FreeRTOSConfig.h').read_text():
+    required.append('vApplicationStackOverflowHook')
 for symbol in required:
     require(re.search(r'\b[Tt] ' + re.escape(symbol) + r'$', symbols, re.M), 'missing strong function ' + symbol)
 # Enforce the reserved F767 Ethernet banks in the linked image.
@@ -31,8 +36,8 @@ for name, origin, limit in [('.eth_desc', 0x20070000, 0x20070400), ('.eth_data',
     require(match is not None, 'missing DMA section ' + name)
     size, address = (int(v, 16) for v in match.groups())
     require(address == origin and address + size <= limit and address % 32 == 0, 'DMA section bounds/alignment ' + name)
-for name, origin, limit in [('.privileged_data', 0x20000000, 0x2000c000),
-                            ('.gateway_app', 0x2000c000, 0x20010000)]:
+for name, origin, limit in [('.privileged_data', 0x20000000, 0x20020000),
+                            ('.gateway_app', 0x20020000, 0x20024000)]:
     match = re.search(r'^\s*\d+\s+' + re.escape(name) + r'\s+([0-9a-f]+)\s+([0-9a-f]+)', sections, re.M)
     require(match is not None, 'missing MPU isolation section ' + name)
     size, address = (int(v, 16) for v in match.groups())

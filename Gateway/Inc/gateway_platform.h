@@ -16,6 +16,8 @@ typedef struct {
 extern volatile GatewayFaultRecord gateway_fault_record;
 void gateway_boot_report(void);
 void gateway_platform_start(void);
+void gateway_platform_grant_log_access(void *task);
+void *gateway_platform_network_task_handle(void);
 void gateway_panic(GatewayFault reason) __attribute__((noreturn));
 void gateway_assert_failed(const char *file, unsigned line) __attribute__((noreturn));
 #endif

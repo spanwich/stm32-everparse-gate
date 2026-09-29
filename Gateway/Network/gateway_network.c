@@ -88,12 +88,32 @@ void gateway_network_diagnostics(void)
         (unsigned long)t,(unsigned long)e,(unsigned long)l,t>=1024 && e>=1024 && l>=512?"OK":"LOW",
         (unsigned long)used,(unsigned long)peak,(unsigned long)errors);
 #if GATEWAY_R4_TRACE_NET
+    extern volatile uint32_t gateway_d1_mbox_post_failures;
+    extern volatile uint32_t gateway_d1_mbox_post_handle;
+    extern volatile uint32_t gateway_d1_accept_mbox_handle;
+    extern volatile int32_t gateway_d1_accept_get_status;
+    extern volatile uint32_t gateway_d1_tcpip_fetch_handle;
+    extern volatile int32_t gateway_d1_tcpip_fetch_status;
+    extern volatile uint32_t gateway_d1_tcpip_fetch_count;
+    extern volatile uint32_t gateway_d1_try_post_failures;
+    extern volatile uint32_t gateway_d1_try_post_handle;
     gateway_log("[NETSTATE] phase=%lu accept=%lu close=%lu delete=%lu errors=%lu/%lu last=%d/%d/%d pcb=%lu/%lu err=%lu\n",
         (unsigned long)network_phase,(unsigned long)accept_count,
         (unsigned long)close_count,(unsigned long)delete_count,
         (unsigned long)close_errors,(unsigned long)delete_errors,
         last_accept,last_close,last_delete,(unsigned long)pcb_used,
         (unsigned long)pcb_peak,(unsigned long)pcb_errors);
+    gateway_log("[D1MBOX] accept_handle=%lu get_status=%ld post_fail=%lu post_handle=%lu\n",
+        (unsigned long)gateway_d1_accept_mbox_handle,
+        (long)gateway_d1_accept_get_status,
+        (unsigned long)gateway_d1_mbox_post_failures,
+        (unsigned long)gateway_d1_mbox_post_handle);
+    gateway_log("[D1TCPIP] fetch_handle=%lu status=%ld count=%lu try_fail=%lu try_handle=%lu\n",
+        (unsigned long)gateway_d1_tcpip_fetch_handle,
+        (long)gateway_d1_tcpip_fetch_status,
+        (unsigned long)gateway_d1_tcpip_fetch_count,
+        (unsigned long)gateway_d1_try_post_failures,
+        (unsigned long)gateway_d1_try_post_handle);
 #endif
 #if GATEWAY_PAPER_CONTROL
     PaperGateCycles gate=gateway_paper_gate_take();

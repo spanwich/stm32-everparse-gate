@@ -7,6 +7,7 @@
 #include "cmsis_os2.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -23,16 +24,23 @@
 #define GATEWAY_FAULT_INJECT 0
 #endif
 extern UART_HandleTypeDef huart3;
-static _Alignas(8) StackType_t gateway_stack[GATEWAY_STACK_BYTES / sizeof(StackType_t)];
+static StackType_t gateway_stack[GATEWAY_STACK_BYTES / sizeof(StackType_t)] __attribute__((aligned(8192)));
 static _Alignas(8) StackType_t diagnostic_stack[DIAGNOSTIC_STACK_BYTES / sizeof(StackType_t)];
-static StaticTask_t gateway_tcb, diagnostic_tcb;
+static StaticTask_t gateway_tcb __attribute__((section(".gateway_privileged")));
+static StaticTask_t diagnostic_tcb __attribute__((section(".gateway_privileged")));
 static StaticSemaphore_t log_mutex_cb;
 static osThreadId_t gateway_task, diagnostic_task;
+void *gateway_platform_network_task_handle(void) { return (void *)gateway_task; }
 #if GATEWAY_PAPER_CONTROL
 TaskHandle_t gateway_paper_core_task(void) { return (TaskHandle_t)gateway_task; }
 TaskHandle_t gateway_paper_diagnostics_task(void) { return (TaskHandle_t)diagnostic_task; }
 #endif
 static osMutexId_t log_mutex;
+void gateway_platform_grant_log_access(void *task)
+{
+    vGrantAccessToQueue((TaskHandle_t)task,
+                        (QueueHandle_t)((uintptr_t)log_mutex >> 1U));
+}
 static volatile uint32_t log_drops;
 static volatile uint32_t tests_complete;
 static GatewayTestStats completed_stats;
@@ -60,7 +68,7 @@ void gateway_assert_failed(const char *file, unsigned line)
     gateway_panic(GATEWAY_FAULT_ASSERT);
 }
 void vApplicationMallocFailedHook(void) { gateway_panic(GATEWAY_FAULT_ALLOC); }
-void vApplicationStackOverflowHook(TaskHandle_t task, signed char *name)
+void vApplicationStackOverflowHook(TaskHandle_t task, char *name)
 {
     (void)name;
     gateway_fault_record.task = task;
@@ -195,9 +203,25 @@ void gateway_platform_start(void)
     if (!log_mutex) gateway_panic(GATEWAY_FAULT_STARTUP);
     /* CMSIS osThreadNew rejects the MPU privilege bit. These two trusted
      * startup/diagnostic tasks call HAL and privileged heap probes directly. */
-    gateway_task = (osThreadId_t)xTaskCreateStatic(run_core, "gateway_core",
-        GATEWAY_STACK_BYTES / sizeof(StackType_t), NULL,
-        (UBaseType_t)osPriorityNormal | portPRIVILEGE_BIT, gateway_stack, &gateway_tcb);
+    const TaskParameters_t network_params = {
+        .pvTaskCode=run_core, .pcName="gateway_core",
+        .usStackDepth=GATEWAY_STACK_BYTES / sizeof(StackType_t),
+        .pvParameters=NULL,
+        .uxPriority=(UBaseType_t)osPriorityNormal | portPRIVILEGE_BIT,
+        .puxStackBuffer=gateway_stack,
+        .xRegions={
+            {(void *)0x20000000UL,512U*1024U,
+                portMPU_REGION_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
+                portMPU_REGION_CACHEABLE_BUFFERABLE},
+            {NULL,0,0},
+            {(void *)0x20020000UL,16U*1024U,
+                portMPU_REGION_PRIVILEGED_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
+                portMPU_REGION_CACHEABLE_BUFFERABLE}},
+        .pxTaskBuffer=&gateway_tcb};
+    TaskHandle_t network_task=NULL;
+    if(xTaskCreateRestrictedStatic(&network_params,&network_task)!=pdPASS)
+        gateway_panic(GATEWAY_FAULT_STARTUP);
+    gateway_task=(osThreadId_t)network_task;
     diagnostic_task = (osThreadId_t)xTaskCreateStatic(run_diagnostics, "gateway_diag",
         DIAGNOSTIC_STACK_BYTES / sizeof(StackType_t), NULL,
         (UBaseType_t)(GATEWAY_PAPER_CONTROL ? osPriorityAboveNormal : osPriorityLow) |

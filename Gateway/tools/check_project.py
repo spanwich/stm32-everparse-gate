@@ -45,7 +45,11 @@ for name in ['STM32F767ZITX_FLASH.ld', 'STM32F767ZITX_RAM.ld']:
     script = (root / name).read_text()
     assert '0x20070000' in script and '0x20070400' in script
     assert ('LENGTH = 448K' in script or
-            ('LENGTH = 384K' in script and 'LENGTH = 64K' in script)), name
+            ('LENGTH = 384K' in script and 'LENGTH = 64K' in script) or
+            ('LENGTH = 368K' in script and 'LENGTH = 16K' in script and
+             'LENGTH = 64K' in script) or
+            ('LENGTH = 304K' in script and 'LENGTH = 16K' in script and
+             'LENGTH = 128K' in script)), name
 network = json.loads((root / 'Gateway/Provenance/network.json').read_text())
 for item in network['files']:
     assert hashlib.sha256((root / item['destination']).read_bytes()).hexdigest() == item['sha256'], 'Vendored network source changed: ' + item['destination']

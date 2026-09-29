@@ -1292,9 +1292,17 @@ osMutexId_t osMutexNew (const osMutexAttr_t *attr) {
       }
       #endif
 
+      /* MPU wrappers v2 use opaque integer handles starting at 1. Encode
+         CMSIS's recursive flag in a separate low bit after shifting. */
+      #if (configENABLE_MPU == 1) && (configUSE_MPU_WRAPPERS_V1 == 0)
+      if (hMutex != NULL) {
+        hMutex = (SemaphoreHandle_t)(((uint32_t)hMutex << 1U) | rmtx);
+      }
+      #else
       if ((hMutex != NULL) && (rmtx != 0U)) {
         hMutex = (SemaphoreHandle_t)((uint32_t)hMutex | 1U);
       }
+      #endif
     }
   }
 
@@ -1306,7 +1314,11 @@ osStatus_t osMutexAcquire (osMutexId_t mutex_id, uint32_t timeout) {
   osStatus_t stat;
   uint32_t rmtx;
 
+  #if (configENABLE_MPU == 1) && (configUSE_MPU_WRAPPERS_V1 == 0)
+  hMutex = (SemaphoreHandle_t)((uint32_t)mutex_id >> 1U);
+  #else
   hMutex = (SemaphoreHandle_t)((uint32_t)mutex_id & ~1U);
+  #endif
 
   rmtx = (uint32_t)mutex_id & 1U;
 
@@ -1347,7 +1359,11 @@ osStatus_t osMutexRelease (osMutexId_t mutex_id) {
   osStatus_t stat;
   uint32_t rmtx;
 
+  #if (configENABLE_MPU == 1) && (configUSE_MPU_WRAPPERS_V1 == 0)
+  hMutex = (SemaphoreHandle_t)((uint32_t)mutex_id >> 1U);
+  #else
   hMutex = (SemaphoreHandle_t)((uint32_t)mutex_id & ~1U);
+  #endif
 
   rmtx = (uint32_t)mutex_id & 1U;
 
@@ -1379,7 +1395,11 @@ osThreadId_t osMutexGetOwner (osMutexId_t mutex_id) {
   SemaphoreHandle_t hMutex;
   osThreadId_t owner;
 
+  #if (configENABLE_MPU == 1) && (configUSE_MPU_WRAPPERS_V1 == 0)
+  hMutex = (SemaphoreHandle_t)((uint32_t)mutex_id >> 1U);
+  #else
   hMutex = (SemaphoreHandle_t)((uint32_t)mutex_id & ~1U);
+  #endif
 
   if (IS_IRQ() || (hMutex == NULL)) {
     owner = NULL;
@@ -1395,7 +1415,11 @@ osStatus_t osMutexDelete (osMutexId_t mutex_id) {
 #ifndef USE_FreeRTOS_HEAP_1
   SemaphoreHandle_t hMutex;
 
+  #if (configENABLE_MPU == 1) && (configUSE_MPU_WRAPPERS_V1 == 0)
+  hMutex = (SemaphoreHandle_t)((uint32_t)mutex_id >> 1U);
+  #else
   hMutex = (SemaphoreHandle_t)((uint32_t)mutex_id & ~1U);
+  #endif
 
   if (IS_IRQ()) {
     stat = osErrorISR;
@@ -1849,7 +1873,7 @@ extern void vApplicationIdleHook (void);
 extern void vApplicationTickHook (void);
 extern void vApplicationMallocFailedHook (void);
 extern void vApplicationDaemonTaskStartupHook (void);
-extern void vApplicationStackOverflowHook (TaskHandle_t xTask, signed char *pcTaskName);
+extern void vApplicationStackOverflowHook (TaskHandle_t xTask, char *pcTaskName);
 
 /**
   Dummy implementation of the callback function vApplicationIdleHook().
@@ -1883,7 +1907,7 @@ __WEAK void vApplicationDaemonTaskStartupHook (void){}
   Dummy implementation of the callback function vApplicationStackOverflowHook().
 */
 #if (configCHECK_FOR_STACK_OVERFLOW > 0)
-__WEAK void vApplicationStackOverflowHook (TaskHandle_t xTask, signed char *pcTaskName) {
+__WEAK void vApplicationStackOverflowHook (TaskHandle_t xTask, char *pcTaskName) {
   (void)xTask;
   (void)pcTaskName;
 }

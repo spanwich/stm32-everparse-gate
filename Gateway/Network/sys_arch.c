@@ -43,6 +43,19 @@
 #include "gateway_platform.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
+#include "paper_experiment.h"
+#if GATEWAY_R4_TRACE_NET
+volatile uint32_t gateway_d1_mbox_post_failures;
+volatile uint32_t gateway_d1_mbox_post_handle;
+volatile uint32_t gateway_d1_accept_mbox_handle;
+volatile int32_t gateway_d1_accept_get_status;
+volatile uint32_t gateway_d1_tcpip_fetch_handle;
+volatile int32_t gateway_d1_tcpip_fetch_status;
+volatile uint32_t gateway_d1_tcpip_fetch_count;
+volatile uint32_t gateway_d1_try_post_failures;
+volatile uint32_t gateway_d1_try_post_handle;
+#endif
 osThreadId_t gateway_tcpip_task;
 
 #if defined(LWIP_PROVIDE_ERRNO)
@@ -68,6 +81,11 @@ err_t sys_mbox_new(sys_mbox_t *mbox, int size)
 #endif /* SYS_STATS */
   if(*mbox == NULL)
     return ERR_MEM;
+
+  /* The lwIP control thread creates the mailboxes later used by the
+   * network-facing task. V11 ACLs do not grant that access implicitly. */
+  vGrantAccessToQueue((TaskHandle_t)gateway_platform_network_task_handle(),
+                      (QueueHandle_t)*mbox);
 
   return ERR_OK;
 }
@@ -110,7 +128,12 @@ void sys_mbox_post(sys_mbox_t *mbox, void *data)
 #if (osCMSIS < 0x20000U)
   while(osMessagePut(*mbox, (uint32_t)data, osWaitForever) != osOK);
 #else
-  while(osMessageQueuePut(*mbox, &data, 0, osWaitForever) != osOK);
+  while(osMessageQueuePut(*mbox, &data, 0, osWaitForever) != osOK) {
+#if GATEWAY_R4_TRACE_NET
+    ++gateway_d1_mbox_post_failures;
+    gateway_d1_mbox_post_handle=(uint32_t)*mbox;
+#endif
+  }
 #endif
 }
 
@@ -132,6 +155,10 @@ err_t sys_mbox_trypost(sys_mbox_t *mbox, void *msg)
   {
     // could not post, queue must be full
     result = ERR_MEM;
+#if GATEWAY_R4_TRACE_NET
+    ++gateway_d1_try_post_failures;
+    gateway_d1_try_post_handle=(uint32_t)*mbox;
+#endif
 
 #if SYS_STATS
     lwip_stats.sys.mbox.err++;
@@ -188,6 +215,12 @@ u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
     }
 #else
     status = osMessageQueueGet(*mbox, msg, 0, timeout);
+#if GATEWAY_R4_TRACE_NET
+    if(timeout==250U) {
+      gateway_d1_accept_mbox_handle=(uint32_t)*mbox;
+      gateway_d1_accept_get_status=(int32_t)status;
+    }
+#endif
     if (status == osOK)
     {
       return (osKernelGetTickCount() - starttime);
@@ -205,7 +238,12 @@ u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
     *msg = (void *)event.value.v;
     return (osKernelSysTick() - starttime);
 #else
-    osMessageQueueGet(*mbox, msg, 0, osWaitForever );
+    status = osMessageQueueGet(*mbox, msg, 0, osWaitForever );
+#if GATEWAY_R4_TRACE_NET
+    gateway_d1_tcpip_fetch_handle=(uint32_t)*mbox;
+    gateway_d1_tcpip_fetch_status=(int32_t)status;
+    ++gateway_d1_tcpip_fetch_count;
+#endif
     return (osKernelGetTickCount() - starttime);
 #endif
   }
@@ -272,6 +310,9 @@ err_t sys_sem_new(sys_sem_t *sem, u8_t count)
 #endif /* SYS_STATS */
     return ERR_MEM;
   }
+
+  vGrantAccessToQueue((TaskHandle_t)gateway_platform_network_task_handle(),
+                      (QueueHandle_t)*sem);
 
   if(count == 0)	// Means it can't be taken
   {

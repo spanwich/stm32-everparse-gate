@@ -52,8 +52,18 @@
   #include <stdint.h>
   extern uint32_t SystemCoreClock;
 #endif
-#define configENABLE_FPU                         0
+#define configENABLE_FPU                         1
 #define configENABLE_MPU                         1
+#define configTOTAL_MPU_REGIONS                   8
+#define configUSE_MPU_WRAPPERS_V1                 0
+#define configENFORCE_SYSTEM_CALLS_FROM_KERNEL_ONLY 1
+#define configENABLE_ACCESS_CONTROL_LIST          1
+#define configPROTECTED_KERNEL_OBJECT_POOL_SIZE   128
+#define configSYSTEM_CALL_STACK_SIZE              128
+/* This board reports CPUID 0x411FC270 (Cortex-M7 r1p0), not r0p0/r0p1. */
+#define configENABLE_ERRATA_837070_WORKAROUND     0
+#define configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS 0
+#define configUSE_TIME_SLICING                    1
 #include "../../Gateway/Inc/paper_experiment.h"
 #if GATEWAY_PAPER_CONTROL || GATEWAY_R4_CONTROL
 #define INCLUDE_xTaskGetIdleTaskHandle           1
