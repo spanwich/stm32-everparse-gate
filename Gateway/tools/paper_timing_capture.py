@@ -18,6 +18,10 @@ p = argparse.ArgumentParser()
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--boots', type=int, default=5)
 p.add_argument('--seconds', type=int, default=240)
+p.add_argument('--clock-hz', type=int, default=96000000)
+p.add_argument('--variant', default='V0')
+p.add_argument('--baud', type=int, choices=(115200, 921600), default=921600)
+p.add_argument('--interrupts', choices=('enabled','masked'), default='enabled')
 a = p.parse_args()
 assert 1 <= a.boots <= 5
 root = Path(__file__).resolve().parents[2]
@@ -36,14 +40,14 @@ fd = os.open(serial, os.O_RDONLY | os.O_NONBLOCK | os.O_NOCTTY)
 attrs = termios.tcgetattr(fd)
 attrs[0] = attrs[1] = attrs[3] = 0
 attrs[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
-attrs[4] = attrs[5] = termios.B115200
+attrs[4] = attrs[5] = termios.B921600 if a.baud == 921600 else termios.B115200
 attrs[6][termios.VMIN] = 0
 attrs[6][termios.VTIME] = 0
 termios.tcsetattr(fd, termios.TCSANOW, attrs)
 
 
 def decode(raw, destination):
-    expected = [(0, 0)] + [(stage, case) for stage in range(1, 6) for case in range(7)]
+    expected = [(0, 0)] + [(stage, case) for stage in range(1, 8) for case in range(7)]
     rows = []
     offset = 0
     for stage, case in expected:
@@ -99,8 +103,10 @@ try:
         if boot == 1:
             assert b'Download verified successfully' in output
         raw = raw_path.read_bytes()
+        assert b'[BOOT] SYSCLK=' + str(a.clock_hz).encode() in raw, 'clock variant differs from boot report'
         assert b'[CORE SELFTEST] PASS 301/301' in raw
         assert b'[PAPER CORPUS] comparisons=12527 failures=0' in raw
+        assert b'interrupts=' + a.interrupts.encode() in raw, 'interrupt setting differs from capture label'
         csv_path = out / f'boot-{boot}.cycles.csv'
         rows = decode(raw, csv_path)
         results.append({'boot': boot, 'samples': len(rows),
@@ -117,9 +123,11 @@ for boot in range(1, a.boots + 1):
             key = (int(row['stage']), int(row['case']))
             grouped.setdefault(key, []).append(int(row['cycles']))
 summary = {'firmware_elf_sha256': hashlib.sha256(elf.read_bytes()).hexdigest(),
-           'clock_hz': 96000000, 'interrupts': 'enabled', 'boots': results,
+           'variant': a.variant, 'clock_hz': a.clock_hz, 'uart_baud': a.baud,
+           'interrupts': a.interrupts, 'boots': results,
            'stage_names': ['empty', 'validator', 'serializer_validator',
-                           'extractor', 'handwritten', 'request_processing'],
+                           'extractor', 'handwritten', 'request_processing',
+                           'serializer', 'field_serializer'],
            'case_names': ['first_allow', 'last_allow', 'absent_path',
                           'method_deny', 'role_deny', 'scope_deny', 'rate_deny'],
            'statistics': {}}

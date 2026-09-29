@@ -25,6 +25,8 @@
 /* USER CODE BEGIN Includes */
 #include "gateway_platform.h"
 #include "gateway_network.h"
+#include "paper_experiment.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -93,6 +95,9 @@ static void MX_USART3_UART_Init(void);
 int main(void) {
 
 	/* USER CODE BEGIN 1 */
+    extern uint8_t __privileged_data_start__[], __privileged_data_end__[];
+    memset(__privileged_data_start__, 0,
+           (size_t)(__privileged_data_end__-__privileged_data_start__));
 
 	/* USER CODE END 1 */
 
@@ -106,6 +111,9 @@ int main(void) {
 
 	/* USER CODE BEGIN Init */
     gateway_network_mpu();
+#if GATEWAY_R4_CACHES
+    SCB_EnableICache();
+#endif
 
 	/* USER CODE END Init */
 
@@ -184,7 +192,13 @@ void SystemClock_Config(void) {
 	/** Configure the main internal regulator output voltage
 	 */
 	__HAL_RCC_PWR_CLK_ENABLE();
-	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+	__HAL_PWR_VOLTAGESCALING_CONFIG(
+#if GATEWAY_R4_FAST_CLOCK
+        PWR_REGULATOR_VOLTAGE_SCALE1
+#else
+        PWR_REGULATOR_VOLTAGE_SCALE3
+#endif
+    );
 
 	/** Initializes the RCC Oscillators according to the specified parameters
 	 * in the RCC_OscInitTypeDef structure.
@@ -194,9 +208,19 @@ void SystemClock_Config(void) {
 	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
 	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
 	RCC_OscInitStruct.PLL.PLLM = 4;
-	RCC_OscInitStruct.PLL.PLLN = 96;
+	RCC_OscInitStruct.PLL.PLLN =
+#if GATEWAY_R4_FAST_CLOCK
+        216;
+#else
+        96;
+#endif
 	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-	RCC_OscInitStruct.PLL.PLLQ = 4;
+	RCC_OscInitStruct.PLL.PLLQ =
+#if GATEWAY_R4_FAST_CLOCK
+        9;
+#else
+        4;
+#endif
 	RCC_OscInitStruct.PLL.PLLR = 2;
 	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
 		Error_Handler();
@@ -214,10 +238,26 @@ void SystemClock_Config(void) {
 			| RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
 	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
 	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider =
+#if GATEWAY_R4_FAST_CLOCK
+        RCC_HCLK_DIV4;
+#else
+        RCC_HCLK_DIV2;
+#endif
+	RCC_ClkInitStruct.APB2CLKDivider =
+#if GATEWAY_R4_FAST_CLOCK
+        RCC_HCLK_DIV2;
+#else
+        RCC_HCLK_DIV1;
+#endif
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK) {
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct,
+#if GATEWAY_R4_FAST_CLOCK
+        FLASH_LATENCY_7
+#else
+        FLASH_LATENCY_3
+#endif
+        ) != HAL_OK) {
 		Error_Handler();
 	}
 }
@@ -288,7 +328,12 @@ static void MX_USART3_UART_Init(void) {
 
 	/* USER CODE END USART3_Init 1 */
 	huart3.Instance = USART3;
-	huart3.Init.BaudRate = 115200;
+	huart3.Init.BaudRate =
+#if GATEWAY_PAPER_TIMING
+        921600;
+#else
+        115200;
+#endif
 	huart3.Init.WordLength = UART_WORDLENGTH_8B;
 	huart3.Init.StopBits = UART_STOPBITS_1;
 	huart3.Init.Parity = UART_PARITY_NONE;

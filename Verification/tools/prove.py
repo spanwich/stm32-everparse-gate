@@ -14,7 +14,7 @@ for name,path in [('fstar',a.fstar),('karamel',a.karamel+'/krml'),('z3',a.z3)]:
     assert hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()==lock[name]['sha256'], 'Tool identity mismatch: '+name
 
 with tempfile.TemporaryDirectory(prefix='mediation-proof-') as tmp:
-    flags = [a.fstar, '--smt', a.z3, '--split_queries', 'always', '--z3smtopt', '(set-option :smt.arith.solver 2)', '--cache_checked_modules', '--cache_dir', tmp,
+    flags = [a.fstar, '--smt', a.z3, '--split_queries', 'always', '--z3rlimit', '1000', '--z3smtopt', '(set-option :smt.arith.solver 2)', '--cache_checked_modules', '--cache_dir', tmp,
              '--include', str(root/'lowstar'), '--include', a.karamel+'/krmllib', '--include', a.karamel+'/krmllib/obj']
     def run(cmd, log, env=None):
         r = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='mediation-proof-') as tmp:
         # Sequential checks make dependency .checked files available for extraction.
         for name in modules:
             run(flags+['--include',str(specs),str(specs/name)], 'replay-'+name+'.log')
-    modules=['Mediation.Format.fst','Mediation.Extern.fsti','Mediation.Wrapper.fst']
+    modules=['Mediation.Format.fst','Mediation.Extern.fsti','Mediation.Field.fst','Mediation.Wrapper.fst']
     for name in modules:
         run(flags+[str(root/'lowstar'/name)], name+'.log')
     if a.extract:
@@ -39,7 +39,8 @@ with tempfile.TemporaryDirectory(prefix='mediation-proof-') as tmp:
         run(flags+['--odir',tmp,'--codegen','krml','--extract','Mediation']+[str(root/'lowstar'/n) for n in modules], 'extract-fstar.log')
         env=dict(os.environ, KRML_HOME=a.karamel)
         run([a.karamel+'/krml','-skip-compilation','-skip-linking','-tmpdir',str(root/'generated'),
-             '-bundle','Mediation.Format=Mediation.Format','-bundle','Mediation.Wrapper=Mediation.Wrapper',
+             '-bundle','Mediation.Format=Mediation.Format','-bundle','Mediation.Field=Mediation.Field',
+             '-bundle','Mediation.Wrapper=Mediation.Wrapper',
              tmp+'/out.krml'], 'extract-karamel.log', env)
         target=root.parent/'Gateway/Generated/Mediation'
         target.mkdir(parents=True,exist_ok=True)

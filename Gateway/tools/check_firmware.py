@@ -5,6 +5,9 @@ import json, re, subprocess, sys
 COMPILER = Path('/opt/st/stm32cubeide_2.0.0/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.linux64_1.0.100.202509120712/tools/bin')
 elf = Path(sys.argv[1]).resolve()
 build = elf.parent
+experiment = (Path(__file__).resolve().parents[1] / 'Inc/paper_experiment.h').read_text()
+opt_o2 = re.search(r'^#define\s+GATEWAY_R4_OPT_O2\s+1\b', experiment, re.M) is not None
+generated_opt = '-O2' if opt_o2 else '-Os'
 
 def run(tool, *args):
     return subprocess.check_output([str(COMPILER / ('arm-none-eabi-' + tool)), *map(str, args)], text=True)
@@ -28,6 +31,12 @@ for name, origin, limit in [('.eth_desc', 0x20070000, 0x20070400), ('.eth_data',
     require(match is not None, 'missing DMA section ' + name)
     size, address = (int(v, 16) for v in match.groups())
     require(address == origin and address + size <= limit and address % 32 == 0, 'DMA section bounds/alignment ' + name)
+for name, origin, limit in [('.privileged_data', 0x20000000, 0x2000c000),
+                            ('.gateway_app', 0x2000c000, 0x20010000)]:
+    match = re.search(r'^\s*\d+\s+' + re.escape(name) + r'\s+([0-9a-f]+)\s+([0-9a-f]+)', sections, re.M)
+    require(match is not None, 'missing MPU isolation section ' + name)
+    size, address = (int(v, 16) for v in match.groups())
+    require(address == origin and address + size <= limit, 'MPU isolation section bounds ' + name)
 for name in ['DMARxDscrTab', 'DMATxDscrTab']:
     match = re.search(r'^([0-9a-f]+) [A-Za-z] ' + name + r'$', symbols, re.M)
     require(match is not None and 0x20070000 <= int(match[1], 16) < 0x20070400 and int(match[1], 16) % 32 == 0, 'DMA descriptor placement ' + name)
@@ -38,7 +47,7 @@ for name in ['gateway_http_feed', 'gateway_http_process', 'gateway_bearer_check'
 objects = sorted((build / 'Gateway/Generated/Extractor').glob('*.o'))
 require(len(objects) == 8, 'expected all eight generated extractor/IPC objects')
 mediation_objects = sorted((build / 'Gateway/Generated/Mediation').glob('*.o'))
-require(len(mediation_objects) == 2, 'expected both verified mediation objects')
+require(len(mediation_objects) == 3, 'expected all three verified mediation objects')
 objects += mediation_objects
 makefile = build / 'Gateway/Generated/subdir.mk'
 # CubeIDE generates leaf makefiles; never modify them here.
@@ -49,7 +58,7 @@ for recipe in makefiles:
     require(commands, 'missing compiler command in ' + str(recipe))
     for line in commands:
         opts = re.findall(r'(?:^|\s)(-O(?:[0-3sgz]|fast))(?=\s|$)', line)
-        require(opts and opts[-1] == '-Os', 'generated code must use -Os: ' + str(recipe))
+        require(opts and opts[-1] == generated_opt, 'generated optimization mismatch: ' + str(recipe))
 extractor_names = set()
 for obj in objects:
     for line in run('nm', '--defined-only', obj).splitlines():
@@ -116,7 +125,7 @@ def chain(fn, path=()):
     return frames.get(fn, {}).get('bytes', 0) + max([chain(t, path + (fn,)) for t in edges.get(fn, ()) if t in frames] or [0])
 report = {
     'elf': str(elf), 'compiler': run('gcc', '--version').splitlines()[0],
-    'generated_optimization': '-Os', 'extractor_recursive_calls': False,
+    'generated_optimization': generated_opt, 'extractor_recursive_calls': False,
     'mediation_recursive_calls': False, 'http_direct_call_graph_mediation': True,
     'extractor_linked_functions': sorted(extractor_names & linked),
     'known_frame_chain_bytes': {n: chain(n) for n in ['run_core', 'run_diagnostics', 'extract_security_params', 'gateway_evaluate', 'gateway_dispatch', 'gateway_login', 'gateway_login_validate', 'gateway_mediate', 'Mediation_Wrapper_run', 'Mediation_Format_build', 'gateway_http_process']},
@@ -126,5 +135,5 @@ report = {
     'limits': 'Known-frame sums exclude library/assembly/indirect-call costs, exception frames and interrupt nesting. Validate task and MSP margins on hardware; this is not a worst-case stack proof.'
 }
 (build / 'gateway.stack.json').write_text(json.dumps(report, indent=2) + '\n')
-print('Gateway post-link checks PASS: generated -Os, strong hooks, no recursive extractor calls')
+print('Gateway post-link checks PASS: generated '+generated_opt+', strong hooks, no recursive extractor calls')
 print('Stack evidence:', build / 'gateway.stack.json')

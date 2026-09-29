@@ -53,9 +53,9 @@
   extern uint32_t SystemCoreClock;
 #endif
 #define configENABLE_FPU                         0
-#define configENABLE_MPU                         0
+#define configENABLE_MPU                         1
 #include "../../Gateway/Inc/paper_experiment.h"
-#if GATEWAY_PAPER_CONTROL
+#if GATEWAY_PAPER_CONTROL || GATEWAY_R4_CONTROL
 #define INCLUDE_xTaskGetIdleTaskHandle           1
 extern void gateway_runtime_init(void);
 extern uint32_t gateway_runtime_counter(void);

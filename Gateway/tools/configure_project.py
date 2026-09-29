@@ -9,9 +9,15 @@ import xml.etree.ElementTree as ET
 root = Path(__file__).resolve().parents[2]
 paper_flags = (root / 'Gateway/Inc/paper_experiment.h').read_text()
 paper_alloc = bool(re.search(r'^#define\s+GATEWAY_PAPER_ALLOC\s+1\b', paper_flags, re.M))
+mpu = bool(re.search(r'^#define\s+GATEWAY_R4_MPU\s+1\b', paper_flags, re.M))
+opt_o2 = bool(re.search(r'^#define\s+GATEWAY_R4_OPT_O2\s+1\b', paper_flags, re.M))
+fast_clock = bool(re.search(r'^#define\s+GATEWAY_R4_FAST_CLOCK\s+1\b', paper_flags, re.M))
 path = root / '.cproject'
 tree = ET.parse(path)
 for cfg in tree.findall('.//configuration'):
+    for option in cfg.findall('.//option'):
+        if '.debug.option.cpuclock.' in option.get('superClass', ''):
+            option.set('value', '216' if fast_clock else '96')
     entries = cfg.find('sourceEntries')
     if entries is None:
         continue
@@ -19,6 +25,8 @@ for cfg in tree.findall('.//configuration'):
         ET.SubElement(entries, 'entry', {'excluding': 'tools|Provenance|Validation', 'flags': 'VALUE_WORKSPACE_PATH|RESOLVED', 'kind': 'sourcePath', 'name': 'Gateway'})
     gateway_entry = next(e for e in entries if e.get('name') == 'Gateway')
     gateway_entry.set('excluding', 'tools|Provenance|Network|Validation')
+    middlewares = next(e for e in entries if e.get('name') == 'Middlewares')
+    middlewares.set('excluding', 'Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM7/r0p1' if mpu else '')
     network_entries = {
         'Gateway/Network': 'lwip|lan8742',
         'Gateway/Network/lan8742': '',
@@ -32,13 +40,24 @@ for cfg in tree.findall('.//configuration'):
             entry = ET.SubElement(entries, 'entry', {'flags': 'VALUE_WORKSPACE_PATH|RESOLVED', 'kind': 'sourcePath', 'name': name})
         entry.set('excluding', excludes)
     base = next(f for f in cfg.findall('folderInfo') if f.get('resourcePath') == '')
+    if opt_o2:
+        for option in base.findall('.//option'):
+            if option.get('superClass', '').endswith('.compiler.option.optimization.level'):
+                option.set('value', option.get('superClass') + '.value.o2')
+    else:
+        for option in base.findall('.//option'):
+            if option.get('superClass', '').endswith('.compiler.option.optimization.level'):
+                if cfg.get('name') == 'Release':
+                    option.set('value', option.get('superClass') + '.value.os')
+                else:
+                    option.attrib.pop('value', None)
     for tool in base.findall('.//tool'):
         if tool.get('superClass') != 'com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker':
             continue
         option = next((o for o in tool.findall('option') if o.get('superClass', '').endswith('.tool.c.linker.option.otherflags')), None)
-        if paper_alloc:
-            flags = ' '.join('-Wl,--wrap=' + name for name in
-                             ('pvPortMalloc', 'malloc', '_malloc_r', 'mem_malloc', 'memp_malloc'))
+        wraps = ['pvPortMalloc', 'malloc', '_malloc_r', 'mem_malloc', 'memp_malloc'] if paper_alloc else []
+        if wraps:
+            flags = ' '.join('-Wl,--wrap=' + name for name in wraps)
             if option is None:
                 option = ET.SubElement(tool, 'option', {'id': 'policy_gate.paper.alloc.wrap',
                     'name': 'Other flags',
@@ -55,6 +74,11 @@ for cfg in tree.findall('.//configuration'):
             value = '../Gateway/' + name
             if not any(v.get('value') == value for v in inc):
                 ET.SubElement(inc, 'listOptionValue', {'builtIn': 'false', 'value': value})
+        if mpu:
+            old = '../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM7/r0p1'
+            for value in inc.findall('listOptionValue'):
+                if value.get('value') == old:
+                    value.set('value', '../Gateway/MPUPort')
     # A folder-specific managed configuration keeps generated recursion optimized,
     # while all handwritten Debug code remains at the project's original -O0.
     for folder in list(cfg.findall('folderInfo')):
@@ -67,7 +91,7 @@ for cfg in tree.findall('.//configuration'):
         if 'id' in element.attrib:
             element.set('id', element.get('id') + '.gateway.generated')
         if element.get('superClass', '').endswith('.compiler.option.optimization.level'):
-            element.set('value', element.get('superClass') + '.value.os')
+            element.set('value', element.get('superClass') + ('.value.o2' if opt_o2 else '.value.os'))
             element.set('valueType', 'enumerated')
     cfg.insert(list(cfg).index(entries), generated)
     cfg.set('postbuildStep', 'python3 ../Gateway/tools/check_firmware.py policy_gate.elf')
@@ -75,4 +99,4 @@ ET.indent(tree, space='\t')
 text = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<?fileVersion 4.0.0?>' + ET.tostring(tree.getroot(), encoding='unicode') + '\n'
 if path.read_text() != text:
     path.write_text(text)
-print('CubeIDE Gateway sources and generated-code -Os configuration ready')
+print('CubeIDE Gateway sources and generated-code '+('-O2' if opt_o2 else '-Os')+' configuration ready')

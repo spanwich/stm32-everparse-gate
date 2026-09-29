@@ -60,5 +60,8 @@ GatewayResult gateway_set_identity(GatewayContext *ctx,
 GatewayResult gateway_evaluate(GatewayContext *ctx);
 /* Consumes a forwarding result once; never dispatches denied/updated requests. */
 bool gateway_dispatch(GatewayContext *ctx);
+/* App task's bounded effect implementation, with a copied policy snapshot. */
+bool gateway_render_app(const uint8_t *app, uint32_t app_len,
+                        const Policy *policy, uint8_t *gate, uint32_t *gate_len);
 bool gateway_guards_ok(const GatewayContext *ctx);
 #endif

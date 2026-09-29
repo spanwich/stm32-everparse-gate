@@ -8,11 +8,12 @@
 #include "path_hashes.h"
 #include "HTTP_Extract_Complete.h"
 #include "../Generated/Mediation/Mediation_Format.h"
+#include "../Generated/Mediation/Mediation_Field.h"
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
 
-enum { SAMPLES=10000, STAGES=6, CASES=7 };
+enum { SAMPLES=10000, STAGES=8, CASES=7 };
 static uint8_t record[8+4*SAMPLES];
 static GatewayContext context;
 static GatewayHttp http;
@@ -90,12 +91,18 @@ static uint32_t run_one(unsigned stage)
         return extract_security_params((uint8_t *)http_request,(uint32_t)http_length,
                                        extracted,&extracted_len);
     case 4: return handwritten();
-    default:
+    case 5:
         gateway_begin_request(&context);gateway_http_init(&http);
         {
             int status=gateway_http_feed(&http,&context,http_request,http_length);
             return status==1?(uint32_t)gateway_http_process(&http,&context):(uint32_t)status;
         }
+    case 6:
+        Mediation_Format_build(security,policy,login,2,envelope);
+        return envelope[0];
+    default:
+        Mediation_Field_build_access(security,policy,login,envelope);
+        return envelope[0];
     }
 }
 
@@ -103,13 +110,22 @@ void gateway_paper_timing_run(void)
 {
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT=0;DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-    gateway_log("[PAPER TIMING] begin samples=%u stages=%u cases=%u interrupts=enabled\n",
-                SAMPLES,STAGES,CASES);
+    gateway_log("[PAPER TIMING] begin samples=%u stages=%u cases=%u interrupts=%s\n",
+                SAMPLES,STAGES,CASES,GATEWAY_R4_TIMING_MASK_IRQ?"masked":"enabled");
     for(unsigned stage=0;stage<STAGES;++stage) {
         unsigned count=stage==0?1:CASES;
         for(unsigned which=0;which<count;++which) {
             setup(which);
             Mediation_Format_build(security,policy,login,2,envelope);
+            if (stage==7) {
+                uint8_t reference[sizeof(envelope)];
+                memcpy(reference,envelope,sizeof(reference));
+                Mediation_Field_build_access(security,policy,login,envelope);
+                if(memcmp(reference,envelope,sizeof(reference))!=0) {
+                    gateway_log("[PAPER TIMING] field mismatch case=%u\n",which);
+                    return;
+                }
+            }
             if(stage==1 || stage==2 || stage==4) {
                 bool oracle=handwritten();
                 bool generated=paper_timing_validate(envelope);
@@ -121,9 +137,16 @@ void gateway_paper_timing_run(void)
             memcpy(record,"PGB1",4);record[4]=(uint8_t)stage;record[5]=(uint8_t)which;
             put16(record+6,SAMPLES);
             for(unsigned sample=0;sample<SAMPLES;++sample) {
+#if GATEWAY_R4_TIMING_MASK_IRQ
+                uint32_t primask=__get_PRIMASK();
+                __disable_irq();
+#endif
                 uint32_t start=DWT->CYCCNT;
                 result_sink=run_one(stage);
                 uint32_t delta=DWT->CYCCNT-start;
+#if GATEWAY_R4_TIMING_MASK_IRQ
+                __set_PRIMASK(primask);
+#endif
                 put32(record+8+4*sample,delta);
             }
             if(gateway_log_binary(record,sizeof(record))!=(int)sizeof(record)) {

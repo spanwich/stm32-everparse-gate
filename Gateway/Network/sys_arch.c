@@ -41,6 +41,8 @@
 
 #include "cmsis_os.h"
 #include "gateway_platform.h"
+#include "FreeRTOS.h"
+#include "task.h"
 osThreadId_t gateway_tcpip_task;
 
 #if defined(LWIP_PROVIDE_ERRNO)
@@ -466,12 +468,13 @@ sys_thread_t sys_thread_new(const char *name, lwip_thread_fn thread , void *arg,
   const osThreadDef_t os_thread_def = { (char *)name, (os_pthread)thread, (osPriority)prio, 0, stacksize};
   return osThreadCreate(&os_thread_def, arg);
 #else
-  const osThreadAttr_t attributes = {
-                        .name = name,
-                        .stack_size = stacksize,
-                        .priority = (osPriority_t)prio,
-                      };
-  gateway_tcpip_task = osThreadNew(thread, arg, &attributes);
+  TaskHandle_t task = NULL;
+  if (stacksize <= 0 || (stacksize % (int)sizeof(StackType_t)) != 0 ||
+      xTaskCreate((TaskFunction_t)thread, name,
+                  (configSTACK_DEPTH_TYPE)(stacksize / (int)sizeof(StackType_t)),
+                  arg, (UBaseType_t)prio | portPRIVILEGE_BIT, &task) != pdPASS)
+      gateway_panic(GATEWAY_FAULT_ALLOC);
+  gateway_tcpip_task = (osThreadId_t)task;
   if (!gateway_tcpip_task) gateway_panic(GATEWAY_FAULT_ALLOC);
   return gateway_tcpip_task;
 #endif

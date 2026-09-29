@@ -217,8 +217,12 @@ err_t gateway_ethernet_init(struct netif *n)
     n->name[0]='p'; n->name[1]='g'; n->hwaddr_len=6; memcpy(n->hwaddr,heth.Init.MACAddr,6);
     n->mtu=1500; n->flags=NETIF_FLAG_BROADCAST|NETIF_FLAG_ETHARP;
     n->output=etharp_output; n->linkoutput=output;
-    const osThreadAttr_t ia={.name="ETH input",.priority=osPriorityAboveNormal,.stack_mem=input_stack,.stack_size=sizeof(input_stack),.cb_mem=&input_tcb,.cb_size=sizeof(input_tcb)};
-    const osThreadAttr_t la={.name="ETH link",.priority=osPriorityBelowNormal,.stack_mem=link_stack,.stack_size=sizeof(link_stack),.cb_mem=&link_tcb,.cb_size=sizeof(link_tcb)};
-    gateway_eth_task=osThreadNew(input_thread,NULL,&ia); gateway_link_task=osThreadNew(link_thread,NULL,&la);
+    /* These tasks own HAL/PHY state and must call privileged NVIC/driver code. */
+    gateway_eth_task=(osThreadId_t)xTaskCreateStatic(input_thread,"ETH input",
+        sizeof(input_stack)/sizeof(StackType_t),NULL,
+        (UBaseType_t)osPriorityAboveNormal|portPRIVILEGE_BIT,input_stack,&input_tcb);
+    gateway_link_task=(osThreadId_t)xTaskCreateStatic(link_thread,"ETH link",
+        sizeof(link_stack)/sizeof(StackType_t),NULL,
+        (UBaseType_t)osPriorityBelowNormal|portPRIVILEGE_BIT,link_stack,&link_tcb);
     return gateway_eth_task && gateway_link_task?ERR_OK:ERR_MEM;
 }

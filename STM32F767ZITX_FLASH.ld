@@ -44,7 +44,8 @@ _Min_Stack_Size = 0x1000; /* required amount of stack */
 /* Memories definition */
 MEMORY
 {
-  RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 448K
+  RAM_PRIV (xrw) : ORIGIN = 0x20000000,   LENGTH = 64K
+  RAM    (xrw)    : ORIGIN = 0x20010000,   LENGTH = 384K
   FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 2048K
 }
 
@@ -55,6 +56,26 @@ MEMORY { ETH_DESC (rw) : ORIGIN = 0x20070000, LENGTH = 1K
 /* Sections */
 SECTIONS
 {
+  __FLASH_segment_start__ = ORIGIN(FLASH);
+  __FLASH_segment_end__ = ORIGIN(FLASH) + LENGTH(FLASH);
+  __SRAM_segment_start__ = ORIGIN(RAM_PRIV);
+  __SRAM_segment_end__ = 0x20080000;
+  /* The MPU port rounds the 448 KiB CPU RAM span to 512 KiB. Its
+     maintained region-4 setup disables the Ethernet upper subregion. */
+  .privileged_data (NOLOAD) : {
+    __privileged_data_start__ = .;
+    *(.gateway_privileged*)
+    *(privileged_data)
+    . = ALIGN(8);
+  } >RAM_PRIV
+  .gateway_app 0x2000c000 (NOLOAD) : {
+    . = ALIGN(8);
+    *(.gateway_app*)
+    . = ALIGN(8);
+  } >RAM_PRIV
+  __privileged_data_end__ = ORIGIN(RAM_PRIV) + LENGTH(RAM_PRIV);
+  ASSERT(SIZEOF(.privileged_data) <= 49152, "gate/kernel privileged RAM overflow")
+  ASSERT(SIZEOF(.gateway_app) <= 16384, "application MPU subregion overflow")
   .eth_desc (NOLOAD) : {
     . = ALIGN(32); KEEP(*(.RxDecripSection))
     . = ALIGN(32); KEEP(*(.TxDecripSection))
@@ -71,6 +92,17 @@ SECTIONS
     KEEP(*(.isr_vector)) /* Startup code */
     . = ALIGN(4);
   } >FLASH
+
+  .privileged_functions : {
+    . = ALIGN(4);
+    *(privileged_functions)
+    /* The port rounds this region up to a power of two. Pad before .text,
+       otherwise the rounded privileged region traps unprivileged code. */
+    . = ALIGN(32768);
+    __privileged_functions_end__ = .;
+  } >FLASH
+  ASSERT(__privileged_functions_end__ - ORIGIN(FLASH) <= 65536,
+         "privileged flash MPU region exceeds 64 KiB")
 
   /* The program code and other data into "FLASH" Rom type memory */
   .text :

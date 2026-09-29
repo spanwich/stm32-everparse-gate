@@ -11,6 +11,7 @@ import threading
 
 p = argparse.ArgumentParser()
 p.add_argument('--output', type=Path, required=True)
+p.add_argument('--baud', type=int, choices=(115200, 921600), default=115200)
 p.add_argument('command', nargs=argparse.REMAINDER)
 a = p.parse_args()
 command = a.command[1:] if a.command and a.command[0] == '--' else a.command
@@ -25,7 +26,7 @@ fd = os.open(serial, os.O_RDONLY | os.O_NONBLOCK | os.O_NOCTTY)
 attrs = termios.tcgetattr(fd)
 attrs[0] = attrs[1] = attrs[3] = 0
 attrs[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
-attrs[4] = attrs[5] = termios.B115200
+attrs[4] = attrs[5] = termios.B921600 if a.baud == 921600 else termios.B115200
 attrs[6][termios.VMIN] = attrs[6][termios.VTIME] = 0
 termios.tcsetattr(fd, termios.TCSANOW, attrs)
 termios.tcflush(fd, termios.TCIFLUSH)
@@ -55,6 +56,6 @@ finally:
 (a.output / 'command.log').write_bytes(result.stdout)
 (a.output / 'capture.json').write_text(json.dumps({
     'command': command, 'exit_code': result.returncode,
-    'uart_log': str(a.output / 'uart.log')}, indent=2) + '\n')
+    'uart_baud': a.baud, 'uart_log': str(a.output / 'uart.log')}, indent=2) + '\n')
 print(result.stdout.decode(errors='replace'))
 raise SystemExit(result.returncode)

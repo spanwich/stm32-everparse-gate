@@ -193,18 +193,22 @@ void gateway_platform_start(void)
         .cb_mem = &log_mutex_cb, .cb_size = sizeof(log_mutex_cb)};
     log_mutex = osMutexNew(&mutex_attr);
     if (!log_mutex) gateway_panic(GATEWAY_FAULT_STARTUP);
-    const osThreadAttr_t core_attr = {.name = "gateway_core", .priority = osPriorityNormal,
-        .cb_mem = &gateway_tcb, .cb_size = sizeof(gateway_tcb),
-        .stack_mem = gateway_stack, .stack_size = sizeof(gateway_stack)};
-    const osThreadAttr_t diag_attr = {.name = "gateway_diag",
-        .priority = GATEWAY_PAPER_CONTROL ? osPriorityAboveNormal : osPriorityLow,
-        .cb_mem = &diagnostic_tcb, .cb_size = sizeof(diagnostic_tcb),
-        .stack_mem = diagnostic_stack, .stack_size = sizeof(diagnostic_stack)};
-    gateway_task = osThreadNew(run_core, NULL, &core_attr);
-    diagnostic_task = osThreadNew(run_diagnostics, NULL, &diag_attr);
+    /* CMSIS osThreadNew rejects the MPU privilege bit. These two trusted
+     * startup/diagnostic tasks call HAL and privileged heap probes directly. */
+    gateway_task = (osThreadId_t)xTaskCreateStatic(run_core, "gateway_core",
+        GATEWAY_STACK_BYTES / sizeof(StackType_t), NULL,
+        (UBaseType_t)osPriorityNormal | portPRIVILEGE_BIT, gateway_stack, &gateway_tcb);
+    diagnostic_task = (osThreadId_t)xTaskCreateStatic(run_diagnostics, "gateway_diag",
+        DIAGNOSTIC_STACK_BYTES / sizeof(StackType_t), NULL,
+        (UBaseType_t)(GATEWAY_PAPER_CONTROL ? osPriorityAboveNormal : osPriorityLow) |
+        portPRIVILEGE_BIT, diagnostic_stack, &diagnostic_tcb);
     if (!gateway_task || !diagnostic_task) gateway_panic(GATEWAY_FAULT_STARTUP);
 #if GATEWAY_PAPER_CONTROL
     extern void gateway_paper_control_start(void);
     gateway_paper_control_start();
+#endif
+#if GATEWAY_R4_CONTROL
+    extern void gateway_r4_control_start(void);
+    gateway_r4_control_start();
 #endif
 }

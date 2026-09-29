@@ -6,6 +6,9 @@
 #include "gateway_clear.h"
 #include "gateway_audit.h"
 #include "gateway_routes.h"
+#ifdef STM32F767xx
+#include "gateway_r4_boundary.h"
+#endif
 #include "paper_experiment.h"
 #if GATEWAY_PAPER_CONTROL
 #include "paper_control.h"
@@ -38,6 +41,9 @@ bool gateway_mediation_check(uint8_t kind, uint8_t *bytes, uint32_t length);
 bool Mediation_Extern_check(uint8_t kind, uint32_t length, uint8_t *request,
                           uint8_t *policy, uint8_t *login, uint8_t *envelope)
 {
+#if defined(STM32F767xx) && GATEWAY_R4_FAULT_INJECT == 2
+    gateway_r4_fault_before_validator(envelope);
+#endif
     bool accepted=gateway_mediation_check(kind,envelope,length);
     if(accepted) gateway_audit_accept(kind,length,request,policy,login);
     return accepted;
@@ -112,7 +118,11 @@ uint32_t Mediation_Extern_invoke(uint8_t kind, uint32_t length, uint8_t *request
     memcpy(app->subject_id,p->subject_id,SUBJECT_ID_MAX_APP);
     app->body_len=p->body_len; memcpy(app->body,p->body,p->body_len);
     c->app_len=APP_REQUEST_HEADER_SIZE+p->body_len; c->result=GATEWAY_FORWARD;
+#ifdef STM32F767xx
+    return gateway_r4_app_dispatch(c)?200:500;
+#else
     return gateway_dispatch(c)?200:500;
+#endif
 }
 
 int gateway_mediate(GatewayContext *c, unsigned kind)

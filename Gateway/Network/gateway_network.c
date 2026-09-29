@@ -1,5 +1,6 @@
 #include "gateway_network.h"
 #include "gateway_http.h"
+#include "gateway_r4_boundary.h"
 #include "gateway_audit.h"
 #include "../Web/dashboard_html.h"
 _Static_assert(sizeof(gateway_dashboard)<=16384 && sizeof(gateway_dashboard_js)<=16384, "static asset bound");
@@ -18,6 +19,7 @@ _Static_assert(sizeof(gateway_dashboard)<=16384 && sizeof(gateway_dashboard_js)<
 #include "lwip/netifapi.h"
 #include "lwip/api.h"
 #include "lwip/stats.h"
+#include "lwip/memp.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include <stdio.h>
@@ -29,6 +31,11 @@ static GatewayHttp http;
 static volatile uint32_t ready, requests, rx_failures;
 static uint32_t heap_used, heap_peak, heap_errors;
 static volatile int last_status, last_send;
+#if GATEWAY_R4_TRACE_NET
+static volatile uint32_t network_phase, accept_count, close_count, delete_count;
+static volatile uint32_t close_errors, delete_errors, pcb_used, pcb_peak, pcb_errors;
+static volatile int last_accept, last_close, last_delete;
+#endif
 #if GATEWAY_PAPER_CONTROL
 static uint32_t request_cycles, request_calls;
 #endif
@@ -42,6 +49,13 @@ static void sample_heap(void *unused)
     (void)unused;
     taskENTER_CRITICAL();
     heap_used=lwip_stats.mem.used; heap_peak=lwip_stats.mem.max; heap_errors=lwip_stats.mem.err;
+#if GATEWAY_R4_TRACE_NET
+    if(lwip_stats.memp[MEMP_TCP_PCB]) {
+        pcb_used=lwip_stats.memp[MEMP_TCP_PCB]->used;
+        pcb_peak=lwip_stats.memp[MEMP_TCP_PCB]->max;
+        pcb_errors=lwip_stats.memp[MEMP_TCP_PCB]->err;
+    }
+#endif
     taskEXIT_CRITICAL();
 }
 void gateway_network_mpu(void)
@@ -73,6 +87,14 @@ void gateway_network_diagnostics(void)
         (unsigned long)gateway_tx_packets,(unsigned long)gateway_rx_drops,(unsigned long)gateway_tx_errors,
         (unsigned long)t,(unsigned long)e,(unsigned long)l,t>=1024 && e>=1024 && l>=512?"OK":"LOW",
         (unsigned long)used,(unsigned long)peak,(unsigned long)errors);
+#if GATEWAY_R4_TRACE_NET
+    gateway_log("[NETSTATE] phase=%lu accept=%lu close=%lu delete=%lu errors=%lu/%lu last=%d/%d/%d pcb=%lu/%lu err=%lu\n",
+        (unsigned long)network_phase,(unsigned long)accept_count,
+        (unsigned long)close_count,(unsigned long)delete_count,
+        (unsigned long)close_errors,(unsigned long)delete_errors,
+        last_accept,last_close,last_delete,(unsigned long)pcb_used,
+        (unsigned long)pcb_peak,(unsigned long)pcb_errors);
+#endif
 #if GATEWAY_PAPER_CONTROL
     PaperGateCycles gate=gateway_paper_gate_take();
     uint32_t cycles=request_cycles,calls=request_calls;
@@ -92,22 +114,25 @@ void gateway_network_diagnostics(void)
 static void serve(struct netconn *conn)
 {
     GatewayContext *c=&gateway_network_context;
+    const GatewayR4Reply *decision=NULL;
+    GatewayAuditRecord audit={0};
 #if GATEWAY_PAPER_ALLOC
     decision_allocations=0;
 #endif
     gateway_begin_request(c); gateway_http_init(&http);
-    gateway_audit_begin(c);
     netconn_set_sendtimeout(conn,2000); netconn_set_recvtimeout(conn,250);
-    conn->linger=2;
+    /* Close returns after queuing FIN; lwIP retains and ACKs copied TCP data.
+     * Positive linger stalled the netconn caller with no per-request UART. */
+    conn->linger=-1;
     uint32_t start=osKernelGetTickCount(),epoch=gateway_link_epoch;
     int status=0;
     while(!status) {
-        if(!gateway_link_up || epoch!=gateway_link_epoch) { ++rx_failures; (void)gateway_audit_finish(); return; }
+        if(!gateway_link_up || epoch!=gateway_link_epoch) { ++rx_failures; return; }
         if((uint32_t)(osKernelGetTickCount()-start)>=5000) { status=408; break; }
         struct netbuf *buffer=NULL;
         err_t err=netconn_recv(conn,&buffer);
         if(err==ERR_TIMEOUT) continue;
-        if(err!=ERR_OK) { if(buffer) netbuf_delete(buffer); ++rx_failures; (void)gateway_audit_finish(); return; }
+        if(err!=ERR_OK) { if(buffer) netbuf_delete(buffer); ++rx_failures; return; }
         for(struct pbuf *p=buffer->p;p;p=p->next) {
             if(status==1 && p->len) { status=400; break; }
             status=gateway_http_feed(&http,c,p->payload,p->len);
@@ -122,7 +147,8 @@ static void serve(struct netconn *conn)
 #if GATEWAY_PAPER_CONTROL
         uint32_t start_cycles=DWT->CYCCNT;
 #endif
-        status=gateway_http_process(&http,c);
+        decision=gateway_r4_submit(&http);
+        status=decision?decision->status:500;
 #if GATEWAY_PAPER_CONTROL
         request_cycles+=DWT->CYCCNT-start_cycles;++request_calls;
 #endif
@@ -133,17 +159,18 @@ static void serve(struct netconn *conn)
         ++decision_allocations_checked;
 #endif
     }
-    GatewayAuditRecord audit=gateway_audit_finish();
+    if(decision) audit=decision->audit;
     const char *body="{\"status\":\"error\"}";
     size_t length=strlen(body);
-    if(c->gate_len>=GATE_RESPONSE_HEADER_SIZE && (status==200 || status==400 || status==401 || status==403 || status==429)) {
-        const GateResponse *r=(const GateResponse *)c->gate;
-        if(r->body_len==c->gate_len-GATE_RESPONSE_HEADER_SIZE) { body=(const char *)r->body; length=r->body_len; }
+    if(decision && decision->gate_len>=GATE_RESPONSE_HEADER_SIZE &&
+       (status==200 || status==400 || status==401 || status==403 || status==429)) {
+        const GateResponse *r=(const GateResponse *)decision->gate;
+        if(r->body_len==decision->gate_len-GATE_RESPONSE_HEADER_SIZE) { body=(const char *)r->body; length=r->body_len; }
     }
     const char *type="application/json";
-    if(status==200 && http.dashboard) { body=(const char *)gateway_dashboard; length=sizeof(gateway_dashboard); type="text/html; charset=utf-8"; }
-    if(status==200 && http.script) { body=(const char *)gateway_dashboard_js; length=sizeof(gateway_dashboard_js); type="application/javascript; charset=utf-8"; }
-    if(status==200 && http.demo) type="text/plain; charset=utf-8";
+    if(status==200 && decision && decision->dashboard) { body=(const char *)gateway_dashboard; length=sizeof(gateway_dashboard); type="text/html; charset=utf-8"; }
+    if(status==200 && decision && decision->script) { body=(const char *)gateway_dashboard_js; length=sizeof(gateway_dashboard_js); type="application/javascript; charset=utf-8"; }
+    if(status==200 && decision && decision->demo) type="text/plain; charset=utf-8";
     /* Raw input is no longer owned by extraction. Small responses are coalesced;
      * larger immutable flash assets stream after the header using the same
      * absolute send deadline. No large response allocation is required. */
@@ -185,12 +212,15 @@ static void serve(struct netconn *conn)
         }
     }
     last_status=status;
+#if !GATEWAY_R4_NO_HTTP_LOG
     gateway_log("[HTTP] status=%d bytes=%lu header=%d send=%d\n",status,(unsigned long)http.used,n,last_send);
+#endif
     ++requests;
 }
 void gateway_network_run(void)
 {
     gateway_init(&gateway_network_context);
+    gateway_r4_boundary_start();
     osSemaphoreId_t sem=osSemaphoreNew(1,0,NULL);
     if(!sem) gateway_panic(GATEWAY_FAULT_ALLOC);
     tcpip_init(tcp_ready,sem);
@@ -207,11 +237,40 @@ void gateway_network_run(void)
     netconn_set_recvtimeout(listener,250);
     ready=1;
     gateway_log("[HTTP] READY 192.168.40.128/24:80 lab_bearer=%u RAM policy; no TLS\n",GATEWAY_LAB_AUTH);
+    gateway_r4_network_drop_privilege();
     for(;;) {
         struct netconn *conn=NULL;
+#if GATEWAY_R4_TRACE_NET
+        network_phase=1;
+#endif
         err_t err=netconn_accept(listener,&conn);
-        if(err!=ERR_OK) { (void)osDelay(10); continue; }
+        if(err!=ERR_OK) {
+#if GATEWAY_R4_TRACE_NET
+            last_accept=err;network_phase=5;
+#endif
+            (void)osDelay(10); continue;
+        }
+#if GATEWAY_R4_TRACE_NET
+        ++accept_count;network_phase=2;
+#endif
         serve(conn);
-        (void)netconn_close(conn); (void)netconn_delete(conn);
+#if GATEWAY_R4_TRACE_NET
+        network_phase=3;
+#endif
+        err_t closed=netconn_close(conn);
+#if !GATEWAY_R4_TRACE_NET
+        (void)closed;
+#endif
+#if GATEWAY_R4_TRACE_NET
+        last_close=closed;++close_count;if(closed!=ERR_OK) ++close_errors;
+        network_phase=4;
+#endif
+        err_t deleted=netconn_delete(conn);
+#if !GATEWAY_R4_TRACE_NET
+        (void)deleted;
+#endif
+#if GATEWAY_R4_TRACE_NET
+        last_delete=deleted;++delete_count;if(deleted!=ERR_OK) ++delete_errors;
+#endif
     }
 }

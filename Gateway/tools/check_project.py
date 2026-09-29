@@ -11,13 +11,16 @@ for item in manifest['files']:
     elif item['kind'] == 'runtime':
         assert digest == item['local_sha256'], 'Runtime adaptation changed: update and review provenance: ' + item['destination']
 project = ET.parse(root / '.cproject')
+opt_o2 = re.search(r'^#define\s+GATEWAY_R4_OPT_O2\s+1\b',
+                   (root / 'Gateway/Inc/paper_experiment.h').read_text(), re.M) is not None
 for cfg in project.findall('.//configuration'):
     if cfg.find('sourceEntries') is None: continue
     assert any(e.get('name') == 'Gateway' for e in cfg.find('sourceEntries')), 'Run Gateway/tools/configure_project.py'
     generated = cfg.find("folderInfo[@resourcePath='Gateway/Generated']")
     assert generated is not None, 'Generated-code folder configuration missing'
     opts = [o for o in generated.findall('.//option') if o.get('superClass', '').endswith('.tool.c.compiler.option.optimization.level')]
-    assert len(opts) == 1 and opts[0].get('value', '').endswith('.value.os'), 'Generated C must use -Os'
+    assert len(opts) == 1 and opts[0].get('value', '').endswith(
+        '.value.o2' if opt_o2 else '.value.os'), 'Generated C optimization differs from labelled variant'
     assert 'check_firmware.py' in cfg.get('postbuildStep', ''), 'Post-link admission check missing'
 ioc = dict(line.split('=', 1) for line in (root / 'policy_gate.ioc').read_text().splitlines() if '=' in line)
 assert ioc['ProjectManager.ProjectName'] == 'policy_gate'
@@ -40,7 +43,9 @@ assert ioc['FREERTOS.configTOTAL_HEAP_SIZE'] == '65536'
 assert '((size_t)65536)' in config
 for name in ['STM32F767ZITX_FLASH.ld', 'STM32F767ZITX_RAM.ld']:
     script = (root / name).read_text()
-    assert 'LENGTH = 448K' in script and '0x20070000' in script and '0x20070400' in script
+    assert '0x20070000' in script and '0x20070400' in script
+    assert ('LENGTH = 448K' in script or
+            ('LENGTH = 384K' in script and 'LENGTH = 64K' in script)), name
 network = json.loads((root / 'Gateway/Provenance/network.json').read_text())
 for item in network['files']:
     assert hashlib.sha256((root / item['destination']).read_bytes()).hexdigest() == item['sha256'], 'Vendored network source changed: ' + item['destination']
