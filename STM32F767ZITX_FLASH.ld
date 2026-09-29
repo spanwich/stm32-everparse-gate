@@ -36,7 +36,7 @@
 ENTRY(Reset_Handler)
 
 /* Highest address of the user mode stack */
-_estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
+_estack = ORIGIN(RAM_SPARE) + LENGTH(RAM_SPARE); /* privileged MSP below DMA */
 
 _Min_Heap_Size = 0x200; /* required amount of heap */
 _Min_Stack_Size = 0x1000; /* required amount of stack */
@@ -46,7 +46,10 @@ MEMORY
 {
   RAM_PRIV (xrw) : ORIGIN = 0x20000000,   LENGTH = 128K
   RAM_APP (xrw)  : ORIGIN = 0x20020000,   LENGTH = 16K
-  RAM    (xrw)    : ORIGIN = 0x20024000,   LENGTH = 304K
+  RAM    (xrw)    : ORIGIN = 0x20024000,   LENGTH = 176K
+  RAM_GATE (xrw) : ORIGIN = 0x20050000,   LENGTH = 64K
+  RAM_AUTH (xrw) : ORIGIN = 0x20060000,   LENGTH = 16K
+  RAM_SPARE (xrw): ORIGIN = 0x20064000,   LENGTH = 48K
   FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 2048K
 }
 
@@ -74,9 +77,38 @@ SECTIONS
     *(.gateway_app*)
     . = ALIGN(8);
   } >RAM_APP
+  .gateway_auth (NOLOAD) : {
+    __gateway_auth_start__ = .;
+    . = ALIGN(8);
+    *(.gateway_auth*)
+    . = ALIGN(8);
+    __gateway_auth_end__ = .;
+  } >RAM_AUTH
+  .gateway_gate (NOLOAD) : {
+    __gateway_gate_start__ = .;
+    . = ALIGN(8);
+    *(.gateway_gate*)
+    *HTTP_Extract_*.o(.bss .bss.*)
+    *IPC_Extract.o(.bss .bss.*)
+    *Mediation_*.o(.bss .bss.*)
+    . = ALIGN(8);
+    __gateway_gate_end__ = .;
+  } >RAM_GATE
+  .gateway_gate_init : {
+    __gateway_gate_init_start__ = .;
+    *HTTP_Extract_*.o(.data .data.*)
+    *IPC_Extract.o(.data .data.*)
+    *Mediation_*.o(.data .data.*)
+    . = ALIGN(4);
+    __gateway_gate_init_end__ = .;
+  } >RAM_GATE AT>FLASH
+  __gateway_gate_init_load__ = LOADADDR(.gateway_gate_init);
   __privileged_data_end__ = ORIGIN(RAM_PRIV) + LENGTH(RAM_PRIV);
   ASSERT(SIZEOF(.privileged_data) <= 131072, "gate/kernel privileged RAM overflow")
   ASSERT(SIZEOF(.gateway_app) <= 16384, "application MPU subregion overflow")
+  ASSERT(SIZEOF(.gateway_auth) <= 16384, "AUTH MPU region overflow")
+  ASSERT(__gateway_gate_init_end__ <= ORIGIN(RAM_GATE) + LENGTH(RAM_GATE),
+         "GATE MPU region overflow")
   .eth_desc (NOLOAD) : {
     . = ALIGN(32); KEEP(*(.RxDecripSection))
     . = ALIGN(32); KEEP(*(.TxDecripSection))

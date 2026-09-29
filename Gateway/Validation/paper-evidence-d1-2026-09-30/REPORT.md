@@ -1,11 +1,10 @@
-# D1 evidence — stage 1, 2026-09-30
+# D1 evidence — stages 1–3, 2026-09-30
 
-**Verdict: D1 is not established.** This directory records the first D1.7
-build-up step: an operational FreeRTOS V11.3.1 MPU wrappers v2 port of the R4
-task split, with inherited MPU and privilege-escalation probes on the
-NUCLEO-F767ZI. GATE, AUTH and SHIM have not been separated as §12–§13 require.
-P1–P5, the restrictive reset policy, the labelled A/B corpus, P5 timing
-matrix, and final cost claims remain open.
+**Verdict: D1 is not established.** This directory records D1.7 steps 1–3:
+FreeRTOS V11.3.1 MPU wrappers v2, a private AUTH oracle and an unprivileged
+GATE on the NUCLEO-F767ZI. SHIM/NET separation, P5 scheduling, the
+restrictive reset policy, the labelled A/B corpus, P5 timing matrix, and final
+cost claims remain open. P1–P5 are not yet established.
 
 The final stage-one Debug ELF is `v11-stage1-final/policy_gate.elf`, SHA-256
 `9b8635dc33e961902cf18b66e4e1af10d5e12833123904e592538b9d23fddf37`.
@@ -28,15 +27,65 @@ byte state transitions in that callback.
   r0p1 was wrong for this board. The r0p0/r0p1-only erratum workaround caused
   an assertion in `port.c:840`; it was disabled for the observed revision.
 - The privileged SRAM reservation grew to 128 KiB to hold the 64 KiB kernel
-  heap and current gate state. APP has a separate 16 KiB region. The current
-  network task still sees broad nonprivileged RAM and the GATE task is still
-  privileged. This is a transitional R4 split, not D1 isolation.
+  heap and stage-one gate state. APP has a separate 16 KiB region. In stage
+  one the GATE task was still privileged; stage three moves it to its own
+  region. NET still sees broad nonprivileged RAM, so D1 isolation is open.
 - CMSIS mutex handles now encode the V11 opaque handle separately from the
   recursive flag. The old adapter interpreted the first valid handle `1` as
   null, dropping all post-boot logs. The final image has zero log drops.
 - V11's MPU wrapper configuration does not retain the old software stack hook
   in the linked image; MPU stack protection applies to unprivileged tasks.
   A whole-call-chain stack bound has not been proved.
+
+## AUTH and GATE build-up
+
+The current working stage-three Debug ELF is
+`v11-gate-stage3b/policy_gate.elf`, SHA-256
+`4a868ea4a2415503602301a12450db5c584d4a93c696ee454bee3ef98d3b66e6`.
+Its `board/uart.log` records 301/301 startup checks and sustained heartbeats.
+`http-smoke` and `http-repeat-200` record successful LOGIN and IDENTIFY
+round trips, issued-token and fixture-token access, forged-token rejection,
+bad-credential rejection, and 200 sequential authenticated requests. The
+network suite passed every check, including bytewise fragmentation, 4096-byte
+input, policy update/rollback, trickle timeout, connection recovery, and 200
+mixed requests; see `network-suite/results.json`, `network-suite/summary.json`,
+and simultaneous `network-suite-uart/uart.log`.
+
+AUTH alone holds the credential table, fixture-token table and HMAC key in
+`.gateway_auth` at `0x20060000–0x20063fff`. The privileged initializer copies
+precomputed credential hashes and the key from the privileged flash bank.
+No plaintext demo passwords are linked into the board image. GATE sends
+`IDENTIFY(token)` and `LOGIN(credential bytes)` over kernel-owned queues;
+only GATE and AUTH receive ACL grants for those queues. The raw credential
+body reaches AUTH after the verified login envelope check. The GATE policy,
+buffers, audit state and stack occupy `.gateway_gate` at
+`0x20050000–0x2005ffff`; generated mediation/extractor mutable globals are
+placed there by the linker without editing generated C. GATE and AUTH both
+run unprivileged. NET and APP have their GATE/AUTH SRAM subregions disabled.
+
+On-board read probes `v11-auth-net-read-key` and `v11-auth-app-read-key`
+produced MemManage data faults with `MMFAR=0x20061000` (key address), before
+any key byte was observed. Separate `v11-gate-net-write` and
+`v11-gate-app-write` probes produced MemManage data faults at the policy
+byte `0x20054250`. The marked probes and raw UART/SWD logs are retained in
+their directories. The board was restored to the working stage-three image.
+
+The stage-three host ASan/UBSan binary passed 301/301 linked vectors and the
+12,527-case paper reference corpus. LeakSanitizer was disabled for this host
+run because it fails under the environment's ptrace supervision; its first
+failure is retained in `stage3-host/tests.log`, and the successful run in
+`stage3-host/tests-asan-ubsan.log`. The on-board image is the primary evidence
+for task isolation; host tests establish only pure-code behavior.
+
+The first stage-three live-request variant faulted on generated mutable
+`Mediation_Format_zero` at `0x200261e8`. The linker fix placed it at
+`0x2005a014`; the working image then passed the live suites. The first AUTH
+variant exposed a DMA-backed pbuf read at `0x20071668` when NET's Ethernet
+bank was prematurely disabled. Until D1.7 step 4 copies frames through SHIM,
+NET retains temporary read access to that bank. Another AUTH variant exposed
+V11's privileged-only `vQueueDelete` during netconn cleanup. A bounded
+privileged cleanup worker now reclaims registered lwIP objects; its broad
+registration must be narrowed to exact ownership in step 4.
 
 ## Inherited and escalation injections
 
@@ -69,10 +118,10 @@ safe. No arbitrary-code compromise corpus has been run yet.
 
 | Claim | Stage-one status and reason |
 |---|---|
-| P1 complete mediation | **Open**: gate remains privileged; no 100,000-request effect audit on D1. |
-| P2 gate integrity | **Open**: named NET/APP writes faulted, but current NET still sees broad general RAM and no full compartment map exists. |
-| P3 identity integrity | **Open**: credentials and HMAC key have not moved to AUTH-only memory. |
-| P4 policy updates | **Open**: existing R4 validator tests are not D1 compartment evidence. |
+| P1 complete mediation | **Open**: GATE is now unprivileged and named tests pass, but NET/SHIM separation and the 100,000-request exact-effect audit are missing. |
+| P2 gate integrity | **Open**: named NET/APP writes faulted, but NET still directly consumes DMA-backed buffers and other entry points are unaudited. |
+| P3 identity integrity | **Partial**: AUTH owns the key/table and named NET/APP reads faulted; full compromised-NET and forged-role corpus is pending. |
+| P4 policy updates | **Open**: functional update/rollback tests pass, but final D1 compartment injections and reset-default tests remain. |
 | P5 no starvation | **Open**: priorities, token bucket and §13.5 idle/loaded timing matrix are not installed. |
 
 The paper-reference EverParse and Low* mediation artifacts retain the R1/R4
@@ -80,7 +129,7 @@ proof and test boundary. This port did not perform a fresh proof run. The
 FreeRTOS kernel, all privileged code, the Ethernet DMA, HAL, and board hardware
 remain trusted. DWT maxima, when later measured, will not be WCET bounds.
 
-Next per D1.7: build the private `IDENTIFY`/`LOGIN` AUTH oracle, move its table
-and HMAC key into AUTH-only RAM initialized from privileged flash, then make
-GATE unprivileged with a disjoint region. The eventual final D1 report must
-replace this stage-one no-go verdict and satisfy §13 where it amends §12.
+Next per D1.7: introduce the minimal privileged SHIM, copy Ethernet frames
+across NET's boundary, and run lwIP plus driver logic unprivileged. Then
+complete steps 5–6 and the amended §13 final evidence. The eventual final
+D1 report must replace this no-go verdict.

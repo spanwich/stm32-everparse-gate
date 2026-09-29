@@ -13,8 +13,8 @@ static struct {
     uint8_t kind;
     uint32_t length;
     bool active;
-} audit;
-static uint32_t next_request_id;
+} audit __attribute__((section(".gateway_gate")));
+static uint32_t next_request_id __attribute__((section(".gateway_gate")));
 
 void gateway_audit_begin(GatewayContext *context)
 {

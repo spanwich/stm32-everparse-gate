@@ -98,10 +98,20 @@ int main(void) {
     extern uint8_t __privileged_data_start__[], __privileged_data_end__[];
     extern uint8_t __privileged_init_start__[], __privileged_init_end__[];
     extern uint8_t __privileged_init_load__[];
+    extern uint8_t __gateway_auth_start__[], __gateway_auth_end__[];
+    extern uint8_t __gateway_gate_start__[], __gateway_gate_end__[];
+    extern uint8_t __gateway_gate_init_start__[], __gateway_gate_init_end__[];
+    extern uint8_t __gateway_gate_init_load__[];
     memset(__privileged_data_start__, 0,
            (size_t)(__privileged_data_end__-__privileged_data_start__));
     memcpy(__privileged_init_start__, __privileged_init_load__,
            (size_t)(__privileged_init_end__-__privileged_init_start__));
+    memset(__gateway_auth_start__,0,
+           (size_t)(__gateway_auth_end__-__gateway_auth_start__));
+    memset(__gateway_gate_start__,0,
+           (size_t)(__gateway_gate_end__-__gateway_gate_start__));
+    memcpy(__gateway_gate_init_start__,__gateway_gate_init_load__,
+           (size_t)(__gateway_gate_init_end__-__gateway_gate_init_start__));
 
 	/* USER CODE END 1 */
 

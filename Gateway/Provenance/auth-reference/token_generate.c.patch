@@ -1,4 +1,4 @@
---- /home/iamfo470/phd/camkes-vm-examples/projects/http_gateway_x86/components/Authenticator/token_generate.c
+--- Gateway/Provenance/auth-reference/token_generate.c
 +++ Gateway/Auth/token_generate.c
 @@ -1,7 +1,7 @@
  /*
@@ -9,8 +9,38 @@
   * HMAC computed over: subject || role || scope (deterministic).
   *
   * SPDX-License-Identifier: BSD-2-Clause
-@@ -52,7 +52,7 @@
-     Hacl_HMAC_compute_sha2_256(hmac, (uint8_t *)SERVER_SECRET, 32,
+@@ -10,14 +10,19 @@
+ #include "token_generate.h"
+ #include <string.h>
+ #include "Hacl_HMAC.h"
++#ifdef STM32F767xx
++#include "gateway_d1_auth.h"
++#endif
+ 
+ /* Hardcoded server secret (32 bytes) — demo only */
++#ifndef STM32F767xx
+ static const uint8_t SERVER_SECRET[32] = {
+     0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE,
+     0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+     0xF0, 0xE1, 0xD2, 0xC3, 0xB4, 0xA5, 0x96, 0x87,
+     0x78, 0x69, 0x5A, 0x4B, 0x3C, 0x2D, 0x1E, 0x0F
+ };
++#endif
+ 
+ static const char HEX[] = "0123456789abcdef";
+ 
+@@ -49,10 +54,16 @@
+ 
+     /* Compute HMAC-SHA256 (HACL* verified, void return) */
+     uint8_t hmac[32];
+-    Hacl_HMAC_compute_sha2_256(hmac, (uint8_t *)SERVER_SECRET, 32,
++    Hacl_HMAC_compute_sha2_256(hmac,
++#ifdef STM32F767xx
++                                (uint8_t *)gateway_d1_auth_key(),
++#else
++                                (uint8_t *)SERVER_SECRET,
++#endif
++                                32,
                                  payload, plen);
  
 -    /* Format: <subject_hex>:<role_hex>:<scope_hex>:<hmac_hex> */
@@ -18,7 +48,7 @@
      uint8_t pos = 0;
      uint8_t max = 127; /* token_buf is 128, leave room */
  
-@@ -60,19 +60,19 @@
+@@ -60,19 +71,19 @@
                         token_out + pos, max - pos);
      if (n == 0) return 0;
      pos += n;

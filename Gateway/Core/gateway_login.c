@@ -6,6 +6,9 @@
 #include "credential_store.h"
 #include "token_generate.h"
 #include "token_validate.h"
+#ifdef STM32F767xx
+#include "gateway_d1_auth.h"
+#endif
 #include <stdio.h>
 #include <string.h>
 typedef struct { const uint8_t *p; size_t n, i; } Json;
@@ -88,28 +91,60 @@ bool gateway_login_prepare(const uint8_t *body, size_t length,
     gateway_clear(user,sizeof(user)); gateway_clear(pass,sizeof(pass));
     return ok;
 }
-int gateway_login(const uint8_t *body, size_t length, char *response, size_t capacity)
+int gateway_auth_issue_token(const uint8_t *body, size_t length,
+                             char *token, uint8_t *token_length)
 {
-    char user[33]={0}, pass[65]={0}, token[128]={0};
-    uint8_t ulen=0,plen=0,tlen=0; GatewayIdentity id={0}; int status=400;
+    char user[33]={0}, pass[65]={0};
+    uint8_t ulen=0,plen=0; GatewayIdentity id={0}; int status=400;
+    *token_length=0;
     if(!credentials(body,length,user,&ulen,pass,&plen)) goto done;
     status=401;
 #if GATEWAY_LAB_AUTH
     if(verify_credentials(user,ulen,pass,plen,&id.role,&id.scope,id.subject,&id.subject_len) &&
-       generate_token((const char *)id.subject,id.subject_len,id.role,id.scope,token,&tlen)) status=200;
+       generate_token((const char *)id.subject,id.subject_len,id.role,id.scope,
+                      token,token_length)) status=200;
 #endif
  done:;
-    int n;
-    if(status==200) n=snprintf(response,capacity,"{\"status\":\"ok\",\"token\":\"%.*s\"}",(int)tlen,token);
-    else n=snprintf(response,capacity,"{\"status\":\"error\",\"message\":\"%s\"}",
-                    status==400?"invalid login JSON":"invalid credentials");
     gateway_clear(user,sizeof(user)); gateway_clear(pass,sizeof(pass));
-    gateway_clear(token,sizeof(token)); gateway_clear(&id,sizeof(id));
-    return n<0 || (size_t)n>=capacity?500:status;
+    gateway_clear(&id,sizeof(id));
+    return status;
+}
+int gateway_login(const uint8_t *body, size_t length, char *response, size_t capacity)
+{
+    char token[128]={0}; uint8_t tlen=0;
+#ifdef STM32F767xx
+    int status=gateway_d1_auth_login(body,length,token,&tlen);
+#else
+    int status=gateway_auth_issue_token(body,length,token,&tlen);
+#endif
+    static const char prefix[]="{\"status\":\"ok\",\"token\":\"";
+    static const char suffix[]="\"}";
+    const char *error=status==400?
+        "{\"status\":\"error\",\"message\":\"invalid login JSON\"}":
+        "{\"status\":\"error\",\"message\":\"invalid credentials\"}";
+    size_t n;
+    if(status==200) {
+        n=sizeof(prefix)-1U+tlen+sizeof(suffix)-1U;
+        if(n<capacity) {
+            memcpy(response,prefix,sizeof(prefix)-1U);
+            memcpy(response+sizeof(prefix)-1U,token,tlen);
+            memcpy(response+sizeof(prefix)-1U+tlen,suffix,sizeof(suffix)-1U);
+            response[n]=0;
+        }
+    } else {
+        n=strlen(error);
+        if(n<capacity) memcpy(response,error,n+1U);
+    }
+    gateway_clear(token,sizeof(token));
+    return n>=capacity?500:status;
 }
 bool gateway_login_validate(const uint8_t *token, size_t length, GatewayIdentity *identity)
 {
     memset(identity,0,sizeof(*identity));
+#ifdef STM32F767xx
+    uint8_t rate=0;
+    return gateway_d1_auth_identify(token,length,identity,&rate);
+#else
 #if GATEWAY_LAB_AUTH
     if(length>127 || !length) return false;
     identity->valid=validate_token((const char *)token,(uint8_t)length,&identity->role,
@@ -118,4 +153,5 @@ bool gateway_login_validate(const uint8_t *token, size_t length, GatewayIdentity
     (void)token; (void)length;
 #endif
     return identity->valid;
+#endif
 }

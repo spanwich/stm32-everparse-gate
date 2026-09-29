@@ -41,6 +41,8 @@
 
 #include "cmsis_os.h"
 #include "gateway_platform.h"
+#include "gateway_d1_cleanup.h"
+#include "main.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
@@ -86,6 +88,7 @@ err_t sys_mbox_new(sys_mbox_t *mbox, int size)
    * network-facing task. V11 ACLs do not grant that access implicitly. */
   vGrantAccessToQueue((TaskHandle_t)gateway_platform_network_task_handle(),
                       (QueueHandle_t)*mbox);
+  gateway_d1_cleanup_register((QueueHandle_t)*mbox);
 
   return ERR_OK;
 }
@@ -114,7 +117,13 @@ void sys_mbox_free(sys_mbox_t *mbox)
 #if (osCMSIS < 0x20000U)
   osMessageDelete(*mbox);
 #else
-  osMessageQueueDelete(*mbox);
+  if(__get_CONTROL() & 1U) {
+    if(!gateway_d1_cleanup_enqueue((QueueHandle_t)*mbox))
+      gateway_panic(GATEWAY_FAULT_ASSERT);
+  } else {
+    gateway_d1_cleanup_forget((QueueHandle_t)*mbox);
+    osMessageQueueDelete(*mbox);
+  }
 #endif
 #if SYS_STATS
   --lwip_stats.sys.mbox.used;
@@ -313,6 +322,7 @@ err_t sys_sem_new(sys_sem_t *sem, u8_t count)
 
   vGrantAccessToQueue((TaskHandle_t)gateway_platform_network_task_handle(),
                       (QueueHandle_t)*sem);
+  gateway_d1_cleanup_register((QueueHandle_t)*sem);
 
   if(count == 0)	// Means it can't be taken
   {
@@ -400,7 +410,13 @@ void sys_sem_free(sys_sem_t *sem)
   --lwip_stats.sys.sem.used;
 #endif /* SYS_STATS */
 
-  osSemaphoreDelete(*sem);
+  if(__get_CONTROL() & 1U) {
+    if(!gateway_d1_cleanup_enqueue((QueueHandle_t)*sem))
+      gateway_panic(GATEWAY_FAULT_ASSERT);
+  } else {
+    gateway_d1_cleanup_forget((QueueHandle_t)*sem);
+    osSemaphoreDelete(*sem);
+  }
 }
 /*-----------------------------------------------------------------------------------*/
 int sys_sem_valid(sys_sem_t *sem)

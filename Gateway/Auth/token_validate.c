@@ -10,14 +10,19 @@
 #include "token_validate.h"
 #include <string.h>
 #include "Hacl_HMAC.h"
+#ifdef STM32F767xx
+#include "gateway_d1_auth.h"
+#endif
 
 /* Same server secret as token_generate.c */
+#ifndef STM32F767xx
 static const uint8_t SERVER_SECRET[32] = {
     0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE,
     0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
     0xF0, 0xE1, 0xD2, 0xC3, 0xB4, 0xA5, 0x96, 0x87,
     0x78, 0x69, 0x5A, 0x4B, 0x3C, 0x2D, 0x1E, 0x0F
 };
+#endif
 
 static int hex_char_val(char c)
 {
@@ -103,7 +108,13 @@ int validate_token(const char *token, uint8_t token_len,
     payload[plen++] = scope_bytes[1];
 
     uint8_t expected_hmac[32];
-    Hacl_HMAC_compute_sha2_256(expected_hmac, (uint8_t *)SERVER_SECRET, 32,
+    Hacl_HMAC_compute_sha2_256(expected_hmac,
+#ifdef STM32F767xx
+                                (uint8_t *)gateway_d1_auth_key(),
+#else
+                                (uint8_t *)SERVER_SECRET,
+#endif
+                                32,
                                 payload, plen);
 
     /* Constant-time comparison */

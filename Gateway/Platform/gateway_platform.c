@@ -1,4 +1,6 @@
 #include "gateway_platform.h"
+#include "gateway_d1_auth.h"
+#include "gateway_d1_cleanup.h"
 #include "gateway_network.h"
 #include "gateway_log.h"
 #include "gateway_tests.h"
@@ -201,6 +203,9 @@ void gateway_platform_start(void)
         .cb_mem = &log_mutex_cb, .cb_size = sizeof(log_mutex_cb)};
     log_mutex = osMutexNew(&mutex_attr);
     if (!log_mutex) gateway_panic(GATEWAY_FAULT_STARTUP);
+    gateway_d1_auth_secrets_init();
+    gateway_d1_auth_start();
+    gateway_d1_cleanup_start();
     /* CMSIS osThreadNew rejects the MPU privilege bit. These two trusted
      * startup/diagnostic tasks call HAL and privileged heap probes directly. */
     const TaskParameters_t network_params = {
@@ -212,7 +217,9 @@ void gateway_platform_start(void)
         .xRegions={
             {(void *)0x20000000UL,512U*1024U,
                 portMPU_REGION_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
-                portMPU_REGION_CACHEABLE_BUFFERABLE},
+                /* Stage 2 still consumes DMA-backed lwIP pbufs; SHIM copy
+                 * removes this access in D1.7 step 4. Exclude AUTH now. */
+                portMPU_REGION_CACHEABLE_BUFFERABLE|(0x60UL<<8)},
             {NULL,0,0},
             {(void *)0x20020000UL,16U*1024U,
                 portMPU_REGION_PRIVILEGED_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|

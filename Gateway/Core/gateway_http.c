@@ -1,6 +1,9 @@
 /* Handwritten bounded HTTP transport adapter; not covered by generated proofs. */
 #include "gateway_http.h"
 #include "gateway_login.h"
+#ifdef STM32F767xx
+#include "gateway_d1_auth.h"
+#endif
 #include "gateway_clear.h"
 #include "gateway_routes.h"
 #include "gateway_mediation.h"
@@ -82,8 +85,11 @@ static int headers(GatewayHttp *h, GatewayContext *c)
                 n=n*10U+(p[i]-'0');
             }
             h->body_len=n;
-            char line[40]; int z=snprintf(line,sizeof(line),"Content-Length: %lu\r\n",(unsigned long)n);
-            if(z<0 || !append(c,line,(size_t)z)) return 413;
+            char digits[10]; size_t d=0;
+            do { digits[d++]=(char)('0'+n%10U); n/=10U; } while(n);
+            if(!append(c,"Content-Length: ",16)) return 413;
+            while(d) if(!append(c,&digits[--d],1)) return 413;
+            if(!append(c,"\r\n",2)) return 413;
         } else if(equal(p+pos,colon-pos,"authorization")) {
             if(auth++) return 400;
             size_t sp=v; while(sp<ve && p[sp]!=' ') ++sp;
@@ -136,6 +142,9 @@ int gateway_http_feed(GatewayHttp *h, GatewayContext *c, const void *data, size_
 bool gateway_bearer_check(const uint8_t *token,size_t n,GatewayIdentity *id,uint8_t *rate)
 {
     memset(id,0,sizeof(*id)); *rate=0;
+#ifdef STM32F767xx
+    return gateway_d1_auth_identify(token,n,id,rate);
+#else
 #if GATEWAY_LAB_AUTH
     static const struct { const char *token,*subject; uint8_t role, rate; uint16_t scope; } rows[]={
         {"pg-lab-operator","lab-operator",ROLE_OPERATOR,0,1},
@@ -153,6 +162,7 @@ bool gateway_bearer_check(const uint8_t *token,size_t n,GatewayIdentity *id,uint
     (void)token; (void)n;
 #endif
     return gateway_login_validate(token,n,id);
+#endif
 }
 int gateway_http_process(GatewayHttp *h,GatewayContext *c)
 {

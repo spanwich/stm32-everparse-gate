@@ -37,16 +37,23 @@ for name, origin, limit in [('.eth_desc', 0x20070000, 0x20070400), ('.eth_data',
     size, address = (int(v, 16) for v in match.groups())
     require(address == origin and address + size <= limit and address % 32 == 0, 'DMA section bounds/alignment ' + name)
 for name, origin, limit in [('.privileged_data', 0x20000000, 0x20020000),
-                            ('.gateway_app', 0x20020000, 0x20024000)]:
+                            ('.gateway_app', 0x20020000, 0x20024000),
+                            ('.gateway_gate', 0x20050000, 0x20060000),
+                            ('.gateway_gate_init', 0x20050000, 0x20060000),
+                            ('.gateway_auth', 0x20060000, 0x20064000)]:
     match = re.search(r'^\s*\d+\s+' + re.escape(name) + r'\s+([0-9a-f]+)\s+([0-9a-f]+)', sections, re.M)
     require(match is not None, 'missing MPU isolation section ' + name)
     size, address = (int(v, 16) for v in match.groups())
-    require(address == origin and address + size <= limit, 'MPU isolation section bounds ' + name)
+    require((address == origin or name == '.gateway_gate_init' and address >= origin)
+            and address + size <= limit, 'MPU isolation section bounds ' + name)
 for name in ['DMARxDscrTab', 'DMATxDscrTab']:
     match = re.search(r'^([0-9a-f]+) [A-Za-z] ' + name + r'$', symbols, re.M)
     require(match is not None and 0x20070000 <= int(match[1], 16) < 0x20070400 and int(match[1], 16) % 32 == 0, 'DMA descriptor placement ' + name)
 require(re.search(r'^20070000 [A-Za-z] _estack$', symbols, re.M), 'MSP must end below reserved DMA bank')
-for name in ['gateway_http_feed', 'gateway_http_process', 'gateway_bearer_check', 'gateway_login', 'gateway_login_validate', 'gateway_clear', 'gateway_network_run', 'ETH_IRQHandler']:
+for name in ['gateway_http_feed', 'gateway_http_process', 'gateway_bearer_check',
+             'gateway_login', 'gateway_d1_auth_identify',
+             'gateway_d1_auth_login', 'gateway_clear', 'gateway_network_run',
+             'ETH_IRQHandler']:
     require(re.search(r'\b[Tt] ' + name + r'$', symbols, re.M), 'missing network function ' + name)
 
 objects = sorted((build / 'Gateway/Generated/Extractor').glob('*.o'))

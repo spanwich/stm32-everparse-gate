@@ -1,17 +1,20 @@
 {
-  "stage": "D1.7 step 1",
+  "stage": "D1.7 steps 1-3",
   "date": "2026-09-30",
-  "verdict": "NO-GO for D1 P1-P5; V11 MPU wrappers v2 stage one operational",
+  "verdict": "NO-GO for D1 P1-P5; V11 MPU, AUTH oracle, and unprivileged GATE operational",
   "board": "NUCLEO-F767ZI",
   "cpuid": "0x411fc270",
-  "primary_image": "v11-stage1-final/policy_gate.elf",
-  "primary_elf_sha256": "9b8635dc33e961902cf18b66e4e1af10d5e12833123904e592538b9d23fddf37",
+  "primary_image": "v11-gate-stage3b/policy_gate.elf",
+  "primary_elf_sha256": "4a868ea4a2415503602301a12450db5c584d4a93c696ee454bee3ef98d3b66e6",
   "primary_boot": {
     "core_selftests": "301/301",
     "http_ready": true,
-    "unauthenticated_status_http": 401,
-    "uart_log": "v11-stage1-final/board/uart.log",
-    "http_uart_log": "v11-stage1-final/http-probe/uart.log"
+    "uart_log": "v11-gate-stage3b/board/uart.log",
+    "login_identify_smoke": "passed",
+    "authenticated_repeat_requests": 200,
+    "network_suite_checks": 34,
+    "network_suite_mixed_requests": 200,
+    "network_suite_uart_log": "v11-gate-stage3b/network-suite-uart/uart.log"
   },
   "r4_escalation": {
     "raw_svc": "succeeded; policy 0xA7",
@@ -34,12 +37,26 @@
   "properties": {
     "P1": "open",
     "P2": "open",
-    "P3": "open",
+    "P3": "partial",
     "P4": "open",
     "P5": "open"
   },
   "pending": [
-    "D1.7 steps 2-6",
+    "D1.7 steps 4-6",
     "final D1 evidence \u00a712.8 as amended by \u00a713"
-  ]
+  ],
+  "host": {
+    "asan_ubsan_linked_vectors": "301/301",
+    "paper_corpus_cases": 12527,
+    "log": "stage3-host/tests-asan-ubsan.log",
+    "leak_sanitizer": "disabled due to ptrace-supervised execution"
+  },
+  "auth_key_read": {
+    "NET": "MemManage at 0x20061000",
+    "APP": "MemManage at 0x20061000"
+  },
+  "gate_policy_write": {
+    "NET": "MemManage at 0x20054250",
+    "APP": "MemManage at 0x20054250"
+  }
 }

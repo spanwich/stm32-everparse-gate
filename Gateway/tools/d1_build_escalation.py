@@ -12,7 +12,7 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 header = root / 'Gateway/Inc/paper_experiment.h'
 parser = argparse.ArgumentParser()
-parser.add_argument('probe', type=int, choices=range(1, 10))
+parser.add_argument('probe', type=int, choices=range(1, 12))
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 out = args.output.resolve()
