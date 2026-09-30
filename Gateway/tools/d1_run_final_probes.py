@@ -19,6 +19,8 @@ import argparse, hashlib, json, re, shutil, subprocess, tempfile, time, urllib.r
 root = Path(__file__).resolve().parents[2]
 header = root / 'Gateway/Inc/paper_experiment.h'
 evidence = root / 'Gateway/Validation/paper-evidence-d1-2026-09-30'
+CLI = ('/opt/st/stm32cubeide_2.0.0/plugins/com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.'
+       'linux64_2.2.300.202508131133/tools/bin/STM32_Programmer_CLI')
 tools = ('/opt/st/stm32cubeide_2.0.0/plugins/com.st.stm32cube.ide.mcu.externaltools.'
          'gnu-tools-for-stm32.13.3.rel1.linux64_1.0.100.202509120712/tools/bin/')
 ALL = list(range(1, 16)) + [20, 21, 22]
@@ -77,6 +79,19 @@ for probe in a.probes:
                             '--output', str(out / 'board'), '--seconds', '20', '--expected-selftests', '301'],
                            cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     (out / 'board-command.log').write_bytes(board.stdout)
+    # A fault record left by the previous image survives reflashing in no-init
+    # RAM; this image's first boot consumes it and would skip the probe. Reset
+    # once more so the probe boot starts clean (not for APP probe 21, which
+    # fires during that first boot).
+    raw_boot = (out / 'board/uart-raw.log').read_text(errors='replace') if (out / 'board/uart-raw.log').exists() else ''
+    stale = '[RESET]' in raw_boot and probe != 21
+    if stale:
+        subprocess.run([CLI, '-c', 'port=SWD', 'sn=066FFF555567894967085545', 'mode=UR', '-rst'],
+                       capture_output=True)
+        for _ in range(40):
+            if http_status('pg-lab-operator') == 403:
+                break
+            time.sleep(1)
     # Trigger and observe across the watchdog reset (~8 s after a panic).
     script = ("import time,subprocess;"
               "subprocess.run(['curl','--interface','enp44s0','--max-time','5','-s','-o','/dev/null','-w','trigger=%{http_code}\\\\n',"
