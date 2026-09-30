@@ -41,6 +41,9 @@ static const struct {
     }
 };
 static uint8_t auth_key[32] AUTH_PRIVATE;
+#if GATEWAY_D1_PROBE == 22
+static volatile uint32_t probe_skip_auth AUTH_PRIVATE;   /* compartment-local copy */
+#endif
 static Fixture auth_fixture[3] AUTH_PRIVATE;
 static StackType_t auth_stack[AUTH_STACK_WORDS] AUTH_PRIVATE
     __attribute__((aligned(4096)));
@@ -110,9 +113,7 @@ static void auth_task(void *arg)
             continue;
         reply.sequence=request.sequence;
 #if GATEWAY_D1_PROBE == 22
-        extern volatile uint32_t gateway_d1_fault_was_reset;
-        if(!gateway_d1_fault_was_reset) { extern void *gateway_d1_probe_gate_policy(void);
-          gateway_log("[PROBE] id=22 start context=AUTH\n");
+        if(!probe_skip_auth) { extern void *gateway_d1_probe_gate_policy(void);
           *(volatile uint8_t *)gateway_d1_probe_gate_policy()=0U;
           gateway_log("[PROBE] id=22 ESCAPED\n"); gateway_panic(GATEWAY_FAULT_ASSERT); }
 #endif
@@ -131,6 +132,9 @@ static void auth_task(void *arg)
 
 void gateway_d1_auth_start(void)
 {
+#if GATEWAY_D1_PROBE == 22
+    { extern volatile uint32_t gateway_d1_fault_was_reset; probe_skip_auth=gateway_d1_fault_was_reset; }
+#endif
     gate_request=xQueueCreateStatic(1,sizeof(AuthRequest),request_storage,&request_cb);
     gate_reply=xQueueCreateStatic(1,sizeof(AuthReply),reply_storage,&reply_cb);
     if(!gate_request || !gate_reply) gateway_panic(GATEWAY_FAULT_ALLOC);

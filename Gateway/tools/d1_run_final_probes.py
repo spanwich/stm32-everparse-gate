@@ -86,7 +86,9 @@ for probe in a.probes:
                           '--', 'python3', '-c', script], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     (out / 'capture-command.log').write_bytes(cap.stdout)
     after = http_status('pg-lab-operator')
-    uart = (out / 'uart/uart.log').read_text(errors='replace')
+    # Boot-time probes (APP) fire during the board_test capture; include it.
+    uart = ((out / 'board/uart.log').read_text(errors='replace') if (out / 'board/uart.log').exists() else '') + \
+           (out / 'uart/uart.log').read_text(errors='replace')
     record = {
         'probe': probe, 'elf_sha256': manifest['elf_sha256'], 'board_exit_code': board.returncode,
         'probe_lines': [l for l in uart.splitlines() if '[PROBE]' in l],

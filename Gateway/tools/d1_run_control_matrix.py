@@ -11,18 +11,19 @@ p = argparse.ArgumentParser()
 p.add_argument('--frequencies', nargs='+', type=int, choices=(1000, 4000, 10000),
                default=(1000, 4000, 10000))
 p.add_argument('--buckets', nargs='+', type=int, choices=(0, 1), default=(1, 0))
+p.add_argument('--prefix', default='d1-control', help='evidence directory prefix (default keeps the stage-7 names)')
 p.add_argument('--scenarios', nargs='+',
                choices=('idle', 'valid', 'denied', 'malformed'),
                default=('idle', 'valid', 'denied', 'malformed'))
 a = p.parse_args()
 for hz in a.frequencies:
     for bucket in a.buckets:
-        name = f'd1-control-{hz}-bucket{bucket}'
+        name = f'{a.prefix}-{hz}-bucket{bucket}'
         directory = evidence / name
         image = directory / 'policy_gate.elf'
         if not image.is_file():
             subprocess.run(['python3', 'Gateway/tools/d1_build_control.py',
-                            '--hz', str(hz), '--bucket', str(bucket)],
+                            '--hz', str(hz), '--bucket', str(bucket), '--prefix', a.prefix],
                            cwd=root, check=True)
         pending = [scenario for scenario in a.scenarios
                    if not (directory / scenario / 'summary.json').is_file()]

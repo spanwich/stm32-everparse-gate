@@ -10,8 +10,9 @@ header = root / 'Gateway/Inc/paper_experiment.h'
 p = argparse.ArgumentParser()
 p.add_argument('--hz', type=int, choices=(1000, 4000, 10000), required=True)
 p.add_argument('--bucket', type=int, choices=(0, 1), required=True)
+p.add_argument('--prefix', default='d1-control')
 a = p.parse_args()
-name = f'd1-control-{a.hz}-bucket{a.bucket}'
+name = f'{a.prefix}-{a.hz}-bucket{a.bucket}'
 original = header.read_text()
 try:
     changed = original

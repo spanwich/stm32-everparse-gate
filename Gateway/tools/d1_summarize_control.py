@@ -3,13 +3,16 @@
 from pathlib import Path
 import csv
 import json
+import sys
 
 root = Path(__file__).resolve().parents[2]
 out = root / 'Gateway/Validation/paper-evidence-d1-2026-09-30'
+prefix = sys.argv[1] if len(sys.argv) > 1 else 'd1-control'
+stem = 'control-matrix' if prefix == 'd1-control' else prefix + '-matrix'
 rows = []
 for hz in (1000, 4000, 10000):
     for bucket in (1, 0):
-        directory = out / f'd1-control-{hz}-bucket{bucket}'
+        directory = out / f'{prefix}-{hz}-bucket{bucket}'
         image_hash = None
         idle = None
         for scenario in ('idle', 'valid', 'denied', 'malformed'):
@@ -46,8 +49,8 @@ for hz in (1000, 4000, 10000):
 assert len(rows) == 24
 assert all(row['total_misses'] == 0 and row['gap_anomalies'] == 0
            for row in rows if row['hz'] in (1000, 4000))
-(out / 'control-matrix.json').write_text(json.dumps(rows, indent=2) + '\n')
-with (out / 'control-matrix.csv').open('w', newline='') as file:
+(out / f'{stem}.json').write_text(json.dumps(rows, indent=2) + '\n')
+with (out / f'{stem}.csv').open('w', newline='') as file:
     writer = csv.DictWriter(file, fieldnames=rows[0])
     writer.writeheader()
     writer.writerows(rows)

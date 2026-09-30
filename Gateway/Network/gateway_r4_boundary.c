@@ -84,7 +84,10 @@ static void validator_probe(void *arg)
 #if GATEWAY_D1_PROBE
 /* NET-visible probe plumbing, present only in probe images. */
 volatile QueueHandle_t gateway_d1_probe_leaked_queue;
-volatile uint32_t gateway_d1_probe_forge_slot, gateway_d1_probe_bad_tx;
+volatile uint32_t gateway_d1_probe_forge_slot, gateway_d1_probe_bad_tx, gateway_d1_probe_result=0xFFFFU;
+/* Copies of the privileged "booted from a fault" flag that each unprivileged
+ * compartment can read (set at start-up, before the tasks run). */
+static volatile uint32_t probe_skip_gate GATE_PRIVATE, probe_skip_app APP_PRIVATE;
 extern TickType_t MPU_xTaskGetTickCount(void);
 extern void *gateway_d1_probe_dma_address(void);
 void *gateway_d1_probe_gate_policy(void) { return &live_gate.policy; }
@@ -93,7 +96,9 @@ void *gateway_d1_probe_gate_policy(void) { return &live_gate.policy; }
 static AppJob probe_forged_job;
 #define PROBE_LOG(...) gateway_log(__VA_ARGS__)
 #define PROBE_ESCAPED(id) do { PROBE_LOG("[PROBE] id=%u ESCAPED control=%lu\n",(unsigned)(id), \
-    (unsigned long)(__get_CONTROL() & 1U)); gateway_panic(GATEWAY_FAULT_ASSERT); } while(0)
+    (unsigned long)(__get_CONTROL() & 1U)); vTaskDelay(pdMS_TO_TICKS(1000)); \
+    gateway_panic(GATEWAY_FAULT_ASSERT); } while(0)
+#define PROBE_SETTLE() vTaskDelay(pdMS_TO_TICKS(800))   /* let the log line flush */
 /* Runs in the unprivileged NET HTTP task on the first submitted request. */
 static void d1_net_probe(void)
 {
@@ -103,7 +108,7 @@ static void d1_net_probe(void)
     if(gateway_d1_fault_was_reset) return;
     const unsigned id=GATEWAY_D1_PROBE;
     PROBE_LOG("[PROBE] id=%u start context=NET control=%lu\n",id,(unsigned long)(__get_CONTROL() & 1U));
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(500));
     switch(id) {
     case 1: live_gate.policy.num_rules=0U; break;                          /* write policy store */
     case 2: live_gate.security[0]=0xAAU; break;                            /* write validator input */
@@ -120,24 +125,26 @@ static void d1_net_probe(void)
               BaseType_t sent=xQueueSend(gateway_d1_probe_leaked_queue,&probe_forged_job,0);
               PROBE_LOG("[PROBE] id=8 send=%ld\n",(long)sent);
               vTaskDelay(pdMS_TO_TICKS(300));
-              PROBE_LOG("[PROBE] id=8 done\n");
+              PROBE_LOG("[PROBE] id=8 done\n"); PROBE_SETTLE();
               gateway_panic(GATEWAY_FAULT_ASSERT); }
     case 9: __asm volatile("svc %0" :: "i" (portSVC_RAISE_PRIVILEGE) : "memory"); __ISB();
             PROBE_LOG("[PROBE] id=9 control=%lu\n",(unsigned long)(__get_CONTROL() & 1U));
-            live_gate.policy.num_rules=0xA9U; break;
+            PROBE_SETTLE(); live_gate.policy.num_rules=0xA9U; break;
     case 10: { TickType_t (*jump)(void)=(TickType_t (*)(void))(((uintptr_t)MPU_xTaskGetTickCount+0x12U)|1U);
                (void)jump(); __ISB();
                PROBE_LOG("[PROBE] id=10 control=%lu\n",(unsigned long)(__get_CONTROL() & 1U));
-               live_gate.policy.num_rules=0xAAU; break; }
+               PROBE_SETTLE(); live_gate.policy.num_rules=0xAAU; break; }
     case 11: __set_CONTROL(0U); __ISB();
              PROBE_LOG("[PROBE] id=11 control=%lu\n",(unsigned long)(__get_CONTROL() & 1U));
-             live_gate.policy.num_rules=0xABU; break;
+             PROBE_SETTLE(); live_gate.policy.num_rules=0xABU; break;
     case 12: ETH->MACCR=ETH->MACCR; break;                                 /* ETH MAC register */
     case 13: *(volatile uint8_t *)gateway_d1_probe_dma_address()=0U; break; /* DMA buffer */
     case 14: gateway_d1_probe_forge_slot=1U; vTaskDelay(pdMS_TO_TICKS(3000));
-             PROBE_LOG("[PROBE] id=14 no-assert\n"); break;
+             PROBE_LOG("[PROBE] id=14 no-assert forge_state=%lu\n",(unsigned long)gateway_d1_probe_forge_slot); break;
     case 15: gateway_d1_probe_bad_tx=1U; vTaskDelay(pdMS_TO_TICKS(3000));
-             PROBE_LOG("[PROBE] id=15 done\n"); gateway_panic(GATEWAY_FAULT_ASSERT);
+             PROBE_LOG("[PROBE] id=15 overlong_tx queued=%lu shim_ok=%lu (0 = rejected)\n",
+                       (unsigned long)(gateway_d1_probe_result>>8),(unsigned long)(gateway_d1_probe_result&0xFFU));
+             PROBE_SETTLE(); gateway_panic(GATEWAY_FAULT_ASSERT);
     default: return;
     }
     PROBE_ESCAPED(id);
@@ -149,9 +156,7 @@ static void app_task(void *arg)
     (void)arg;
     gateway_log("[MPU] app_unprivileged=%u\n",(unsigned)(__get_CONTROL() & 1U));
 #if GATEWAY_D1_PROBE == 21
-    extern volatile uint32_t gateway_d1_fault_was_reset;
-    if(!gateway_d1_fault_was_reset) {
-    gateway_log("[PROBE] id=21 start context=APP\n");
+    if(!probe_skip_app) {
     vTaskDelay(pdMS_TO_TICKS(3000));
     live_gate.policy.num_rules=0U;
     gateway_log("[PROBE] id=21 ESCAPED\n"); gateway_panic(GATEWAY_FAULT_ASSERT);
@@ -228,9 +233,7 @@ static void gate_task(void *arg)
         } while(gate_input.used<expected);
         GatewayR4Reply answer={0};
 #if GATEWAY_D1_PROBE == 20
-        extern volatile uint32_t gateway_d1_fault_was_reset;
-        if(!gateway_d1_fault_was_reset) {
-        gateway_log("[PROBE] id=20 start context=GATE\n");
+        if(!probe_skip_gate) {
         *(volatile uint8_t *)gateway_d1_auth_key()=0U;
         gateway_log("[PROBE] id=20 ESCAPED\n"); gateway_panic(GATEWAY_FAULT_ASSERT);
         }
@@ -270,6 +273,10 @@ void gateway_r4_boundary_start(void)
     app_job_queue=app_queue; app_result_queue=app_reply_queue;
 #if GATEWAY_D1_PROBE == 8
     gateway_d1_probe_leaked_queue=app_queue;
+#endif
+#if GATEWAY_D1_PROBE
+    { extern volatile uint32_t gateway_d1_fault_was_reset;
+      probe_skip_gate=gateway_d1_fault_was_reset; probe_skip_app=gateway_d1_fault_was_reset; }
 #endif
     const TaskParameters_t app_params={
         .pvTaskCode=app_task,.pcName="gateway_app",.usStackDepth=APP_STACK_WORDS,
