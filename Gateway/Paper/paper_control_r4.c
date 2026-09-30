@@ -15,23 +15,35 @@
 #endif
 #define R4_SAMPLES 10000U
 #define R4_STACK_WORDS 1024U
-static StackType_t control_stack[R4_STACK_WORDS] __attribute__((aligned(4096)));
-static StaticTask_t control_tcb;
-static TaskHandle_t control_handle;
-static volatile uint32_t release_count;
-static volatile uint32_t release_cycles[R4_SAMPLES];
-static TaskStatus_t runtime_before[16], runtime_after[16];
-static UBaseType_t runtime_before_count;
-static uint32_t runtime_before_total;
+static StackType_t control_stack[R4_STACK_WORDS]
+    __attribute__((section(".gateway_rt.stack"),aligned(4096)));
+static StaticTask_t control_tcb __attribute__((section(".gateway_privileged")));
+static TaskHandle_t control_handle __attribute__((section(".gateway_privileged")));
+static volatile uint32_t release_count __attribute__((section(".gateway_privileged")));
+static volatile uint32_t isr_max_cycles __attribute__((section(".gateway_privileged")));
+static volatile uint32_t release_lost __attribute__((section(".gateway_privileged")));
+static volatile uint32_t release_gap_anomalies __attribute__((section(".gateway_privileged")));
+static volatile uint32_t last_release_cycles __attribute__((section(".gateway_privileged")));
+static volatile uint32_t timer_period_cycles __attribute__((section(".gateway_privileged")));
+static volatile uint32_t core_cycles_per_us __attribute__((section(".gateway_privileged")));
+static TaskStatus_t runtime_before[16] __attribute__((section(".gateway_privileged")));
+static TaskStatus_t runtime_after[16] __attribute__((section(".gateway_privileged")));
+static UBaseType_t runtime_before_count __attribute__((section(".gateway_privileged")));
+static uint32_t runtime_before_total __attribute__((section(".gateway_privileged")));
 extern void gateway_r4_critical_reset(void);
 extern uint32_t gateway_r4_critical_max(void);
-static struct {
+extern uint32_t gateway_r4_critical_anomalies(void);
+extern void gateway_r4_critical_window(uint32_t active);
+extern void gateway_d1_eth_isr_reset(void);
+extern uint32_t gateway_d1_eth_isr_max(void);
+extern uint32_t gateway_d1_eth_isr_count(void);
+static volatile struct {
     uint8_t magic[4];
     uint16_t hz;
     uint8_t high;
     uint8_t reserved;
     uint32_t cycles[R4_SAMPLES];
-} capture;
+} capture __attribute__((section(".gateway_rt.capture")));
 
 void gateway_runtime_init(void)
 {
@@ -43,17 +55,34 @@ uint32_t gateway_runtime_counter(void) { return DWT->CYCCNT; }
 
 void TIM7_IRQHandler(void)
 {
+    uint32_t entered=DWT->CYCCNT;
     if((TIM7->SR & TIM_SR_UIF)==0U) return;
     TIM7->SR=0U;
+    /* CNT reports time since the most recent hardware update. A single UIF
+     * can represent several updates while BASEPRI masks this IRQ, so count
+     * those releases from the DWT gap between reconstructed update times. */
+    uint32_t released=entered-(uint32_t)TIM7->CNT*core_cycles_per_us;
     uint32_t n=release_count;
     if(n<R4_SAMPLES) {
-        release_cycles[n]=DWT->CYCCNT;
+        if(n) {
+            uint32_t gap=released-last_release_cycles;
+            uint32_t intervals=(gap+timer_period_cycles/2U)/timer_period_cycles;
+            if(intervals==0U) ++release_gap_anomalies;
+            else if(intervals>1U) release_lost+=intervals-1U;
+        }
+        last_release_cycles=released;
+        /* The ISR writes the release timestamp into the final sample slot.
+         * The task replaces it with latency only after release_count advances. */
+        capture.cycles[n]=released;
         release_count=n+1U;
         BaseType_t wake=pdFALSE;
         vTaskNotifyGiveFromISR(control_handle,&wake);
+        uint32_t spent=DWT->CYCCNT-entered;
+        if(spent>isr_max_cycles) isr_max_cycles=spent;
         portYIELD_FROM_ISR(wake);
     }
     if(n+1U>=R4_SAMPLES) {
+        gateway_r4_critical_window(0U);
         TIM7->DIER=0U;
         TIM7->CR1=0U;
     }
@@ -66,13 +95,17 @@ static void control_task(void *unused)
     capture.magic[2]='C';capture.magic[3]='1';
     capture.hz=GATEWAY_R4_CONTROL_HZ;
     capture.high=GATEWAY_R4_CONTROL_HIGH;
-    /* The network listener and host load are active by the start of this window. */
-    vTaskDelay(pdMS_TO_TICKS(3000));
+    capture.reserved=0U;
+    /* Boot self-tests and the host's admin policy install finish before this
+     * window; the collector also verifies READY precedes START. */
+    vTaskDelay(pdMS_TO_TICKS(10000));
     __HAL_RCC_TIM7_CLK_ENABLE();
     uint32_t bus=HAL_RCC_GetPCLK1Freq();
     uint32_t ppre=(RCC->CFGR & RCC_CFGR_PPRE1)>>RCC_CFGR_PPRE1_Pos;
     uint32_t timer_clock=ppre>=4U ? bus*2U : bus;
     uint32_t period_cycles=HAL_RCC_GetHCLKFreq()/GATEWAY_R4_CONTROL_HZ;
+    timer_period_cycles=period_cycles;
+    core_cycles_per_us=HAL_RCC_GetHCLKFreq()/1000000U;
     TIM7->CR1=0U;
     TIM7->PSC=timer_clock/1000000U-1U;
     TIM7->ARR=1000000U/GATEWAY_R4_CONTROL_HZ-1U;
@@ -85,6 +118,12 @@ static void control_task(void *unused)
     gateway_log("[CTRL R4] START hz=%u high=%u\n",
                 GATEWAY_R4_CONTROL_HZ,GATEWAY_R4_CONTROL_HIGH);
     gateway_r4_critical_reset();
+    gateway_d1_eth_isr_reset();
+    release_count=0U;
+    isr_max_cycles=0U;
+    release_lost=0U;
+    release_gap_anomalies=0U;
+    gateway_r4_critical_window(1U);
     TIM7->CR1=TIM_CR1_CEN;
     uint32_t processed=0U, misses=0U, max_cycles=0U;
     while(processed<R4_SAMPLES) {
@@ -92,24 +131,37 @@ static void control_task(void *unused)
         uint32_t available=release_count;
         while(processed<available) {
             uint32_t now=DWT->CYCCNT;
-            uint32_t late=now-release_cycles[processed];
+            uint32_t late=now-capture.cycles[processed];
             capture.cycles[processed]=late;
             if(late>=period_cycles) ++misses;
             if(late>max_cycles) max_cycles=late;
             ++processed;
         }
     }
-    gateway_log("[CTRL R4] hz=%u high=%u samples=%lu misses=%lu max_cycles=%lu critical_max_cycles=%lu stack_free=%lu\n",
+    /* Freeze measurements before stack scans, logging or runtime diagnostics
+     * can add unrelated critical sections and Ethernet interrupts. */
+    uint32_t critical_max=gateway_r4_critical_max();
+    uint32_t critical_anomalies=gateway_r4_critical_anomalies();
+    uint32_t tim_isr_max=isr_max_cycles;
+    uint32_t lost=release_lost;
+    uint32_t gap_anomalies=release_gap_anomalies;
+    uint32_t eth_isr_max=gateway_d1_eth_isr_max();
+    uint32_t eth_irqs=gateway_d1_eth_isr_count();
+    uint32_t stack_free=uxTaskGetStackHighWaterMark(NULL)*sizeof(StackType_t);
+    gateway_log("[CTRL R4] hz=%u high=%u samples=%lu misses=%lu lost_releases=%lu gap_anomalies=%lu max_cycles=%lu critical_max_cycles=%lu critical_anomalies=%lu isr_max_cycles=%lu eth_isr_max_cycles=%lu eth_isr_count=%lu stack_free=%lu\n",
                 GATEWAY_R4_CONTROL_HZ,GATEWAY_R4_CONTROL_HIGH,
-                (unsigned long)processed,(unsigned long)misses,(unsigned long)max_cycles,
-                (unsigned long)gateway_r4_critical_max(),
-                (unsigned long)uxTaskGetStackHighWaterMark(NULL)*sizeof(StackType_t));
+                (unsigned long)processed,(unsigned long)misses,
+                (unsigned long)lost,(unsigned long)gap_anomalies,
+                (unsigned long)max_cycles,
+                (unsigned long)critical_max,(unsigned long)critical_anomalies,
+                (unsigned long)tim_isr_max,(unsigned long)eth_isr_max,
+                (unsigned long)eth_irqs,(unsigned long)stack_free);
     /* This observer suspends scheduling and scans stacks, so run it only after
      * the 10,000-sample deadline window has closed, but before the long UART
      * transfer used to export the exact samples. */
     uint32_t total=0U;
     UBaseType_t tasks=uxTaskGetSystemState(runtime_after,16U,&total);
-    if(gateway_log_binary(&capture,sizeof(capture))!=(int)sizeof(capture))
+    if(gateway_log_binary((const void *)&capture,sizeof(capture))!=(int)sizeof(capture))
         gateway_panic(GATEWAY_FAULT_ASSERT);
     gateway_log("[RUNTIME R4] total_cycles=%lu tasks=%lu\n",
                 (unsigned long)(total-runtime_before_total),(unsigned long)tasks);
@@ -130,7 +182,7 @@ static void control_task(void *unused)
 void gateway_r4_control_start(void)
 {
     control_handle=xTaskCreateStatic(control_task,"r4_control",R4_STACK_WORDS,NULL,
-        (UBaseType_t)(GATEWAY_R4_CONTROL_HIGH ? osPriorityHigh : osPriorityNormal) |
+        (UBaseType_t)(GATEWAY_R4_CONTROL_HIGH ? osPriorityRealtime4 : osPriorityNormal) |
         portPRIVILEGE_BIT,control_stack,&control_tcb);
     if(!control_handle) gateway_panic(GATEWAY_FAULT_STARTUP);
 }

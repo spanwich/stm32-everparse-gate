@@ -1,10 +1,76 @@
-# D1 evidence — stages 1–4, 2026-09-30
+# D1 evidence — stages 1–7 and ongoing final tests, 2026-09-30
 
-**Verdict: D1 is not established.** This directory records D1.7 steps 1–4:
-FreeRTOS V11.3.1 MPU wrappers v2, a private AUTH oracle and an unprivileged
-GATE on the NUCLEO-F767ZI, then a bounded SHIM/NET handoff. P5 scheduling, the
-restrictive reset policy, the labelled A/B corpus, P5 timing matrix, and final
-cost claims remain open. P1–P5 are not yet established.
+**Verdict: D1 is not yet established.** Steps 1–7 now have working board images:
+FreeRTOS V11.3.1 MPU wrappers v2, a private AUTH oracle and unprivileged GATE,
+a bounded SHIM/NET handoff, restrictive reset policy, proved field serializer,
+and a chunked NET→GATE queue. The full P5 timing matrix is complete. The final
+NET-compromise injection matrix, 100,000-request effect audit, labelled A/B
+corpus, cost image and privileged-code inventory remain open. P1–P4 are not yet
+established; P5 has the measured boundary below.
+
+## Restrictive policy, serializer and bounded queue
+
+The live GATE starts with only login, logout and admin policy read/re-apply
+available. `v11-field-stage6/board/uart.log` records 301/301 board checks;
+`v11-field-stage6/network-suite` and its simultaneous UART trace record fresh
+operator denial, admin policy installation, all 34 existing network checks and
+200 mixed requests, followed by restoration of the restrictive policy. The
+separate `v11-fault-reset-once2/board/uart-raw.log` contains a NET policy-write
+MemManage fault, IWDG reset and second successful boot. Its
+`post-reset-policy-uart/uart.log` and check record operator denial after reset
+and admin re-application. The first one-shot fault image repeatedly faulted
+inside its handler; its raw logs are retained, and the corrected handler reads
+the current TCB directly in privileged handler mode.
+
+The pinned `Verification/tools/prove.py --extract` replay passed and generated
+the active `Mediation.Field.build_access` call for access kind 2. Other kinds
+still use `Mediation.Format.build`. The proof covers byte equality to the
+reviewed scratch mapping and frame/bounds properties; it does not prove the
+kernel, queue integration, HTTP semantics or execution time.
+
+Sustained loaded timing exposed a watchdog design error: the low-priority
+diagnostics feeder was starved and the board reset. A separate privileged
+watchdog task above NET priority now feeds the IWDG. It also exposed the large
+4,100-byte NET→GATE queue item: at 4 kHz valid load, a 33,625-cycle FreeRTOS
+critical section caused 19 late delivered releases and 84 collapsed TIM7
+updates. This failing image and all superseded timing logs are retained in
+`development-timing-invalid.tar.zst` (SHA-256
+`7c76a657293304da783139b0a2d81795ee932b45f0edead78e2aad3b95f7a96b`).
+The replacement queues at most 256 bytes per item and reassembles the exact
+request in GATE-private memory. `v11-chunk-ingress-stage7` passed 301/301 on
+the board, the 34-check HTTP suite, 200 mixed requests and the 4,096-byte
+request case. Both configurations built with zero warnings.
+
+## P5 timing matrix
+
+`control-matrix.csv` and `control-matrix.json` link all 24 final captures to
+their image hashes, raw `uart.bin`, and 10,000 exact per-release samples. For
+each rate and bucket setting, idle and valid/denied/malformed loads used the
+same ELF. The collector requires HTTP READY before timer START, completed
+requests inside every loaded window, exactly one boot, and no parser or
+critical-counter anomalies at 1/4 kHz. TIM7 CNT and DWT reconstruct the latest
+hardware update; gaps count releases lost when its single update flag coalesces.
+
+| Rate | Bucket | Idle misses | Loaded total misses (valid / denied / malformed) | Loaded completed requests |
+|---|---|---:|---|---|
+| 1 kHz | on | 0 | 0 / 0 / 0 | 531 / 623 / 673 |
+| 1 kHz | off | 0 | 0 / 0 / 0 | 714 / 624 / 674 |
+| 4 kHz | on | 0 | 0 / 0 / 0 | 107 / 124 / 134 |
+| 4 kHz | off | 0 | 0 / 0 / 0 | 107 / 125 / 134 |
+| 10 kHz | on | 0 | 162 / 134 / 116 | 23 / 27 / 28 |
+| 10 kHz | off | 0 | 160 / 132 / 113 | 23 / 27 / 29 |
+
+At 10 kHz the loaded critical-section maxima are 13,122–13,642 cycles,
+exceeding the 9,600-cycle period. Timer ISR maxima are approximately 1,400
+cycles and Ethernet ISR maxima approximately 3,000 cycles. Most 10 kHz misses
+are collapsed releases (113–159 per run); three or six delivered releases
+were also late in some runs. Each denied 10 kHz run has one reconstructed-gap
+anomaly, so its exact total has an uncertainty of one release. These DWT
+maxima are observed values, not WCET bounds. The control task runs strictly
+above SHIM, AUTH, GATE, APP and NET; TIM7 IRQ priority 5 is above ETH priority
+7. The 1/4 kHz zero-miss result applies to the measured sequential HTTP loads,
+whose achieved rates and transport errors are in the CSV, not to unmeasured
+line-rate saturation.
 
 The final stage-one Debug ELF is `v11-stage1-final/policy_gate.elf`, SHA-256
 `9b8635dc33e961902cf18b66e4e1af10d5e12833123904e592538b9d23fddf37`.

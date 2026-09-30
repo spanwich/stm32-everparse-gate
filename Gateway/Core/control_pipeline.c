@@ -84,6 +84,19 @@ void policy_init_default(Policy *p)
     }
 }
 
+/* D1 live boot/reset policy. Login is a public, separately validated route;
+ * logout and the admin recovery endpoints are the only stored grants. Pure
+ * self-test fixtures keep policy_init_default() so their old vectors run. */
+void policy_init_restrictive(Policy *p)
+{
+    p->num_rules=3;
+    p->rules[0]=(PolicyRule){PATH_LOGOUT,METHOD_POST,ROLE_OPERATOR,0};
+    p->rules[1]=(PolicyRule){PATH_POLICY,METHOD_GET,ROLE_ADMIN,0x0004};
+    p->rules[2]=(PolicyRule){PATH_POLICY,METHOD_PUT,ROLE_ADMIN,0x0004};
+    for(unsigned i=3;i<MAX_RULES;++i)
+        p->rules[i]=(PolicyRule){DEAD_HASH,0,0,0};
+}
+
 /* ------------------------------------------------------------------ */
 /* GateResponse / AppRequest construction helpers                      */
 /* ------------------------------------------------------------------ */

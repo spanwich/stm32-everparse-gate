@@ -59,13 +59,13 @@ by an uploaded application policy. The byte mapping is reviewed against the
 retained `.3d` specification and independently tested; equivalence of that mapping
 to the `.3d` specification is not itself a proved theorem.
 
-R4 adds `Mediation.Field.build_access` as an experimental access-kind serializer.
+R4 added `Mediation.Field.build_access` as an access-kind serializer.
 Its Low* postcondition proves all 106 output bytes equal to the **same**
 `Mediation.Format.expected` specification and confines writes to the output
 buffer. It copies the 64-byte policy field in a dedicated loop and writes the
 fixed header, request fields and zero tail separately. It is extracted into a
-separate generated C module; the production wrapper still calls the original
-`Mediation.Format.build`. This proof covers access kind 2 only, and does not
+separate generated C module; the D1 production wrapper calls it for access kind 2
+and retains `Mediation.Format.build` for the other kinds. This proof covers access kind 2 only, and does not
 expand the trusted C/FFI boundary or establish machine-code timing properties.
 
 `Mediation.Wrapper.run` discharges the handler's admission precondition for the

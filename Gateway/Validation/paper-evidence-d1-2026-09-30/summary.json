@@ -1,20 +1,18 @@
 {
-  "stage": "D1.7 steps 1-4",
+  "stage": "D1.7 steps 1-7; final P5 matrix complete",
   "date": "2026-09-30",
-  "verdict": "NO-GO for D1 P1-P5; unprivileged TCPIP with bounded SHIM handoff operational",
+  "verdict": "NO-GO for full D1 P1-P4 pending final attacks/audit; P5 zero misses at 1/4 kHz in measured loads",
   "board": "NUCLEO-F767ZI",
   "cpuid": "0x411fc270",
-  "primary_image": "v11-tcpip-broker-stage4j/policy_gate.elf",
-  "primary_elf_sha256": "680e23a04e184976e24007176f310516011f0dbf1e4a361f201255f4ed193f8a",
+  "primary_image": "v11-chunk-ingress-stage7/policy_gate.elf",
+  "primary_elf_sha256": "85b984e2f956d4e6216c9a4546ca313e042d0a2786b0ab899ca16e3c6ff7cb2a",
   "primary_boot": {
     "core_selftests": "301/301",
     "http_ready": true,
-    "uart_log": "v11-tcpip-broker-stage4j/board/uart.log",
-    "login_identify_smoke": "passed",
-    "authenticated_repeat_requests": 20,
+    "uart_log": "v11-chunk-ingress-stage7/board/uart.log",
     "network_suite_checks": 34,
     "network_suite_mixed_requests": 200,
-    "network_suite_uart_log": "v11-tcpip-broker-stage4j/network-suite-uart/uart.log"
+    "network_suite_uart_log": "v11-chunk-ingress-stage7/network-suite-uart/uart.log"
   },
   "r4_escalation": {
     "raw_svc": "succeeded; policy 0xA7",
@@ -39,12 +37,12 @@
     "P2": "open",
     "P3": "partial",
     "P4": "open",
-    "P5": "open"
+    "P5": "measured zero total misses at 1 and 4 kHz; 10 kHz loaded misses 113-162"
   },
   "pending": [
-    "finish D1.7 step 4 boundary audit",
-    "D1.7 steps 5-6",
-    "final D1 evidence \u00a712.8 as amended by \u00a713"
+    "final D1 injection matrix, A/B corpus, 100000 effect audit and 5000 soak",
+    "D1 DWT cost and privileged-code inventory",
+    "final primary image build and board regression"
   ],
   "host": {
     "asan_ubsan_linked_vectors": "301/301",
@@ -59,5 +57,9 @@
   "gate_policy_write": {
     "NET": "MemManage at 0x20054250",
     "APP": "MemManage at 0x20054250"
-  }
+  },
+  "p5_matrix": "control-matrix.json",
+  "field_serializer_proof": "Verification/evidence/proof-manifest.json; pinned prove.py --extract PASS",
+  "restrictive_reset": "v11-fault-reset-once2; post-reset operator denied, admin re-applied",
+  "chunked_ingress": "256-byte kernel queue items; stage7 34-check suite passed"
 }

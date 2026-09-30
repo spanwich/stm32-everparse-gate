@@ -23,6 +23,7 @@
 #include "ethernetif.h"
 #include "gateway_platform.h"
 #include "gateway_log.h"
+#include "paper_experiment.h"
 #include "main.h"
 #include "lan8742.h"
 #include "lwip/etharp.h"
@@ -78,6 +79,8 @@ osThreadId_t gateway_eth_task, gateway_link_task;
 volatile uint32_t gateway_link_up, gateway_link_epoch;
 volatile uint32_t gateway_rx_packets, gateway_tx_packets, gateway_rx_drops, gateway_tx_errors;
 static volatile uint32_t need_reset SHIM_PRIVATE;
+static uint32_t rx_tokens SHIM_PRIVATE;
+static TickType_t rx_last_refill SHIM_PRIVATE;
 static _Alignas(8) StackType_t input_stack[4096/4] SHIM_PRIVATE;
 static _Alignas(8) StackType_t link_stack[3072/4] SHIM_PRIVATE;
 static StackType_t tx_stack[3072/4] SHIM_PRIVATE __attribute__((aligned(4096)));
@@ -135,7 +138,29 @@ void HAL_ETH_ErrorCallback(ETH_HandleTypeDef *h)
     if(h->DMAErrorCode & ETH_DMASR_FBES) need_reset=1;
     (void)osSemaphoreRelease(rx_sem);
 }
-void ETH_IRQHandler(void) { HAL_ETH_IRQHandler(&heth); }
+#if GATEWAY_R4_CONTROL
+static volatile uint32_t eth_isr_max_cycles SHIM_PRIVATE;
+static volatile uint32_t eth_isr_count SHIM_PRIVATE;
+void gateway_d1_eth_isr_reset(void)
+{
+    eth_isr_max_cycles=0U;
+    eth_isr_count=0U;
+}
+uint32_t gateway_d1_eth_isr_max(void) { return eth_isr_max_cycles; }
+uint32_t gateway_d1_eth_isr_count(void) { return eth_isr_count; }
+#endif
+void ETH_IRQHandler(void)
+{
+#if GATEWAY_R4_CONTROL
+    uint32_t entered=DWT->CYCCNT;
+#endif
+    HAL_ETH_IRQHandler(&heth);
+#if GATEWAY_R4_CONTROL
+    uint32_t spent=DWT->CYCCNT-entered;
+    if(spent>eth_isr_max_cycles) eth_isr_max_cycles=spent;
+    ++eth_isr_count;
+#endif
+}
 /* driver_mutex held; hardware reset definitively ends all outstanding DMA. */
 static bool reset_mac(void)
 {
@@ -201,6 +226,8 @@ static void tx_thread(void *arg)
 static void input_thread(void *arg)
 {
     (void)arg;
+    rx_tokens=64U;
+    rx_last_refill=xTaskGetTickCount();
     for(;;) {
         (void)osSemaphoreAcquire(rx_sem,100);
         for(unsigned budget=0;budget<16;++budget) {
@@ -211,6 +238,24 @@ static void input_thread(void *arg)
             (void)osMutexRelease(driver_mutex);
             if(result!=HAL_OK || !p) break;
             ++gateway_rx_packets;
+#if GATEWAY_D1_TOKEN_BUCKET
+            /* At most 64 queued frames in a burst, then two per 1 ms tick.
+             * Drop before copying into NET SRAM; bounded integer arithmetic
+             * avoids an attacker-controlled overflow after long idle time. */
+            TickType_t now=xTaskGetTickCount();
+            TickType_t elapsed=now-rx_last_refill;
+            if(elapsed) {
+                rx_tokens=elapsed>=32U?64U:
+                    rx_tokens+2U*elapsed>64U?64U:rx_tokens+2U*elapsed;
+                rx_last_refill=now;
+            }
+            if(rx_tokens==0U) {
+                ++gateway_rx_drops;
+                pbuf_free(p);
+                continue;
+            }
+            --rx_tokens;
+#endif
             uint8_t slot;
             uint16_t length=p->tot_len;
             if(length==0U || length>FRAME_BYTES ||
@@ -333,16 +378,16 @@ err_t gateway_ethernet_init(struct netif *n)
     /* Only the two SHIM tasks touch HAL/PHY and the DMA bank. */
     gateway_eth_task=(osThreadId_t)xTaskCreateStatic(input_thread,"ETH input",
         sizeof(input_stack)/sizeof(StackType_t),NULL,
-        (UBaseType_t)osPriorityAboveNormal|portPRIVILEGE_BIT,input_stack,&input_tcb);
+        (UBaseType_t)osPriorityRealtime|portPRIVILEGE_BIT,input_stack,&input_tcb);
     gateway_link_task=(osThreadId_t)xTaskCreateStatic(link_thread,"ETH link",
         sizeof(link_stack)/sizeof(StackType_t),NULL,
-        (UBaseType_t)osPriorityBelowNormal|portPRIVILEGE_BIT,link_stack,&link_tcb);
+        (UBaseType_t)osPriorityRealtime|portPRIVILEGE_BIT,link_stack,&link_tcb);
     TaskHandle_t tx_task=xTaskCreateStatic(tx_thread,"ETH TX",3072/sizeof(StackType_t),NULL,
-        (UBaseType_t)osPriorityHigh2|portPRIVILEGE_BIT,tx_stack,&tx_tcb);
+        (UBaseType_t)osPriorityRealtime|portPRIVILEGE_BIT,tx_stack,&tx_tcb);
     if(!tx_task) return ERR_MEM;
     const TaskParameters_t net_params={
         .pvTaskCode=net_input_thread,.pcName="NET input",.usStackDepth=4096/sizeof(StackType_t),
-        .pvParameters=NULL,.uxPriority=(UBaseType_t)osPriorityNormal,
+        .pvParameters=NULL,.uxPriority=(UBaseType_t)osPriorityBelowNormal,
         .puxStackBuffer=net_input_stack,
         .xRegions={
             {(void *)0x20000000UL,512U*1024U,
@@ -359,5 +404,6 @@ err_t gateway_ethernet_init(struct netif *n)
     gateway_sys_grant_net_input(net_input_task);
     vGrantAccessToQueue((TaskHandle_t)gateway_tcpip_task,shim_tx_requests);
     vGrantAccessToQueue((TaskHandle_t)gateway_tcpip_task,shim_tx_replies);
+    vTaskPrioritySet(net_input_task,(UBaseType_t)osPriorityNormal);
     return gateway_eth_task && gateway_link_task?ERR_OK:ERR_MEM;
 }

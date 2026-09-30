@@ -4,6 +4,7 @@ module B = LowStar.Buffer
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 module F = Mediation.Format
+module Field = Mediation.Field
 module E = Mediation.Extern
 
 type result = { invoked:bool; status:U32.t }
@@ -18,7 +19,9 @@ let run (k:F.kind) (n:U32.t{U32.v n<=106})
    (v.invoked ==> E.authorized k n (B.as_seq h0 r) (B.as_seq h0 p) (B.as_seq h0 l)) /\
    (~v.invoked ==> B.as_seq h1 ctx == B.as_seq h0 ctx)) =
  let h0 = get () in
- F.build r p l k e;
+ (* The access request uses the field-wise serializer whose 106-byte equality
+    theorem matches Format.expected. Other request kinds retain Format.build. *)
+ (if k=2uy then Field.build_access r p l e else F.build r p l k e);
  let hb = get () in
  assert (B.as_seq h0 r == B.as_seq hb r /\ B.as_seq h0 p == B.as_seq hb p /\ B.as_seq h0 l == B.as_seq hb l);
  let ok = E.check k n r p l e in

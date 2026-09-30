@@ -41,6 +41,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "mpu_syscall_numbers.h"
+#include "paper_experiment.h"
 
 #ifndef __ARM_FP
     #error This port can only be used when the project options are configured to enable hardware floating point support.
@@ -300,6 +301,25 @@ BaseType_t xPortIsTaskPrivileged( void ) PRIVILEGED_FUNCTION;
  * variable.  Note this is not saved as part of the task context as context
  * switches can only occur when uxCriticalNesting is zero. */
 static UBaseType_t uxCriticalNesting = 0xaaaaaaaa;
+#if GATEWAY_R4_CONTROL
+/* D1 timer variant: measure FreeRTOS task critical sections in core cycles.
+ * These counters live in privileged RAM and are not reachable by NET. */
+#define gatewayDWT_CYCCNT ( *( ( volatile uint32_t * ) 0xE0001004UL ) )
+static volatile uint32_t gateway_critical_start __attribute__((section(".gateway_privileged")));
+static volatile uint32_t gateway_critical_max __attribute__((section(".gateway_privileged")));
+static volatile uint32_t gateway_critical_anomalies __attribute__((section(".gateway_privileged")));
+static volatile uint32_t gateway_critical_window_active __attribute__((section(".gateway_privileged")));
+void gateway_r4_critical_reset(void)
+{
+    gateway_critical_window_active=0U;
+    gateway_critical_start=0U;
+    gateway_critical_max=0U;
+    gateway_critical_anomalies=0U;
+}
+void gateway_r4_critical_window(uint32_t active) { gateway_critical_window_active=active; }
+uint32_t gateway_r4_critical_max(void) { return gateway_critical_max; }
+uint32_t gateway_r4_critical_anomalies(void) { return gateway_critical_anomalies; }
+#endif
 
 #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
 
@@ -1048,6 +1068,10 @@ void vPortEnterCritical( void )
         }
     #else /* if ( configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS == 1 ) */
         portDISABLE_INTERRUPTS();
+        #if GATEWAY_R4_CONTROL
+            if( uxCriticalNesting == 0U && gateway_critical_window_active )
+                gateway_critical_start = gatewayDWT_CYCCNT;
+        #endif
         uxCriticalNesting++;
     #endif /* if ( configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS == 1 ) */
 }
@@ -1090,6 +1114,14 @@ void vPortExitCritical( void )
 
         if( uxCriticalNesting == 0 )
         {
+            #if GATEWAY_R4_CONTROL
+                if( gateway_critical_window_active )
+                {
+                    uint32_t spent = gatewayDWT_CYCCNT - gateway_critical_start;
+                    if( spent & 0x80000000UL ) gateway_critical_anomalies++;
+                    else if( spent > gateway_critical_max ) gateway_critical_max = spent;
+                }
+            #endif
             portENABLE_INTERRUPTS();
         }
     #endif /* if ( configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS == 1 ) */

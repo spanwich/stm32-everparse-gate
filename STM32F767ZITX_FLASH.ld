@@ -84,6 +84,27 @@ SECTIONS
     . = ALIGN(8);
     __gateway_auth_end__ = .;
   } >RAM_AUTH
+  /* Retained across an IWDG/system reset; excluded from every unprivileged
+     task's MPU map and from the normal .bss zeroing loop. */
+  .gateway_fault_noinit (NOLOAD) : {
+    . = ALIGN(8);
+    *(.gateway_fault_noinit*)
+    . = ALIGN(8);
+  } >RAM_SPARE
+  ASSERT(SIZEOF(.gateway_fault_noinit) <= 1024, "retained fault record overflow")
+  /* Timer evidence is privileged-only, including its capture and stack.
+     The upper 4 KiB remains reserved for the privileged main stack. */
+  .gateway_rt_capture (NOLOAD) : {
+    . = ALIGN(8);
+    *(.gateway_rt.capture*)
+  } >RAM_SPARE
+  .gateway_rt_stack (NOLOAD) : {
+    . = ALIGN(4096);
+    *(.gateway_rt.stack*)
+    . = ALIGN(8);
+  } >RAM_SPARE
+  ASSERT(ADDR(.gateway_rt_stack) + SIZEOF(.gateway_rt_stack) <= 0x2006f000,
+         "control evidence overlaps privileged main stack")
   .gateway_gate (NOLOAD) : {
     __gateway_gate_start__ = .;
     . = ALIGN(8);

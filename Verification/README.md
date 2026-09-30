@@ -80,10 +80,10 @@ receives 1536-, 65-, 106- and 106-byte buffers plus an aligned, complete `Gatewa
 must be live and initialized, with the request-shape constraints in
 `Mediation.Extern.input_valid`; context and scratch must be disjoint from each other
 and all inputs. One gateway task owns them throughout the synchronous call.
-`Mediation.Format` proves its byte mapping and bounds. The R4 experimental
+`Mediation.Format` proves its byte mapping and bounds.
 `Mediation.Field.build_access` proves byte equality to that same mapping for
-access kind 2 and is extracted separately for timing comparisons. The active
-wrapper continues to use `Mediation.Format.build`. `Mediation.Extern.check`
+access kind 2. The active wrapper uses this field serializer for access kind 2
+and retains `Mediation.Format.build` for the other kinds. `Mediation.Extern.check`
 bridges to the real validator. `Mediation.Extern.invoke` is the trusted leaf-effect
 boundary. The public C API does not hand an authorization Boolean back to HTTP
 code for later dispatch.

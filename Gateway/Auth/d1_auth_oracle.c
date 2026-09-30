@@ -129,7 +129,7 @@ void gateway_d1_auth_start(void)
     const TaskParameters_t parameters={
         .pvTaskCode=auth_task,.pcName="gateway_auth",
         .usStackDepth=AUTH_STACK_WORDS,.pvParameters=NULL,
-        .uxPriority=(UBaseType_t)osPriorityHigh,.puxStackBuffer=auth_stack,
+        .uxPriority=(UBaseType_t)osPriorityHigh4,.puxStackBuffer=auth_stack,
         .xRegions={{(void *)0x20060000UL,16U*1024U,
             portMPU_REGION_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
             portMPU_REGION_CACHEABLE_BUFFERABLE},{NULL,0,0},{NULL,0,0}},

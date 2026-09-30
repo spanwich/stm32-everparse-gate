@@ -4,6 +4,7 @@ from pathlib import Path
 import argparse
 import csv
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -22,6 +23,7 @@ p.add_argument('--flash',action='store_true')
 p.add_argument('--scenario',choices=('idle','valid','denied','malformed'),required=True)
 p.add_argument('--output',type=Path,required=True)
 p.add_argument('--max-seconds',type=int,default=35)
+p.add_argument('--d1',action='store_true',help='install D1 demo policy before valid load')
 a=p.parse_args()
 a.output.mkdir(parents=True,exist_ok=True)
 elf=a.elf.resolve(); digest=hashlib.sha256(elf.read_bytes()).hexdigest()
@@ -70,6 +72,25 @@ try:
     (a.output/'programmer.log').write_bytes(proc.stdout)
     assert proc.returncode==0 and (not a.flash or b'Download verified successfully' in proc.stdout)
     assert ready.wait(35),'HTTP listener did not start'
+    if a.d1 and a.scenario=='valid':
+        def control_request(method,path,body=None,token=None):
+            connection=http.client.HTTPConnection('192.168.40.128',80,timeout=5)
+            headers={'Authorization':'Bearer '+token} if token else {}
+            connection.request(method,path,body=body,headers=headers)
+            response=connection.getresponse()
+            status,payload=response.status,response.read()
+            connection.close()
+            return status,payload
+        status,body=control_request('POST','/api/login',
+                                    b'{"username":"admin","password":"admin456"}')
+        assert status==200,(status,body)
+        token=json.loads(body)['token']
+        rules=((0x33333333,1,1,1),(0x22222222,2,1,0),
+               (0x44444444,1,2,4),(0x55555555,1,2,1))
+        policy=bytes([len(rules)])+b''.join(struct.pack('<IBBH',*rule)
+                                            for rule in rules)+bytes(8*(8-len(rules)))
+        status,_=control_request('PUT','/api/policy',policy,token)
+        assert status==200,status
     cases={
         'valid':(b'GET /api/status HTTP/1.1\r\nHost: board\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n',200),
         'denied':(b'GET /api/status HTTP/1.1\r\nHost: board\r\n\r\n',401),
@@ -109,11 +130,16 @@ with (a.output/'requests.csv').open('w',newline='') as file:
     writer=csv.writer(file);writer.writerow(('index','seconds','expected','actual','latency_ms','error'))
     writer.writerows(requests)
 data=bytes(raw)
+if a.d1:
+    assert data.count(b'[BOOT] policy_gate') == 1, 'board reset during D1 timing capture'
+    assert data.find(b'[HTTP] READY') < data.find(b'[CTRL R4] START'), \
+        'D1 timer started before the HTTP listener was ready'
 assert b'[CORE SELFTEST] PASS 301/301' in data
 text=data.decode(errors='replace')
-match=re.search(r'\[CTRL R4\] hz=(\d+) high=(\d+) samples=(\d+) misses=(\d+) max_cycles=(\d+) critical_max_cycles=(\d+) stack_free=(\d+)',text)
+match=re.search(r'\[CTRL R4\] hz=(\d+) high=(\d+) samples=(\d+) misses=(\d+)(?: lost_releases=(\d+) gap_anomalies=(\d+))? max_cycles=(\d+) critical_max_cycles=(\d+)(?: critical_anomalies=(\d+))?(?: isr_max_cycles=(\d+))?(?: eth_isr_max_cycles=(\d+) eth_isr_count=(\d+))? stack_free=(\d+)',text)
 assert match,'control summary missing'
-hz,high,count,misses,max_cycles,critical_max,stack_free=map(int,match.groups())
+hz,high,count,misses,lost_releases,gap_anomalies,max_cycles,critical_max,critical_anomalies,isr_max,eth_isr_max,eth_isr_count,stack_free=(
+    int(value or 0) for value in match.groups())
 assert count==10000
 marker=data.find(b'PGC1',data.find(b'[CTRL R4]'))
 assert marker>=0 and data[marker+4:marker+8]==struct.pack('<HBB',hz,high,0)
@@ -128,11 +154,17 @@ ordered=sorted(values)
 summary={'elf_sha256':digest,'scenario':a.scenario,'clock_hz':clock_hz,
          'control_hz':hz,'control_above_gate':bool(high),
          'samples':count,'misses':misses,'misses_recomputed':sum(v>=period for v in values),
+         'lost_releases':lost_releases,'total_misses':misses+lost_releases,
+         'gap_anomalies':gap_anomalies,
          'min_cycles':ordered[0],'median_cycles':statistics.median(ordered),
          'p99_cycles':ordered[9899],'p999_cycles':ordered[9989],
          'max_cycles':ordered[-1],'board_max_cycles':max_cycles,
          'stack_free_bytes':stack_free,'requests':len(requests),
          'critical_max_cycles':critical_max,
+         'critical_anomalies':critical_anomalies,
+         'isr_max_cycles':isr_max,
+         'eth_isr_max_cycles':eth_isr_max,
+         'eth_isr_count':eth_isr_count,
          'status_mismatches':sum(row[2]!=row[3] for row in requests),
          'transport_errors':sum(bool(row[5]) for row in requests),
          'load_duration_seconds':requests[-1][1] if requests else 0,
@@ -158,7 +190,10 @@ summary['window_status_mismatches']=sum(row[2]!=row[3] for row in window_rows)
 summary['window_transport_errors']=sum(bool(row[5]) for row in window_rows)
 assert summary['misses']==summary['misses_recomputed']
 assert summary['max_cycles']==summary['board_max_cycles']
-summary['achieved_request_rate_hz']=summary['requests_during_sample_window']/(count/hz)
+summary['achieved_request_rate_hz']=summary['requests_during_sample_window']/((count+lost_releases)/hz)
+if a.d1 and a.scenario != 'idle':
+    assert summary['requests_during_sample_window'] > 0, \
+        'D1 loaded window contained no completed HTTP requests'
 (a.output/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
 print(json.dumps({key:summary[key] for key in ('scenario','clock_hz','control_hz',
     'control_above_gate','misses','p99_cycles','max_cycles',

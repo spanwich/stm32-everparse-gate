@@ -36,6 +36,8 @@ static StaticQueue_t log_queue_cb __attribute__((section(".gateway_privileged"))
 static uint8_t log_queue_storage[4U*sizeof(LogMessage)] __attribute__((section(".gateway_privileged")));
 static StackType_t log_stack[1024] __attribute__((section(".gateway_privileged"),aligned(4096)));
 static StaticTask_t log_tcb __attribute__((section(".gateway_privileged")));
+static StackType_t watchdog_stack[256] __attribute__((section(".gateway_privileged")));
+static StaticTask_t watchdog_tcb __attribute__((section(".gateway_privileged")));
 static QueueHandle_t log_queue __attribute__((section(".gateway_privileged")));
 static QueueHandle_t unpriv_log_queue;
 static osThreadId_t gateway_task, diagnostic_task;
@@ -53,6 +55,31 @@ static volatile uint32_t log_drops;
 static volatile uint32_t tests_complete;
 static GatewayTestStats completed_stats;
 volatile GatewayFaultRecord gateway_fault_record;
+typedef struct {
+    uint32_t magic, reason, cfsr, hfsr, mmfar, task, psp, pc, checksum;
+} GatewayResetRecord;
+static volatile GatewayResetRecord reset_record
+    __attribute__((section(".gateway_fault_noinit")));
+volatile uint32_t gateway_d1_fault_was_reset;
+#define GATEWAY_RESET_MAGIC 0xD1F017A5UL
+
+static void watchdog_start(void)
+{
+    IWDG->KR=0x5555U;
+    IWDG->PR=6U;       /* LSI/256; about eight seconds at nominal 32 kHz. */
+    IWDG->RLR=1000U;
+    IWDG->KR=0xAAAAU;
+    IWDG->KR=0xCCCCU;
+}
+static void watchdog_feed(void) { IWDG->KR=0xAAAAU; }
+static void watchdog_task(void *argument)
+{
+    (void)argument;
+    for(;;) {
+        watchdog_feed();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
 
 void gateway_panic(GatewayFault reason)
 {
@@ -62,6 +89,30 @@ void gateway_panic(GatewayFault reason)
     gateway_fault_record.hfsr = SCB->HFSR;
     gateway_fault_record.msp = __get_MSP();
     gateway_fault_record.psp = __get_PSP();
+    uint32_t psp=__get_PSP();
+    uint32_t pc=0U;
+    /* Exception frames from unprivileged tasks live on PSP. Fault handlers
+     * call here before any stack switch; a basic frame has PC at word six. */
+    if(psp>=0x20020000UL && psp<=0x2006ffe0UL) pc=((const uint32_t *)psp)[6];
+    uint32_t mmfar=SCB->MMFAR;
+    /* A fault handler cannot enter an MPU syscall/SVC. Read the kernel's
+     * current TCB pointer directly while already privileged in handler mode. */
+    extern void * volatile pxCurrentTCB;
+    uint32_t task=(uint32_t)pxCurrentTCB;
+    reset_record.magic=0U;
+    reset_record.reason=(uint32_t)reason;
+    reset_record.cfsr=SCB->CFSR;
+    reset_record.hfsr=SCB->HFSR;
+    reset_record.mmfar=mmfar;
+    reset_record.task=task;
+    reset_record.psp=psp;
+    reset_record.pc=pc;
+    reset_record.checksum=GATEWAY_RESET_MAGIC ^ reset_record.reason ^
+        reset_record.cfsr ^ reset_record.hfsr ^ reset_record.mmfar ^
+        reset_record.task ^ reset_record.psp ^ reset_record.pc;
+    __DMB();
+    reset_record.magic=GATEWAY_RESET_MAGIC;
+    __DSB();
     /* No allocation, mutexes, UART waits, or dependence on the scheduler/tick. */
     __HAL_RCC_GPIOB_CLK_ENABLE();
     GPIOB->MODER = (GPIOB->MODER & ~(3UL << 28)) | (1UL << 28);
@@ -166,6 +217,17 @@ int _write(int file, char *data, int length)
 }
 void gateway_boot_report(void)
 {
+    if(reset_record.magic==GATEWAY_RESET_MAGIC &&
+       reset_record.checksum==(GATEWAY_RESET_MAGIC ^ reset_record.reason ^
+       reset_record.cfsr ^ reset_record.hfsr ^ reset_record.mmfar ^
+       reset_record.task ^ reset_record.psp ^ reset_record.pc)) {
+        gateway_d1_fault_was_reset=1U;
+        gateway_log("[RESET] previous_fault=%lu cfsr=0x%08lx mmfar=0x%08lx task=0x%08lx pc=0x%08lx\n",
+            (unsigned long)reset_record.reason,(unsigned long)reset_record.cfsr,
+            (unsigned long)reset_record.mmfar,(unsigned long)reset_record.task,
+            (unsigned long)reset_record.pc);
+    }
+    reset_record.magic=0U;
     gateway_log("\n[BOOT] policy_gate core validation; STM32F767ZI\n");
     gateway_log("[BOOT] SYSCLK=%lu HCLK=%lu UART3=%lu FreeRTOS=%s\n",
                 (unsigned long)HAL_RCC_GetSysClockFreq(), (unsigned long)HAL_RCC_GetHCLKFreq(),
@@ -226,6 +288,7 @@ static void run_diagnostics(void *argument)
 void gateway_platform_start(void)
 {
     if (osKernelGetState() != osKernelReady) gateway_panic(GATEWAY_FAULT_STARTUP);
+    watchdog_start();
     /* heap_4 initializes lazily. Exercise and release a minimal allocation so
      * its free/minimum counters are meaningful even with all-static tasks. */
     void *heap_probe = pvPortMalloc(1U);
@@ -240,6 +303,9 @@ void gateway_platform_start(void)
     if(!log_queue || !xTaskCreateStatic(run_logger,"gateway_log",1024U,NULL,
         (UBaseType_t)osPriorityLow|portPRIVILEGE_BIT,log_stack,&log_tcb))
         gateway_panic(GATEWAY_FAULT_STARTUP);
+    if(!xTaskCreateStatic(watchdog_task,"gateway_watchdog",256U,NULL,
+        (UBaseType_t)osPriorityHigh4|portPRIVILEGE_BIT,
+        watchdog_stack,&watchdog_tcb)) gateway_panic(GATEWAY_FAULT_STARTUP);
     gateway_d1_auth_secrets_init();
     gateway_d1_auth_start();
     gateway_d1_cleanup_start();

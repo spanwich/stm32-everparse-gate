@@ -1,5 +1,5 @@
---- components/PolicyGate/control_pipeline.c
-+++ Gateway/Core/control_pipeline.c
+--- a/components/PolicyGate/control_pipeline.c
++++ b/Gateway/Core/control_pipeline.c
 @@ -18,7 +18,9 @@
   */
  
@@ -11,14 +11,13 @@
  #include <string.h>
  #include <stdio.h>
  
-@@ -64,17 +66,20 @@
+@@ -64,21 +66,37 @@
  static void write_rules(uint8_t *buf, int offset, const Policy *p)
  {
      for (int i = 0; i < MAX_RULES; i++) {
--        write_rule(buf, offset + i * 8, &p->rules[i]);
-+        /* AccessRequest has no num_rules field: neutralize unused slots. */
-+        const PolicyRule unused = { DEAD_HASH, 0, 0, 0 };
-+        write_rule(buf, offset + i * 8, i < p->num_rules ? &p->rules[i] : &unused);
++        /* The reference validator evaluates all eight slots, even when
++         * num_rules is smaller. The wire carries the complete slot table. */
+         write_rule(buf, offset + i * 8, &p->rules[i]);
      }
  }
  
@@ -35,7 +34,24 @@
          p->rules[i] = (PolicyRule){ DEAD_HASH, 0, 0, 0x0000 };
      }
  }
-@@ -144,9 +149,9 @@
+ 
++/* D1 live boot/reset policy. Login is a public, separately validated route;
++ * logout and the admin recovery endpoints are the only stored grants. Pure
++ * self-test fixtures keep policy_init_default() so their old vectors run. */
++void policy_init_restrictive(Policy *p)
++{
++    p->num_rules=3;
++    p->rules[0]=(PolicyRule){PATH_LOGOUT,METHOD_POST,ROLE_OPERATOR,0};
++    p->rules[1]=(PolicyRule){PATH_POLICY,METHOD_GET,ROLE_ADMIN,0x0004};
++    p->rules[2]=(PolicyRule){PATH_POLICY,METHOD_PUT,ROLE_ADMIN,0x0004};
++    for(unsigned i=3;i<MAX_RULES;++i)
++        p->rules[i]=(PolicyRule){DEAD_HASH,0,0,0};
++}
++
+ /* ------------------------------------------------------------------ */
+ /* GateResponse / AppRequest construction helpers                      */
+ /* ------------------------------------------------------------------ */
+@@ -144,9 +162,9 @@
          return PIPELINE_DENY;
      }
  
@@ -47,18 +63,7 @@
          return PIPELINE_DENY;
      }
  
-@@ -173,6 +178,10 @@
-     /* Policy format valid and uploader is ADMIN — update active policy */
-     p->num_rules = num_rules;
-     for (int i = 0; i < MAX_RULES; i++) {
-+        if (i >= p->num_rules) {
-+            p->rules[i] = (PolicyRule){ DEAD_HASH, 0, 0, 0 };
-+            continue;
-+        }
-         int off = 1 + i * 8;
-         p->rules[i].path_hash =
-             (uint32_t)body[off + 0] |
-@@ -254,7 +263,7 @@
+@@ -254,7 +272,7 @@
      uint32_t path_hash = params->path_hash;
      uint8_t method = params->method;
  

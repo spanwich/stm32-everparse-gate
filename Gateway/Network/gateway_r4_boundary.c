@@ -1,6 +1,6 @@
-/* R4 transport/gate/app task boundary. Queue items copy bytes; no request,
+/* D1 transport/gate/app task boundary. Queue items copy bytes; no request,
  * response or app pointer crosses ownership. The gate re-parses every request
- * and owns the only live policy and validator input in privileged SRAM. */
+ * and owns the only live policy and validator input in its private SRAM. */
 #include "gateway_r4_boundary.h"
 #include "gateway_platform.h"
 #include "gateway_d1_auth.h"
@@ -26,13 +26,19 @@ extern TickType_t MPU_xTaskGetTickCount(void);
 #define APP_PRIVATE __attribute__((section(".gateway_app")))
 #define GATE_STACK_WORDS 2048U
 #define APP_STACK_WORDS 1024U
+#define INGRESS_CHUNK_BYTES 256U
 typedef struct { uint32_t used; uint8_t raw[GATEWAY_REQUEST_CAPACITY]; } Ingress;
+typedef struct {
+    uint16_t total, offset, length;
+    uint8_t raw[INGRESS_CHUNK_BYTES];
+} IngressChunk;
 typedef struct { uint32_t length; Policy policy; uint8_t app[GATEWAY_WIRE_CAPACITY]; } AppJob;
 typedef struct { uint32_t length; uint8_t gate[GATEWAY_WIRE_CAPACITY]; bool ok; } AppResult;
 
 static GatewayContext live_gate GATE_PRIVATE;
 static GatewayHttp gate_http GATE_PRIVATE;
 static Ingress gate_input GATE_PRIVATE;
+static IngressChunk gate_chunk GATE_PRIVATE;
 static AppJob gate_app_job GATE_PRIVATE;
 static AppResult gate_app_result GATE_PRIVATE;
 static AppJob app_job APP_PRIVATE;
@@ -42,7 +48,7 @@ static StackType_t app_stack[APP_STACK_WORDS] APP_PRIVATE __attribute__((aligned
 static StaticTask_t gate_tcb KERNEL_PRIVATE, app_tcb KERNEL_PRIVATE;
 static StaticQueue_t ingress_cb KERNEL_PRIVATE, reply_cb KERNEL_PRIVATE;
 static StaticQueue_t app_cb KERNEL_PRIVATE, app_reply_cb KERNEL_PRIVATE;
-static uint8_t ingress_storage[sizeof(Ingress)] KERNEL_PRIVATE;
+static uint8_t ingress_storage[sizeof(IngressChunk)] KERNEL_PRIVATE;
 static uint8_t reply_storage[sizeof(GatewayR4Reply)] KERNEL_PRIVATE;
 static uint8_t app_storage[sizeof(AppJob)] KERNEL_PRIVATE;
 static uint8_t app_reply_storage[sizeof(AppResult)] KERNEL_PRIVATE;
@@ -51,7 +57,7 @@ static QueueHandle_t app_queue GATE_PRIVATE, app_reply_queue GATE_PRIVATE;
 static QueueHandle_t net_ingress_queue, net_reply_queue;
 static QueueHandle_t app_job_queue APP_PRIVATE, app_result_queue APP_PRIVATE;
 static bool app_started GATE_PRIVATE;
-static Ingress outbound;
+static IngressChunk outbound;
 static GatewayR4Reply inbound;
 #if GATEWAY_R4_FAULT_INJECT == 2
 static volatile uint8_t *volatile validator_probe_target;
@@ -115,15 +121,34 @@ static void gate_task(void *arg)
 {
     (void)arg;
     gateway_init(&live_gate);
+    policy_init_restrictive(&live_gate.policy);
     for (;;) {
-        if (xQueueReceive(ingress_queue,&gate_input,portMAX_DELAY)!=pdPASS)
-            gateway_panic(GATEWAY_FAULT_ASSERT);
+        uint32_t expected=0U;
+        bool complete=true;
+        gate_input.used=0U;
+        do {
+            TickType_t wait=expected==0U?portMAX_DELAY:pdMS_TO_TICKS(2000);
+            if(xQueueReceive(ingress_queue,&gate_chunk,wait)!=pdPASS) {
+                complete=false;
+                break;
+            }
+            if(expected==0U) expected=gate_chunk.total;
+            if(expected==0U || expected>sizeof(gate_input.raw) ||
+               gate_chunk.total!=expected || gate_chunk.offset!=gate_input.used ||
+               gate_chunk.length==0U || gate_chunk.length>INGRESS_CHUNK_BYTES ||
+               (uint32_t)gate_chunk.length>expected-gate_input.used) {
+                complete=false;
+                break;
+            }
+            memcpy(gate_input.raw+gate_input.used,gate_chunk.raw,gate_chunk.length);
+            gate_input.used+=gate_chunk.length;
+        } while(gate_input.used<expected);
         GatewayR4Reply answer={0};
         gateway_begin_request(&live_gate);
         gateway_http_init(&gate_http);
         gateway_audit_begin(&live_gate);
-        int status=gate_input.used<=sizeof(gate_input.raw)?
-            gateway_http_feed(&gate_http,&live_gate,gate_input.raw,gate_input.used):413;
+        int status=complete?
+            gateway_http_feed(&gate_http,&live_gate,gate_input.raw,gate_input.used):400;
         if (status==1) status=gateway_http_process(&gate_http,&live_gate);
         else if(status==0) status=400;
         answer.status=status;
@@ -144,7 +169,7 @@ static void gate_task(void *arg)
 
 void gateway_r4_boundary_start(void)
 {
-    ingress_queue=xQueueCreateStatic(1,sizeof(Ingress),ingress_storage,&ingress_cb);
+    ingress_queue=xQueueCreateStatic(1,sizeof(IngressChunk),ingress_storage,&ingress_cb);
     reply_queue=xQueueCreateStatic(1,sizeof(GatewayR4Reply),reply_storage,&reply_cb);
     app_queue=xQueueCreateStatic(1,sizeof(AppJob),app_storage,&app_cb);
     app_reply_queue=xQueueCreateStatic(1,sizeof(AppResult),app_reply_storage,&app_reply_cb);
@@ -202,7 +227,8 @@ void gateway_r4_boundary_start(void)
         gateway_panic(GATEWAY_FAULT_STARTUP);
 #endif
     app_started=true;
-    vTaskPrioritySet(gate,(UBaseType_t)osPriorityAboveNormal);
+    vTaskPrioritySet(app,(UBaseType_t)osPriorityAboveNormal);
+    vTaskPrioritySet(gate,(UBaseType_t)osPriorityHigh);
 }
 
 void gateway_r4_network_drop_privilege(void)
@@ -210,6 +236,14 @@ void gateway_r4_network_drop_privilege(void)
     vPortSwitchToUserMode();
     gateway_log("[MPU] network_unprivileged=%u gate_privileged=0\n",
                 (unsigned)(__get_CONTROL() & 1U));
+#if GATEWAY_D1_FAULT_ONCE
+    extern volatile uint32_t gateway_d1_fault_was_reset;
+    if(!gateway_d1_fault_was_reset) {
+        gateway_fault_record.line=51U;
+        live_gate.policy.num_rules=0U;
+        gateway_panic(GATEWAY_FAULT_ASSERT);
+    }
+#endif
 #if GATEWAY_R4_FAULT_INJECT == 1
     gateway_fault_record.line=1;
     live_gate.policy.num_rules=0;
@@ -274,10 +308,20 @@ void gateway_r4_fault_before_validator(uint8_t *validator_input)
 
 const GatewayR4Reply *gateway_r4_submit(const GatewayHttp *assembled)
 {
-    if(!assembled || assembled->used>sizeof(outbound.raw)) return NULL;
-    outbound.used=assembled->used;
-    memcpy(outbound.raw,assembled->raw,outbound.used);
-    if(xQueueSend(net_ingress_queue,&outbound,pdMS_TO_TICKS(2000))!=pdPASS ||
-       xQueueReceive(net_reply_queue,&inbound,pdMS_TO_TICKS(2000))!=pdPASS) return NULL;
+    if(!assembled || assembled->used==0U ||
+       assembled->used>GATEWAY_REQUEST_CAPACITY) return NULL;
+    for(uint32_t offset=0;offset<assembled->used;) {
+        uint32_t length=assembled->used-offset;
+        if(length>INGRESS_CHUNK_BYTES) length=INGRESS_CHUNK_BYTES;
+        outbound.total=(uint16_t)assembled->used;
+        outbound.offset=(uint16_t)offset;
+        outbound.length=(uint16_t)length;
+        memcpy(outbound.raw,assembled->raw+offset,length);
+        if(xQueueSend(net_ingress_queue,&outbound,pdMS_TO_TICKS(2000))!=pdPASS)
+            return NULL;
+        offset+=length;
+    }
+    if(xQueueReceive(net_reply_queue,&inbound,pdMS_TO_TICKS(2000))!=pdPASS)
+        return NULL;
     return &inbound;
 }

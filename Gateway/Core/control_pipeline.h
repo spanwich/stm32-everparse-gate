@@ -55,6 +55,7 @@ int pipeline_process(Policy *policy,
                      uint8_t *app_buf, uint32_t *app_len);
 
 void policy_init_default(Policy *p);
+void policy_init_restrictive(Policy *p);
 const char *role_name(uint8_t role);
 
 #endif /* CONTROL_PIPELINE_H */
