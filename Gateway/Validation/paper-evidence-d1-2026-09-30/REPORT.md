@@ -1,6 +1,10 @@
 # D1 evidence — stages 1–7 and ongoing final tests, 2026-09-30
 
-**Verdict: D1 is not yet established.** Steps 1–7 now have working board images:
+**Verdict (updated after D1.8, see "D1.8 final evidence"): P1-P4 tested on the
+final verified-gate image with the scoped exceptions listed there (probes 14,
+15 and 22 inconclusive; latent long critical section); P5 holds for the
+primary configuration at 1 and 4 kHz.** Original stage-1-7 verdict:
+**D1 was not yet established.** Steps 1–7 now have working board images:
 FreeRTOS V11.3.1 MPU wrappers v2, a private AUTH oracle and unprivileged GATE,
 a bounded SHIM/NET handoff, restrictive reset policy, proved field serializer,
 and a chunked NET→GATE queue. The full P5 timing matrix is complete. The final
@@ -254,6 +258,50 @@ runtime update path (the 65-byte PolicyBlob carries eight rules).
 At n = 1 the verified gate costs about 2.3× the monolithic validator (48 µs vs
 21–26 µs): it serializes each partition through LowParse writers and calls the
 rate validator separately. A full n = 32 scan costs 0.97 ms.
+
+## D1.8 final evidence on the verified-gate image (2026-09-30, paper side)
+
+Final image: `v11-verified-gate-final2` (Debug, SHA-256 `12bc5490…`, source
+`d7c753e`): verified composed gate (§14), `MEMP_NUM_NETCONN` 32 (was 3), no
+per-second GATE stack log. The 95k audit (`v11-verified-gate-netconn32`) and
+the probe images differ from it only by that one diagnostic line (probes: plus
+`GATEWAY_D1_PROBE`).
+
+| ID | Evidence | Result |
+|---|---|---|
+| E-func | Boot self-tests (incl. 12,527-case reference corpus through the verified gate), network suite, live policy, dashboard | 301/301, 34/34, 43/43, 129/129 |
+| E-func | 200-case R1 attack corpus (`attacks-r1/`) | 0 disagreements, 0 fail-open, 0 audit mismatches, policy preserved and restored |
+| E-func | 5,000-request `http.client` soak | 5,000/5,000; median / p99 / max 18.5 / 19.5 / 20.2 ms |
+| E-P1 | Effect audit (`v11-verified-gate-netconn32/e-p1-audit-100000`) | 95,532/95,532 matched, 57,225 effects each paired with one acceptance, 0 violations, 0 transport errors (stopped by the host job time limit, not the board) |
+| E-P2a/E-P3 | NET probes 1-7: write GATE policy, write validator input, write/read AUTH key, write APP input, call a GATE function, call the AUTH client | each MemManage data fault at the target region (GATE `0x2005xxxx`, AUTH `0x20061000`, APP `0x20020048`), faulting task NET |
+| E-P2a | Probe 8: forged job on a leaked GATE->APP queue handle | kernel ACL rejects the send (`send=0`); APP never received a job |
+| E-P2b | Probes 9-11: SVC raise, wrapper-interior SVC (`svc 13` at `MPU_xTaskGetTickCount+0x12`, checked in the ELF), CONTROL write, each followed by a policy write | policy write still faults: no privilege gained |
+| E-P2c | Probe 12: NET writes ETH MAC register; probe 13: NET writes the Ethernet DMA buffer | MemManage at `0x40028000` and `0x20074140` |
+| E-P2c | Probes 14 (forged RX slot index) and 15 (overlong TX request) | **inconclusive**: the harness did not drive the probe's frame path within its window; code review: the SHIM asserts `slot < FRAME_SLOTS` before any write and rejects TX length > frame size |
+| E-fault | Every contained probe: fault -> IWDG reset -> restrictive boot policy | operator 403 after each reset (NET, GATE probe 20: GATE writes AUTH key -> fault at `0x20061000`; APP probe 21: APP writes GATE policy -> fault at `0x20054250`, see `v11-final-probe-21/board/uart-raw.log`) |
+| E-fault | AUTH probe 22 | **inconclusive**: probe did not fire in the final run |
+| E-map | Privileged-code inventory and region map (`v11-verified-gate-final/e-map/privileged-inventory.json`) | 9 privileged tasks and 12 ISRs; SHIM closures RX 5.6 KB, TX 8.8 KB, link 12.3 KB, ETH ISR 2.1 KB; 81 unresolved register-indirect call sites listed |
+| E-cost | Verified gate DWT cycles (§14 section above) | n = 1: 4.6-4.9k cycles (48-51 µs) vs monolithic 2.0-2.5k; n = 32 scan 93k |
+| E-P5 | Control task 1/4/10 kHz × bucket on/off × idle/valid/denied/malformed (`final2-control-*`) | **bucket on (primary configuration): 0 misses at 1 and 4 kHz** under all loads; 10 kHz 92-117 misses (critical-section max 13,145-13,664 cycles > 9,600-cycle period), as at stage 7. **Bucket off: 0 misses at 1 kHz, 480-704 at 4 kHz, 630-887 at 10 kHz**, critical-section max 34,620-36,119 cycles. Idle baseline 0 in every image. |
+
+Findings from this round:
+- **NET liveness under load (fixed).** With 3 netconns the normal peak
+  (listener + served connection + pending accept) filled the pool; 343
+  allocations failed in a 48k-request run (client connection resets), and one
+  run ended with NET blocked in `netconn_delete` on a never-signalled semaphore
+  (SWD task dump in `v11-verified-gate-final/e-p1-hang/`). netconns are
+  released after every close (no leak). With 32 netconns: 0 failures, peak 3.
+- **Latent long critical section (not fixed, not located).** Some builds show a
+  critical section of ~36k cycles (~375 µs) under load: the previous final image
+  in its bucket-on build, the final2 image in its bucket-off build; the other
+  build of each pair shows ~13.6k, as at stage 7 (stage-7 source rebuilt now:
+  13,639). It appears in one build or the other rather than following the
+  verified gate, the netconn pool or the GATE stack log (`bisect-*`); the
+  earlier commit message attributing it to the GATE log is wrong. Until it is
+  located, 4 kHz P5 holds for the measured primary image only.
+- **Design weakness (not fixed).** NET<->GATE and GATE<->APP use one-slot reply
+  queues with 2 s timeouts and no sequence number; a late reply could be paired
+  with the next request. AUTH's exchange already checks a sequence number.
 
 ## Property boundary
 
