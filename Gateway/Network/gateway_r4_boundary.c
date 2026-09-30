@@ -46,6 +46,13 @@ static AppResult app_result APP_PRIVATE;
 static StackType_t gate_stack[GATE_STACK_WORDS] GATE_PRIVATE __attribute__((aligned(8192)));
 static StackType_t app_stack[APP_STACK_WORDS] APP_PRIVATE __attribute__((aligned(4096)));
 static StaticTask_t gate_tcb KERNEL_PRIVATE, app_tcb KERNEL_PRIVATE;
+static TaskHandle_t gate_task_handle KERNEL_PRIVATE;
+/* Section 14: GATE stack high-water mark in bytes, read by the privileged
+ * diagnostics task (0 before GATE exists). */
+uint32_t gateway_r4_gate_stack_free(void)
+{
+    return gate_task_handle?(uint32_t)uxTaskGetStackHighWaterMark(gate_task_handle)*sizeof(StackType_t):0U;
+}
 static StaticQueue_t ingress_cb KERNEL_PRIVATE, reply_cb KERNEL_PRIVATE;
 static StaticQueue_t app_cb KERNEL_PRIVATE, app_reply_cb KERNEL_PRIVATE;
 static uint8_t ingress_storage[sizeof(IngressChunk)] KERNEL_PRIVATE;
@@ -205,6 +212,7 @@ void gateway_r4_boundary_start(void)
         .pxTaskBuffer=&gate_tcb};
     TaskHandle_t gate=NULL;
     if(xTaskCreateRestrictedStatic(&gate_params,&gate)!=pdPASS) gate=NULL;
+    gate_task_handle=gate;
     if(!app || !gate) gateway_panic(GATEWAY_FAULT_STARTUP);
     /* V11 wrappers v2 default to no kernel-object access for unprivileged
      * tasks. Give each endpoint only the R4 queues it actually uses. */

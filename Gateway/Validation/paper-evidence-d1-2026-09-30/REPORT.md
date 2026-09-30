@@ -220,6 +220,41 @@ The V11 wrapper-entry test shows no persistent privilege, but it is a
 legitimate syscall and does not by itself prove all wrapper-entry gadgets
 safe. No arbitrary-code compromise corpus has been run yet.
 
+## Verified composed gate linked (§14)
+
+Access and public-route decisions now call the extracted, verified
+`GateLowGateDecide` (papers repo `experiments/verified-combiner`, commit
+`f3daaef`; files and hashes in `Gateway/Provenance/manifest.json`, copied
+verbatim except the bare-metal byte-order header shared with the policy
+validator). `Gateway/Core/gateway_gate_adapter.c` decodes the 75-byte envelope
+built by the proved `Mediation.Field` serializer into one partition (n = 1) and
+calls the gate; policy updates and login keep their validators.
+`GATEWAY_VERIFIED_GATE=0` restores the monolithic access validator.
+
+| Evidence | Result |
+|---|---|
+| Host equivalence, gate vs monolithic validator on the same envelope (`tools/test_gate_equivalence.c`, ASan/UBSan) | 1,000,000 envelopes (500k structured, 500k random bytes), 105,493 accepts, **0 mismatches** |
+| Host suite (`test_host.py`) | 301/301 self-tests, 119/119 legacy vectors |
+| Final image `v11-verified-gate-final` (Debug, SHA-256 `d168322b…`) on the board | 301/301 boot self-tests; network suite 34/34 incl. 200 mixed requests; live policy 43/43; dashboard 129/129 |
+| SCALANCE XB-200 policy as data, n = 32 (variant `v11-verified-gate-n32-variant`) | 17,760 oracle vectors, 2,622 accepts, **0 mismatches**, 0 fail-closed |
+| Flash / static RAM (Release, gate vs monolithic access) | +4,392 B text, +0 B data/bss |
+| GATE stack | lowest free 3,808 of 8,192 B during the network suite; gate chain frames are static and independent of n (≈ 536 B, `.su`); `GateLowScan` compiles to a loop (no recursive call in either configuration) |
+
+Decision cycles (DWT, 96 MHz, caches off, interrupts enabled, 1,001 samples,
+median; observed, not WCET). The n = 32 policy is loaded from flash data into a
+RAM table by the privileged core task in the variant image, not through a
+runtime update path (the 65-byte PolicyBlob carries eight rules).
+
+| Case | Monolithic validator, n = 1 | Verified gate, n = 1 | Adapter + verified gate, n = 1 | Verified gate, n = 32 |
+|---|---:|---:|---:|---:|
+| First rule matches | 1,983 | 4,592 | 6,641 | 4,592 |
+| Last rule matches | 2,093 | 4,693 | 6,742 | 92,712 |
+| Absent path (deny) | 2,537 | 4,863 | 6,919 | 92,902 |
+
+At n = 1 the verified gate costs about 2.3× the monolithic validator (48 µs vs
+21–26 µs): it serializes each partition through LowParse writers and calls the
+rate validator separately. A full n = 32 scan costs 0.97 ms.
+
 ## Property boundary
 
 | Claim | Stage-one status and reason |

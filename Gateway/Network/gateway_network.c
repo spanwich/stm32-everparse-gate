@@ -94,6 +94,8 @@ void gateway_network_diagnostics(void)
         (unsigned long)gateway_tx_packets,(unsigned long)gateway_rx_drops,(unsigned long)gateway_tx_errors,
         (unsigned long)t,(unsigned long)e,(unsigned long)l,t>=1024 && e>=1024 && l>=512?"OK":"LOW",
         (unsigned long)used,(unsigned long)peak,(unsigned long)errors);
+    gateway_log("[GATE] stack_free=%lu of %lu\n",(unsigned long)gateway_r4_gate_stack_free(),
+                (unsigned long)(2048U*sizeof(StackType_t)));
 #if GATEWAY_R4_TRACE_NET
     extern volatile uint32_t gateway_d1_mbox_post_failures;
     extern volatile uint32_t gateway_d1_mbox_post_handle;

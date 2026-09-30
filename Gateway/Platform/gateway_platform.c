@@ -244,6 +244,10 @@ static void run_core(void *argument)
     vApplicationStackOverflowHook(xTaskGetCurrentTaskHandle(), NULL);
 #endif
     GatewayTestStats stats = gateway_tests_run();
+#if GATEWAY_PAPER_GATE_N32
+    extern void gateway_paper_gate_n32_run(void);
+    if (stats.passed == stats.total) gateway_paper_gate_n32_run();
+#endif
 #if GATEWAY_PAPER_TIMING
     extern void gateway_paper_timing_run(void);
     if (stats.passed == stats.total) gateway_paper_timing_run();

@@ -3,10 +3,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "../Generated/Policy/RbacPolicyWrapper.h"
+#include "paper_experiment.h"
+bool gateway_gate_decide_envelope(const uint8_t *e, uint32_t length);
 bool gateway_mediation_check(uint8_t kind, uint8_t *bytes, uint32_t length)
 {
     if(kind==0 || kind==2)
+#if GATEWAY_VERIFIED_GATE
+        return gateway_gate_decide_envelope(bytes,length);
+#else
         return length==75 && RbacPolicyCheckAccessRequest(bytes,length);
+#endif
     if(kind==3)
         return length==70 && RbacPolicyCheckPolicyBlob(bytes,length);
     if(kind==1) {

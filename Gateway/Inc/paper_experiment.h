@@ -22,6 +22,15 @@
 #ifndef GATEWAY_R4_TRACE_NET
 #define GATEWAY_R4_TRACE_NET 0
 #endif
+/* Section 14: access decisions by the verified composed gate (GateLowGateDecide);
+ * 0 keeps the monolithic RbacPolicy access validator for matched comparisons. */
+#ifndef GATEWAY_VERIFIED_GATE
+#define GATEWAY_VERIFIED_GATE 1
+#endif
+/* Section 14 labelled variant: SCALANCE n = 32 policy-as-data check and gate cycles. */
+#ifndef GATEWAY_PAPER_GATE_N32
+#define GATEWAY_PAPER_GATE_N32 0
+#endif
 #ifndef GATEWAY_D1_TOKEN_BUCKET
 #define GATEWAY_D1_TOKEN_BUCKET 1
 #endif

@@ -12,6 +12,7 @@ typedef struct {
 } GatewayR4Reply;
 
 void gateway_r4_boundary_start(void);
+uint32_t gateway_r4_gate_stack_free(void);
 void gateway_r4_network_drop_privilege(void);
 const GatewayR4Reply *gateway_r4_submit(const GatewayHttp *assembled);
 bool gateway_r4_app_dispatch(GatewayContext *gate);
