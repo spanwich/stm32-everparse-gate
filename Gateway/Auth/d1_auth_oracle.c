@@ -3,6 +3,8 @@
 #include "gateway_d1_auth.h"
 #include "gateway_platform.h"
 #include "gateway_clear.h"
+#include "gateway_log.h"
+#include "paper_experiment.h"
 #include "token_validate.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -107,6 +109,12 @@ static void auth_task(void *arg)
         if(xQueueReceive(auth_request,&request,portMAX_DELAY)!=pdPASS)
             continue;
         reply.sequence=request.sequence;
+#if GATEWAY_D1_PROBE == 22
+        { extern void *gateway_d1_probe_gate_policy(void);
+          gateway_log("[PROBE] id=22 start context=AUTH\n");
+          *(volatile uint8_t *)gateway_d1_probe_gate_policy()=0U;
+          gateway_log("[PROBE] id=22 ESCAPED\n"); gateway_panic(GATEWAY_FAULT_ASSERT); }
+#endif
         if(request.kind==AUTH_IDENTIFY && request.length<=127U) {
             reply.status=identify_local(request.bytes,request.length,
                                         &reply.identity,&reply.rate)?200:401;

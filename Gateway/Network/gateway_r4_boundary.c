@@ -6,6 +6,7 @@
 #include "gateway_d1_auth.h"
 #include "gateway_d1_cleanup.h"
 #include "gateway_log.h"
+#include "gateway_mediation.h"
 #include "paper_experiment.h"
 #include "main.h"
 #include "FreeRTOS.h"
@@ -80,10 +81,75 @@ static void validator_probe(void *arg)
 }
 #endif
 
+#if GATEWAY_D1_PROBE
+/* NET-visible probe plumbing, present only in probe images. */
+volatile QueueHandle_t gateway_d1_probe_leaked_queue;
+volatile uint32_t gateway_d1_probe_forge_slot, gateway_d1_probe_bad_tx;
+extern TickType_t MPU_xTaskGetTickCount(void);
+extern void *gateway_d1_probe_dma_address(void);
+void *gateway_d1_probe_gate_policy(void) { return &live_gate.policy; }
+#endif
+#if GATEWAY_D1_PROBE >= 1 && GATEWAY_D1_PROBE <= 15
+static AppJob probe_forged_job;
+#define PROBE_LOG(...) gateway_log(__VA_ARGS__)
+#define PROBE_ESCAPED(id) do { PROBE_LOG("[PROBE] id=%u ESCAPED control=%lu\n",(unsigned)(id), \
+    (unsigned long)(__get_CONTROL() & 1U)); gateway_panic(GATEWAY_FAULT_ASSERT); } while(0)
+/* Runs in the unprivileged NET HTTP task on the first submitted request. */
+static void d1_net_probe(void)
+{
+    const unsigned id=GATEWAY_D1_PROBE;
+    PROBE_LOG("[PROBE] id=%u start context=NET control=%lu\n",id,(unsigned long)(__get_CONTROL() & 1U));
+    vTaskDelay(pdMS_TO_TICKS(50));
+    switch(id) {
+    case 1: live_gate.policy.num_rules=0U; break;                          /* write policy store */
+    case 2: live_gate.security[0]=0xAAU; break;                            /* write validator input */
+    case 3: *(volatile uint8_t *)gateway_d1_auth_key()=0U; break;          /* write AUTH key */
+    case 4: { volatile uint8_t k=*(volatile const uint8_t *)gateway_d1_auth_key(); /* read AUTH key */
+              PROBE_LOG("[PROBE] id=4 read=%u\n",(unsigned)k); break; }
+    case 5: app_job.app[0]=0U; break;                                      /* write APP input */
+    case 6: (void)gateway_mediate(&live_gate,GATEWAY_ACCESS); break;       /* call GATE function */
+    case 7: { GatewayIdentity who; uint8_t rate;                           /* call AUTH function */
+              bool ok=gateway_d1_auth_identify((const uint8_t *)"pg-lab-admin",12U,&who,&rate);
+              PROBE_LOG("[PROBE] id=7 identify=%u role=%u\n",(unsigned)ok,(unsigned)who.role); break; }
+    case 8: { /* forged job on the leaked GATE->APP queue handle */
+              memset(&probe_forged_job,0,sizeof(probe_forged_job)); probe_forged_job.length=16U;
+              BaseType_t sent=xQueueSend(gateway_d1_probe_leaked_queue,&probe_forged_job,0);
+              PROBE_LOG("[PROBE] id=8 send=%ld\n",(long)sent);
+              vTaskDelay(pdMS_TO_TICKS(300));
+              PROBE_LOG("[PROBE] id=8 done\n");
+              gateway_panic(GATEWAY_FAULT_ASSERT); }
+    case 9: __asm volatile("svc %0" :: "i" (portSVC_RAISE_PRIVILEGE) : "memory"); __ISB();
+            PROBE_LOG("[PROBE] id=9 control=%lu\n",(unsigned long)(__get_CONTROL() & 1U));
+            live_gate.policy.num_rules=0xA9U; break;
+    case 10: { TickType_t (*jump)(void)=(TickType_t (*)(void))(((uintptr_t)MPU_xTaskGetTickCount+0x12U)|1U);
+               (void)jump(); __ISB();
+               PROBE_LOG("[PROBE] id=10 control=%lu\n",(unsigned long)(__get_CONTROL() & 1U));
+               live_gate.policy.num_rules=0xAAU; break; }
+    case 11: __set_CONTROL(0U); __ISB();
+             PROBE_LOG("[PROBE] id=11 control=%lu\n",(unsigned long)(__get_CONTROL() & 1U));
+             live_gate.policy.num_rules=0xABU; break;
+    case 12: ETH->MACCR=ETH->MACCR; break;                                 /* ETH MAC register */
+    case 13: *(volatile uint8_t *)gateway_d1_probe_dma_address()=0U; break; /* DMA buffer */
+    case 14: gateway_d1_probe_forge_slot=1U; vTaskDelay(pdMS_TO_TICKS(3000));
+             PROBE_LOG("[PROBE] id=14 no-assert\n"); break;
+    case 15: gateway_d1_probe_bad_tx=1U; vTaskDelay(pdMS_TO_TICKS(3000));
+             PROBE_LOG("[PROBE] id=15 done\n"); gateway_panic(GATEWAY_FAULT_ASSERT);
+    default: return;
+    }
+    PROBE_ESCAPED(id);
+}
+#endif
+
 static void app_task(void *arg)
 {
     (void)arg;
     gateway_log("[MPU] app_unprivileged=%u\n",(unsigned)(__get_CONTROL() & 1U));
+#if GATEWAY_D1_PROBE == 21
+    gateway_log("[PROBE] id=21 start context=APP\n");
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    live_gate.policy.num_rules=0U;
+    gateway_log("[PROBE] id=21 ESCAPED\n"); gateway_panic(GATEWAY_FAULT_ASSERT);
+#endif
 #if GATEWAY_R4_FAULT_INJECT == 6
     gateway_fault_record.line=6;
     live_gate.policy.num_rules=0;
@@ -97,6 +163,9 @@ static void app_task(void *arg)
     for (;;) {
         if (xQueueReceive(app_job_queue,&app_job,portMAX_DELAY)!=pdPASS)
             gateway_panic(GATEWAY_FAULT_ASSERT);
+#if GATEWAY_D1_PROBE == 8
+        gateway_log("[PROBE] id=8 app_received length=%lu\n",(unsigned long)app_job.length);
+#endif
         app_result.ok=gateway_render_app(app_job.app,app_job.length,&app_job.policy,
                                          app_result.gate,&app_result.length);
         if(!app_result.ok) app_result.length=0;
@@ -151,6 +220,11 @@ static void gate_task(void *arg)
             gate_input.used+=gate_chunk.length;
         } while(gate_input.used<expected);
         GatewayR4Reply answer={0};
+#if GATEWAY_D1_PROBE == 20
+        gateway_log("[PROBE] id=20 start context=GATE\n");
+        *(volatile uint8_t *)gateway_d1_auth_key()=0U;
+        gateway_log("[PROBE] id=20 ESCAPED\n"); gateway_panic(GATEWAY_FAULT_ASSERT);
+#endif
         gateway_begin_request(&live_gate);
         gateway_http_init(&gate_http);
         gateway_audit_begin(&live_gate);
@@ -184,6 +258,9 @@ void gateway_r4_boundary_start(void)
         gateway_panic(GATEWAY_FAULT_ALLOC);
     net_ingress_queue=ingress_queue; net_reply_queue=reply_queue;
     app_job_queue=app_queue; app_result_queue=app_reply_queue;
+#if GATEWAY_D1_PROBE == 8
+    gateway_d1_probe_leaked_queue=app_queue;
+#endif
     const TaskParameters_t app_params={
         .pvTaskCode=app_task,.pcName="gateway_app",.usStackDepth=APP_STACK_WORDS,
         .pvParameters=NULL,.uxPriority=(UBaseType_t)osPriorityBelowNormal,
@@ -318,6 +395,9 @@ const GatewayR4Reply *gateway_r4_submit(const GatewayHttp *assembled)
 {
     if(!assembled || assembled->used==0U ||
        assembled->used>GATEWAY_REQUEST_CAPACITY) return NULL;
+#if GATEWAY_D1_PROBE >= 1 && GATEWAY_D1_PROBE <= 15
+    d1_net_probe();
+#endif
     for(uint32_t offset=0;offset<assembled->used;) {
         uint32_t length=assembled->used-offset;
         if(length>INGRESS_CHUNK_BYTES) length=INGRESS_CHUNK_BYTES;

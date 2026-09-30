@@ -53,6 +53,9 @@ typedef struct {
 } RxBuffer;
 static RxBuffer rx[RX_COUNT] DMA_DATA;
 static uint8_t tx[FRAME_BYTES] DMA_DATA;
+#if GATEWAY_D1_PROBE
+extern volatile uint32_t gateway_d1_probe_forge_slot, gateway_d1_probe_bad_tx;
+#endif
 /* 0=free, 1=DMA/HAL, 2=linked packet (HAL or lwIP). */
 static uint8_t rx_state[RX_COUNT] SHIM_PRIVATE;
 /* The SHIM is the sole DMA reader. FrameSlot is ordinary NET-visible SRAM;
@@ -182,6 +185,15 @@ static err_t output(struct netif *n,struct pbuf *p)
 {
     (void)n;
     if(p->tot_len==0U || p->tot_len>sizeof(net_tx_request.bytes)) return ERR_IF;
+#if GATEWAY_D1_PROBE == 15
+    if(gateway_d1_probe_bad_tx==1U) {
+        /* NET asks the SHIM to transmit an overlong frame. */
+        gateway_d1_probe_bad_tx=2U; net_tx_request.length=0xFFFFU;
+        uint8_t bad_ok=0xEEU; BaseType_t sent=xQueueSend(net_tx_requests,&net_tx_request,pdMS_TO_TICKS(250));
+        if(sent==pdPASS) (void)xQueueReceive(net_tx_replies,&bad_ok,pdMS_TO_TICKS(500));
+        gateway_log("[PROBE] id=15 overlong_tx send=%ld shim_ok=%u\n",(long)sent,(unsigned)bad_ok);
+    }
+#endif
     net_tx_request.length=p->tot_len;
     if(pbuf_copy_partial(p,net_tx_request.bytes,p->tot_len,0)!=p->tot_len ||
        xQueueSend(net_tx_requests,&net_tx_request,pdMS_TO_TICKS(250))!=pdPASS)
@@ -276,6 +288,9 @@ static void input_thread(void *arg)
         (void)osDelay(1);
     }
 }
+#if GATEWAY_D1_PROBE
+void *gateway_d1_probe_dma_address(void) { return (void *)tx; }
+#endif
 static void link_up_callback(void *arg) { netif_set_link_up((struct netif *)arg); }
 static void link_down_callback(void *arg) { netif_set_link_down((struct netif *)arg); }
 static void net_input_thread(void *arg)
@@ -291,6 +306,13 @@ static void net_input_thread(void *arg)
             (void)tcpip_callback(gateway_link_up?link_up_callback:link_down_callback,
                                  net_interface);
         }
+#if GATEWAY_D1_PROBE == 14
+        if(gateway_d1_probe_forge_slot==1U) {
+            /* NET returns an out-of-range slot index to the SHIM. */
+            uint8_t bad=200U; gateway_d1_probe_forge_slot=2U;
+            gateway_log("[PROBE] id=14 forged_slot send=%ld\n",(long)xQueueSend(net_free_slots,&bad,0));
+        }
+#endif
         if(xQueueReceive(net_ready_frames,&ready,pdMS_TO_TICKS(100))!=pdPASS)
             continue;
         if(ready.slot>=FRAME_SLOTS || ready.length==0U || ready.length>FRAME_BYTES)

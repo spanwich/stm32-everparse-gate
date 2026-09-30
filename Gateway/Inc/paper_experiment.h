@@ -31,6 +31,11 @@
 #ifndef GATEWAY_PAPER_GATE_N32
 #define GATEWAY_PAPER_GATE_N32 0
 #endif
+/* D1.8 final-image probes (separate labelled images): 1-15 run in NET, 20 GATE,
+ * 21 APP, 22 AUTH. See Gateway/tools/d1_run_final_probes.py. */
+#ifndef GATEWAY_D1_PROBE
+#define GATEWAY_D1_PROBE 0
+#endif
 #ifndef GATEWAY_D1_TOKEN_BUCKET
 #define GATEWAY_D1_TOKEN_BUCKET 1
 #endif
