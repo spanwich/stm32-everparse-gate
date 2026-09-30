@@ -20,7 +20,7 @@
 #define MEM_SIZE (16*1024)
 #define MEMP_NUM_TCP_PCB 12
 #define MEMP_NUM_TCP_PCB_LISTEN 1
-#define MEMP_NUM_NETCONN 3
+#define MEMP_NUM_NETCONN 32  /* was 3; exhausted transiently under overlapping HTTP load (D1.8 E-P1) */
 #define MEMP_NUM_TCP_SEG 24
 #define PBUF_POOL_SIZE 12
 #define TCP_MSS 1460
