@@ -307,7 +307,7 @@ static void net_input_thread(void *arg)
                                  net_interface);
         }
 #if GATEWAY_D1_PROBE == 14
-        if(gateway_d1_probe_forge_slot==1U) {
+        if(gateway_d1_probe_forge_slot==1U) {   /* set only by the once-per-boot NET probe */
             /* NET returns an out-of-range slot index to the SHIM. */
             uint8_t bad=200U; gateway_d1_probe_forge_slot=2U;
             gateway_log("[PROBE] id=14 forged_slot send=%ld\n",(long)xQueueSend(net_free_slots,&bad,0));

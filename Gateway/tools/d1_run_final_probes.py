@@ -29,14 +29,10 @@ assert set(a.probes) <= set(ALL)
 
 
 def http_status(token):
-    req = urllib.request.Request('http://192.168.40.128/api/status', headers={'Authorization': 'Bearer ' + token})
-    try:
-        with urllib.request.urlopen(req, timeout=6) as r:
-            return r.status
-    except urllib.error.HTTPError as e:
-        return e.code
-    except Exception as e:  # transport failure: the gate is down
-        return type(e).__name__
+    r = subprocess.run(['curl', '--interface', 'enp44s0', '--max-time', '6', '-s', '-o', '/dev/null',
+                        '-w', '%{http_code}', '-H', 'Authorization: Bearer ' + token,
+                        'http://192.168.40.128/api/status'], capture_output=True, text=True)
+    return int(r.stdout) if r.stdout.isdigit() and r.stdout != '000' else 'no-response'
 
 
 def build(probe, out):
@@ -94,7 +90,7 @@ for probe in a.probes:
     record = {
         'probe': probe, 'elf_sha256': manifest['elf_sha256'], 'board_exit_code': board.returncode,
         'probe_lines': [l for l in uart.splitlines() if '[PROBE]' in l],
-        'reset_lines': [l for l in uart.splitlines() if l.startswith('[RESET]')],
+        'reset_lines': [l.strip() for l in uart.splitlines() if '[RESET]' in l],
         'escaped': 'ESCAPED' in uart,
         'rebooted_selftests': '[CORE SELFTEST] PASS 301/301' in uart.split('[RESET]', 1)[-1] if '[RESET]' in uart else False,
         'operator_status_after_reset': after,

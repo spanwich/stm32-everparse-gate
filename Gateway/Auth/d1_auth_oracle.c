@@ -110,7 +110,8 @@ static void auth_task(void *arg)
             continue;
         reply.sequence=request.sequence;
 #if GATEWAY_D1_PROBE == 22
-        { extern void *gateway_d1_probe_gate_policy(void);
+        extern volatile uint32_t gateway_d1_fault_was_reset;
+        if(!gateway_d1_fault_was_reset) { extern void *gateway_d1_probe_gate_policy(void);
           gateway_log("[PROBE] id=22 start context=AUTH\n");
           *(volatile uint8_t *)gateway_d1_probe_gate_policy()=0U;
           gateway_log("[PROBE] id=22 ESCAPED\n"); gateway_panic(GATEWAY_FAULT_ASSERT); }

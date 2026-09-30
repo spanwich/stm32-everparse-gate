@@ -97,6 +97,10 @@ static AppJob probe_forged_job;
 /* Runs in the unprivileged NET HTTP task on the first submitted request. */
 static void d1_net_probe(void)
 {
+    /* Fire once: skip on the boot that follows the probe's own fault, so the
+     * post-reset check sees the restrictive default rather than the probe. */
+    extern volatile uint32_t gateway_d1_fault_was_reset;
+    if(gateway_d1_fault_was_reset) return;
     const unsigned id=GATEWAY_D1_PROBE;
     PROBE_LOG("[PROBE] id=%u start context=NET control=%lu\n",id,(unsigned long)(__get_CONTROL() & 1U));
     vTaskDelay(pdMS_TO_TICKS(50));
@@ -145,10 +149,13 @@ static void app_task(void *arg)
     (void)arg;
     gateway_log("[MPU] app_unprivileged=%u\n",(unsigned)(__get_CONTROL() & 1U));
 #if GATEWAY_D1_PROBE == 21
+    extern volatile uint32_t gateway_d1_fault_was_reset;
+    if(!gateway_d1_fault_was_reset) {
     gateway_log("[PROBE] id=21 start context=APP\n");
     vTaskDelay(pdMS_TO_TICKS(3000));
     live_gate.policy.num_rules=0U;
     gateway_log("[PROBE] id=21 ESCAPED\n"); gateway_panic(GATEWAY_FAULT_ASSERT);
+    }
 #endif
 #if GATEWAY_R4_FAULT_INJECT == 6
     gateway_fault_record.line=6;
@@ -221,9 +228,12 @@ static void gate_task(void *arg)
         } while(gate_input.used<expected);
         GatewayR4Reply answer={0};
 #if GATEWAY_D1_PROBE == 20
+        extern volatile uint32_t gateway_d1_fault_was_reset;
+        if(!gateway_d1_fault_was_reset) {
         gateway_log("[PROBE] id=20 start context=GATE\n");
         *(volatile uint8_t *)gateway_d1_auth_key()=0U;
         gateway_log("[PROBE] id=20 ESCAPED\n"); gateway_panic(GATEWAY_FAULT_ASSERT);
+        }
 #endif
         gateway_begin_request(&live_gate);
         gateway_http_init(&gate_http);
