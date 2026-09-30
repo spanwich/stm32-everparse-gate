@@ -22,6 +22,7 @@ _Static_assert(sizeof(gateway_dashboard)<=16384 && sizeof(gateway_dashboard_js)<
 #include "lwip/memp.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 #include <stdio.h>
 #include <string.h>
 static GatewayContext gateway_network_context;
@@ -47,7 +48,8 @@ static void tcp_ready(void *sem) { (void)osSemaphoreRelease(sem); }
 static void sample_heap(void *unused)
 {
     (void)unused;
-    taskENTER_CRITICAL();
+    /* This callback executes on the sole lwIP owner thread. A 32-bit
+     * diagnostic snapshot does not require a privileged critical section. */
     heap_used=lwip_stats.mem.used; heap_peak=lwip_stats.mem.max; heap_errors=lwip_stats.mem.err;
 #if GATEWAY_R4_TRACE_NET
     if(lwip_stats.memp[MEMP_TCP_PCB]) {
@@ -56,7 +58,12 @@ static void sample_heap(void *unused)
         pcb_errors=lwip_stats.memp[MEMP_TCP_PCB]->err;
     }
 #endif
-    taskEXIT_CRITICAL();
+}
+osSemaphoreId_t gateway_tcpip_boot_sem;
+static void gateway_tcpip_drop_privilege(void *sem)
+{
+    vPortSwitchToUserMode();
+    (void)osSemaphoreRelease((osSemaphoreId_t)sem);
 }
 void gateway_network_mpu(void)
 {
@@ -243,6 +250,7 @@ void gateway_network_run(void)
     gateway_r4_boundary_start();
     osSemaphoreId_t sem=osSemaphoreNew(1,0,NULL);
     if(!sem) gateway_panic(GATEWAY_FAULT_ALLOC);
+    gateway_tcpip_boot_sem=sem;
     tcpip_init(tcp_ready,sem);
     if(osSemaphoreAcquire(sem,10000)!=osOK) gateway_panic(GATEWAY_FAULT_STARTUP);
     (void)osSemaphoreDelete(sem);
@@ -255,6 +263,13 @@ void gateway_network_run(void)
     if(!listener || netconn_bind(listener,IP_ADDR_ANY,80)!=ERR_OK || netconn_listen_with_backlog(listener,1)!=ERR_OK)
         gateway_panic(GATEWAY_FAULT_STARTUP);
     netconn_set_recvtimeout(listener,250);
+    osSemaphoreId_t drop_sem=osSemaphoreNew(1,0,NULL);
+    if(!drop_sem) gateway_panic(GATEWAY_FAULT_ALLOC);
+    vGrantAccessToQueue((TaskHandle_t)gateway_tcpip_task,(QueueHandle_t)drop_sem);
+    if(tcpip_callback(gateway_tcpip_drop_privilege,drop_sem)!=ERR_OK ||
+       osSemaphoreAcquire(drop_sem,5000)!=osOK)
+        gateway_panic(GATEWAY_FAULT_STARTUP);
+    (void)osSemaphoreDelete(drop_sem);
     ready=1;
     gateway_log("[HTTP] READY 192.168.40.128/24:80 lab_bearer=%u RAM policy; no TLS\n",GATEWAY_LAB_AUTH);
     gateway_r4_network_drop_privilege();

@@ -1,8 +1,8 @@
-# D1 evidence — stages 1–3, 2026-09-30
+# D1 evidence — stages 1–4, 2026-09-30
 
-**Verdict: D1 is not established.** This directory records D1.7 steps 1–3:
+**Verdict: D1 is not established.** This directory records D1.7 steps 1–4:
 FreeRTOS V11.3.1 MPU wrappers v2, a private AUTH oracle and an unprivileged
-GATE on the NUCLEO-F767ZI. SHIM/NET separation, P5 scheduling, the
+GATE on the NUCLEO-F767ZI, then a bounded SHIM/NET handoff. P5 scheduling, the
 restrictive reset policy, the labelled A/B corpus, P5 timing matrix, and final
 cost claims remain open. P1–P5 are not yet established.
 
@@ -87,6 +87,46 @@ V11's privileged-only `vQueueDelete` during netconn cleanup. A bounded
 privileged cleanup worker now reclaims registered lwIP objects; its broad
 registration must be narrowed to exact ownership in step 4.
 
+## SHIM/NET step-four checkpoint
+
+The working `v11-tcpip-broker-stage4j/policy_gate.elf` (SHA-256
+`680e23a04e184976e24007176f310516011f0dbf1e4a361f201255f4ed193f8a`)
+was flashed and tested on the board. Its `board/uart.log` records 301/301 startup checks, sustained
+heartbeats, and no stack-margin or UART-drop failure. `http-smoke/uart.log`
+records the concurrent LOGIN/IDENTIFY run with 20 authenticated requests.
+`network-suite/results.json` and `network-suite-uart/uart.log` record all 34
+existing network checks passing, including 200 mixed requests. This is an
+intermediate image, not the final D1 security or P5 evidence image.
+
+The privileged Ethernet SHIM now owns the HAL handle, PHY state, DMA buffers,
+descriptor rings, task stacks and kernel queue storage. It validates and copies
+received frames into bounded NET SRAM slots; an unprivileged NET input task
+allocates lwIP pbufs and calls the lwIP input path. TCP/IP drops privilege after
+network setup. Its transmit callback sends a length-bounded copied frame to a
+privileged SHIM transmit worker. The port's general MMIO MPU region is now
+privileged-only, and unprivileged UART logging uses a copied queue serviced by
+a privileged logger. V11 does not permit unprivileged dynamic queue creation;
+a bounded privileged worker creates and reclaims registered lwIP mailboxes and
+semaphores. The NET task MPU maps exclude the DMA, GATE and AUTH banks and
+overlay APP as privileged-only.
+
+Failed variants are retained. The first unprivileged-TCPIP build faulted when
+the privileged link task passed a message from its protected stack into TCP/IP.
+Link-state callbacks now originate in NET. The next variant faulted on a
+per-call semaphore created by unprivileged NET input, so link callbacks use
+`tcpip_callback`. The first live HTTP request then faulted on an unprivileged
+lwIP mailbox creation; the bounded object worker resolved this. Earlier MMIO
+variants exposed link and diagnostics stack margins; stack sizing and a
+non-inlined queue logger restored acceptance. These are raw development
+observations, not passing fault-reset evidence.
+
+Step four still needs an explicit privileged-code/indirect-call audit and
+SHIM surface reduction. The link monitor and MAC reset path remain privileged
+driver logic. The ETH ISR still invokes HAL's handler, rather than only
+acknowledging and notifying the SHIM task. The object worker grants the two NET
+threads their lwIP objects broadly and has not yet undergone exact ACL and
+adversarial-handle testing. These gaps prevent a final P1–P4 claim.
+
 ## Inherited and escalation injections
 
 All fault probes are separate, verified Debug images. Their boot-test command
@@ -118,8 +158,8 @@ safe. No arbitrary-code compromise corpus has been run yet.
 
 | Claim | Stage-one status and reason |
 |---|---|
-| P1 complete mediation | **Open**: GATE is now unprivileged and named tests pass, but NET/SHIM separation and the 100,000-request exact-effect audit are missing. |
-| P2 gate integrity | **Open**: named NET/APP writes faulted, but NET still directly consumes DMA-backed buffers and other entry points are unaudited. |
+| P1 complete mediation | **Open**: GATE is unprivileged and NET/SHIM copies work, but the 100,000-request exact-effect audit and final injection matrix are missing. |
+| P2 gate integrity | **Open**: named NET/APP writes faulted and NET no longer maps DMA, but final entry-point and privileged-code audits are missing. |
 | P3 identity integrity | **Partial**: AUTH owns the key/table and named NET/APP reads faulted; full compromised-NET and forged-role corpus is pending. |
 | P4 policy updates | **Open**: functional update/rollback tests pass, but final D1 compartment injections and reset-default tests remain. |
 | P5 no starvation | **Open**: priorities, token bucket and §13.5 idle/loaded timing matrix are not installed. |
@@ -129,7 +169,5 @@ proof and test boundary. This port did not perform a fresh proof run. The
 FreeRTOS kernel, all privileged code, the Ethernet DMA, HAL, and board hardware
 remain trusted. DWT maxima, when later measured, will not be WCET bounds.
 
-Next per D1.7: introduce the minimal privileged SHIM, copy Ethernet frames
-across NET's boundary, and run lwIP plus driver logic unprivileged. Then
-complete steps 5–6 and the amended §13 final evidence. The eventual final
+Next per D1.7: complete steps 5–6 and the amended §13 final evidence. The eventual final
 D1 report must replace this no-go verdict.

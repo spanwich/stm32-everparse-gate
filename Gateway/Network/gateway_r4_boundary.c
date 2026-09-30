@@ -195,6 +195,7 @@ void gateway_r4_boundary_start(void)
     gateway_d1_cleanup_grant(gateway_platform_network_task_handle());
     gateway_platform_grant_log_access(xTaskGetCurrentTaskHandle());
     gateway_platform_grant_log_access(app);
+    gateway_platform_grant_log_access(gate);
 #if GATEWAY_R4_FAULT_INJECT == 2
     if(!xTaskCreateStatic(validator_probe,"mpu_probe",512,NULL,
         (UBaseType_t)osPriorityHigh,probe_stack,&probe_tcb))

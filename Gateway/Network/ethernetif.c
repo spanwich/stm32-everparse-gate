@@ -27,17 +27,25 @@
 #include "lan8742.h"
 #include "lwip/etharp.h"
 #include "lwip/netifapi.h"
+#include "lwip/tcpip.h"
 #include "lwip/pbuf.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 #include <string.h>
 #include <stddef.h>
 #include <stdbool.h>
 extern ETH_HandleTypeDef heth;
 extern ETH_TxPacketConfig TxConfig;
+extern osThreadId_t gateway_tcpip_task;
 #define RX_COUNT 10U
 #define FRAME_BYTES 1536U
+#define FRAME_SLOTS 4U
 #define DMA_DATA __attribute__((section(".eth_data"), aligned(32)))
+#define SHIM_PRIVATE __attribute__((section(".gateway_privileged")))
+typedef struct { uint8_t slot; uint16_t length; } FrameReady;
+typedef struct { uint8_t bytes[FRAME_BYTES]; } FrameSlot;
+typedef struct { uint16_t length; uint8_t bytes[FRAME_BYTES]; } TxRequest;
 typedef struct {
     struct pbuf_custom custom;
     _Alignas(32) uint8_t bytes[FRAME_BYTES];
@@ -45,18 +53,41 @@ typedef struct {
 static RxBuffer rx[RX_COUNT] DMA_DATA;
 static uint8_t tx[FRAME_BYTES] DMA_DATA;
 /* 0=free, 1=DMA/HAL, 2=linked packet (HAL or lwIP). */
-static uint8_t rx_state[RX_COUNT];
-static osSemaphoreId_t rx_sem, tx_sem;
-static osMutexId_t driver_mutex;
-static lan8742_Object_t phy;
-static struct netif *interface;
+static uint8_t rx_state[RX_COUNT] SHIM_PRIVATE;
+/* The SHIM is the sole DMA reader. FrameSlot is ordinary NET-visible SRAM;
+ * FreeRTOS queues copy only slot indices, never pointers from NET to SHIM. */
+static FrameSlot frame_slots[FRAME_SLOTS];
+static StaticQueue_t free_cb __attribute__((section(".gateway_privileged")));
+static StaticQueue_t ready_cb __attribute__((section(".gateway_privileged")));
+static uint8_t free_storage[FRAME_SLOTS*sizeof(uint8_t)] __attribute__((section(".gateway_privileged")));
+static uint8_t ready_storage[FRAME_SLOTS*sizeof(FrameReady)] __attribute__((section(".gateway_privileged")));
+static QueueHandle_t shim_free_slots SHIM_PRIVATE, shim_ready_frames SHIM_PRIVATE;
+static QueueHandle_t net_free_slots, net_ready_frames;
+static StaticQueue_t tx_request_cb SHIM_PRIVATE, tx_reply_cb SHIM_PRIVATE;
+static uint8_t tx_request_storage[sizeof(TxRequest)] SHIM_PRIVATE;
+static uint8_t tx_reply_storage[sizeof(uint8_t)] SHIM_PRIVATE;
+static QueueHandle_t shim_tx_requests SHIM_PRIVATE, shim_tx_replies SHIM_PRIVATE;
+static QueueHandle_t net_tx_requests, net_tx_replies;
+static TxRequest net_tx_request;
+static TxRequest shim_tx_request SHIM_PRIVATE;
+static osSemaphoreId_t rx_sem SHIM_PRIVATE, tx_sem SHIM_PRIVATE;
+static osMutexId_t driver_mutex SHIM_PRIVATE;
+static lan8742_Object_t phy SHIM_PRIVATE;
+static struct netif *net_interface;
 osThreadId_t gateway_eth_task, gateway_link_task;
 volatile uint32_t gateway_link_up, gateway_link_epoch;
 volatile uint32_t gateway_rx_packets, gateway_tx_packets, gateway_rx_drops, gateway_tx_errors;
-static volatile uint32_t need_reset;
-static _Alignas(8) StackType_t input_stack[4096/4], link_stack[2048/4];
-static StaticTask_t input_tcb, link_tcb;
-static StaticSemaphore_t mutex_cb, rx_cb, tx_cb;
+static volatile uint32_t need_reset SHIM_PRIVATE;
+static _Alignas(8) StackType_t input_stack[4096/4] SHIM_PRIVATE;
+static _Alignas(8) StackType_t link_stack[3072/4] SHIM_PRIVATE;
+static StackType_t tx_stack[3072/4] SHIM_PRIVATE __attribute__((aligned(4096)));
+static StackType_t net_input_stack[4096/4] __attribute__((aligned(4096)));
+static StaticTask_t input_tcb SHIM_PRIVATE, link_tcb SHIM_PRIVATE;
+static StaticTask_t net_input_tcb SHIM_PRIVATE;
+static StaticTask_t tx_tcb SHIM_PRIVATE;
+static TaskHandle_t net_input_task SHIM_PRIVATE;
+extern void gateway_sys_grant_net_input(TaskHandle_t task);
+static StaticSemaphore_t mutex_cb SHIM_PRIVATE, rx_cb SHIM_PRIVATE, tx_cb SHIM_PRIVATE;
 static int32_t io_init(void) { HAL_ETH_SetMDIOClockRange(&heth); return 0; }
 static int32_t io_deinit(void) { return 0; }
 static int32_t io_read(uint32_t a,uint32_t r,uint32_t *v) { return HAL_ETH_ReadPHYRegister(&heth,a,r,v)==HAL_OK?0:-1; }
@@ -125,13 +156,25 @@ static bool reset_mac(void)
 static err_t output(struct netif *n,struct pbuf *p)
 {
     (void)n;
-    if(p->tot_len>sizeof(tx) || osMutexAcquire(driver_mutex,250)!=osOK) return ERR_IF;
+    if(p->tot_len==0U || p->tot_len>sizeof(net_tx_request.bytes)) return ERR_IF;
+    net_tx_request.length=p->tot_len;
+    if(pbuf_copy_partial(p,net_tx_request.bytes,p->tot_len,0)!=p->tot_len ||
+       xQueueSend(net_tx_requests,&net_tx_request,pdMS_TO_TICKS(250))!=pdPASS)
+        return ERR_IF;
+    uint8_t ok=0;
+    if(xQueueReceive(net_tx_replies,&ok,pdMS_TO_TICKS(500))!=pdPASS) return ERR_IF;
+    return ok?ERR_OK:ERR_IF;
+}
+static uint8_t transmit_frame(const TxRequest *request)
+{
+    if(request->length==0U || request->length>sizeof(tx) ||
+       osMutexAcquire(driver_mutex,250)!=osOK) return 0;
     err_t result=ERR_IF;
     if(gateway_link_up && !need_reset) {
         while(osSemaphoreAcquire(tx_sem,0)==osOK) { }
-        pbuf_copy_partial(p,tx,p->tot_len,0);
-        ETH_BufferTypeDef buffer={.buffer=tx,.len=p->tot_len,.next=NULL};
-        TxConfig.Length=p->tot_len; TxConfig.TxBuffer=&buffer; TxConfig.pData=tx;
+        memcpy(tx,request->bytes,request->length);
+        ETH_BufferTypeDef buffer={.buffer=tx,.len=request->length,.next=NULL};
+        TxConfig.Length=request->length; TxConfig.TxBuffer=&buffer; TxConfig.pData=tx;
         __DSB();
         if(HAL_ETH_Transmit_IT(&heth,&TxConfig)==HAL_OK && osSemaphoreAcquire(tx_sem,200)==osOK) {
             HAL_ETH_ReleaseTxPacket(&heth); ++gateway_tx_packets; result=ERR_OK;
@@ -142,7 +185,18 @@ static err_t output(struct netif *n,struct pbuf *p)
             (void)reset_mac();
         }
     }
-    (void)osMutexRelease(driver_mutex); return result;
+    (void)osMutexRelease(driver_mutex); return result==ERR_OK;
+}
+static void tx_thread(void *arg)
+{
+    (void)arg;
+    for(;;) {
+        if(xQueueReceive(shim_tx_requests,&shim_tx_request,portMAX_DELAY)!=pdPASS)
+            gateway_panic(GATEWAY_FAULT_ASSERT);
+        uint8_t ok=transmit_frame(&shim_tx_request);
+        if(xQueueSend(shim_tx_replies,&ok,pdMS_TO_TICKS(500))!=pdPASS)
+            gateway_panic(GATEWAY_FAULT_ASSERT);
+    }
 }
 static void input_thread(void *arg)
 {
@@ -157,9 +211,55 @@ static void input_thread(void *arg)
             (void)osMutexRelease(driver_mutex);
             if(result!=HAL_OK || !p) break;
             ++gateway_rx_packets;
-            if(interface->input(p,interface)!=ERR_OK) { ++gateway_rx_drops; pbuf_free(p); }
+            uint8_t slot;
+            uint16_t length=p->tot_len;
+            if(length==0U || length>FRAME_BYTES ||
+               xQueueReceive(shim_free_slots,&slot,0)!=pdPASS) {
+                ++gateway_rx_drops;
+                pbuf_free(p);
+                continue;
+            }
+            configASSERT(slot<FRAME_SLOTS);
+            uint16_t copied=pbuf_copy_partial(p,frame_slots[slot].bytes,length,0);
+            pbuf_free(p);
+            FrameReady ready={slot,length};
+            if(copied!=length || xQueueSend(shim_ready_frames,&ready,0)!=pdPASS) {
+                ++gateway_rx_drops;
+                configASSERT(xQueueSend(shim_free_slots,&slot,0)==pdPASS);
+            }
         }
         (void)osDelay(1);
+    }
+}
+static void link_up_callback(void *arg) { netif_set_link_up((struct netif *)arg); }
+static void link_down_callback(void *arg) { netif_set_link_down((struct netif *)arg); }
+static void net_input_thread(void *arg)
+{
+    (void)arg;
+    uint32_t observed_epoch=0;
+    /* This is unprivileged NET logic. The SHIM copies and validates frame
+     * lengths before publishing a slot; NET allocates its own lwIP pbuf. */
+    for(;;) {
+        FrameReady ready;
+        if(observed_epoch!=gateway_link_epoch) {
+            observed_epoch=gateway_link_epoch;
+            (void)tcpip_callback(gateway_link_up?link_up_callback:link_down_callback,
+                                 net_interface);
+        }
+        if(xQueueReceive(net_ready_frames,&ready,pdMS_TO_TICKS(100))!=pdPASS)
+            continue;
+        if(ready.slot>=FRAME_SLOTS || ready.length==0U || ready.length>FRAME_BYTES)
+            gateway_panic(GATEWAY_FAULT_ASSERT);
+        struct pbuf *copy=pbuf_alloc(PBUF_RAW,ready.length,PBUF_POOL);
+        if(!copy || pbuf_take(copy,frame_slots[ready.slot].bytes,ready.length)!=ERR_OK) {
+            ++gateway_rx_drops;
+            if(copy) pbuf_free(copy);
+        } else if(net_interface->input(copy,net_interface)!=ERR_OK) {
+            ++gateway_rx_drops;
+            pbuf_free(copy);
+        }
+        if(xQueueSend(net_free_slots,&ready.slot,0)!=pdPASS)
+            gateway_panic(GATEWAY_FAULT_ASSERT);
     }
 }
 static void link_thread(void *arg)
@@ -197,8 +297,6 @@ static void link_thread(void *arg)
         bool active=gateway_link_up!=0;
         (void)osMutexRelease(driver_mutex);
         if(changed) {
-            if(active) (void)netifapi_netif_set_link_up(interface);
-            else (void)netifapi_netif_set_link_down(interface);
             gateway_log("[ETH] link=%s phy=%ld epoch=%lu\n",active?"UP":"DOWN",(long)link,(unsigned long)gateway_link_epoch);
         }
         (void)osDelay(250);
@@ -206,12 +304,22 @@ static void link_thread(void *arg)
 }
 err_t gateway_ethernet_init(struct netif *n)
 {
-    interface=n;
+    net_interface=n;
     memset(rx,0,sizeof(rx)); memset(tx,0,sizeof(tx)); memset(rx_state,0,sizeof(rx_state));
     const osMutexAttr_t ma={.attr_bits=osMutexPrioInherit,.cb_mem=&mutex_cb,.cb_size=sizeof(mutex_cb)};
     const osSemaphoreAttr_t ra={.cb_mem=&rx_cb,.cb_size=sizeof(rx_cb)}, ta={.cb_mem=&tx_cb,.cb_size=sizeof(tx_cb)};
     driver_mutex=osMutexNew(&ma); rx_sem=osSemaphoreNew(1,0,&ra); tx_sem=osSemaphoreNew(1,0,&ta);
     if(!driver_mutex || !rx_sem || !tx_sem) return ERR_MEM;
+    shim_free_slots=xQueueCreateStatic(FRAME_SLOTS,sizeof(uint8_t),free_storage,&free_cb);
+    shim_ready_frames=xQueueCreateStatic(FRAME_SLOTS,sizeof(FrameReady),ready_storage,&ready_cb);
+    shim_tx_requests=xQueueCreateStatic(1,sizeof(TxRequest),tx_request_storage,&tx_request_cb);
+    shim_tx_replies=xQueueCreateStatic(1,sizeof(uint8_t),tx_reply_storage,&tx_reply_cb);
+    if(!shim_free_slots || !shim_ready_frames || !shim_tx_requests || !shim_tx_replies)
+        return ERR_MEM;
+    net_free_slots=shim_free_slots; net_ready_frames=shim_ready_frames;
+    net_tx_requests=shim_tx_requests; net_tx_replies=shim_tx_replies;
+    for(uint8_t i=0;i<FRAME_SLOTS;++i)
+        if(xQueueSend(shim_free_slots,&i,0)!=pdPASS) return ERR_MEM;
     heth.Init.RxBuffLen=FRAME_BYTES;
     TxConfig.Attributes=ETH_TX_PACKETS_FEATURES_CRCPAD | ETH_TX_PACKETS_FEATURES_CSUM;
     TxConfig.ChecksumCtrl=ETH_CHECKSUM_DISABLE;
@@ -222,12 +330,34 @@ err_t gateway_ethernet_init(struct netif *n)
     n->name[0]='p'; n->name[1]='g'; n->hwaddr_len=6; memcpy(n->hwaddr,heth.Init.MACAddr,6);
     n->mtu=1500; n->flags=NETIF_FLAG_BROADCAST|NETIF_FLAG_ETHARP;
     n->output=etharp_output; n->linkoutput=output;
-    /* These tasks own HAL/PHY state and must call privileged NVIC/driver code. */
+    /* Only the two SHIM tasks touch HAL/PHY and the DMA bank. */
     gateway_eth_task=(osThreadId_t)xTaskCreateStatic(input_thread,"ETH input",
         sizeof(input_stack)/sizeof(StackType_t),NULL,
         (UBaseType_t)osPriorityAboveNormal|portPRIVILEGE_BIT,input_stack,&input_tcb);
     gateway_link_task=(osThreadId_t)xTaskCreateStatic(link_thread,"ETH link",
         sizeof(link_stack)/sizeof(StackType_t),NULL,
         (UBaseType_t)osPriorityBelowNormal|portPRIVILEGE_BIT,link_stack,&link_tcb);
+    TaskHandle_t tx_task=xTaskCreateStatic(tx_thread,"ETH TX",3072/sizeof(StackType_t),NULL,
+        (UBaseType_t)osPriorityHigh2|portPRIVILEGE_BIT,tx_stack,&tx_tcb);
+    if(!tx_task) return ERR_MEM;
+    const TaskParameters_t net_params={
+        .pvTaskCode=net_input_thread,.pcName="NET input",.usStackDepth=4096/sizeof(StackType_t),
+        .pvParameters=NULL,.uxPriority=(UBaseType_t)osPriorityNormal,
+        .puxStackBuffer=net_input_stack,
+        .xRegions={
+            {(void *)0x20000000UL,512U*1024U,
+                portMPU_REGION_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
+                portMPU_REGION_CACHEABLE_BUFFERABLE|(0xE0UL<<8)},
+            {(void *)0x20020000UL,16U*1024U,
+                portMPU_REGION_PRIVILEGED_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
+                portMPU_REGION_CACHEABLE_BUFFERABLE},
+            {NULL,0,0}},.pxTaskBuffer=&net_input_tcb};
+    if(xTaskCreateRestrictedStatic(&net_params,&net_input_task)!=pdPASS) net_input_task=NULL;
+    if(!net_input_task) return ERR_MEM;
+    vGrantAccessToQueue(net_input_task,shim_ready_frames);
+    vGrantAccessToQueue(net_input_task,shim_free_slots);
+    gateway_sys_grant_net_input(net_input_task);
+    vGrantAccessToQueue((TaskHandle_t)gateway_tcpip_task,shim_tx_requests);
+    vGrantAccessToQueue((TaskHandle_t)gateway_tcpip_task,shim_tx_replies);
     return gateway_eth_task && gateway_link_task?ERR_OK:ERR_MEM;
 }

@@ -1312,13 +1312,13 @@ static void prvSetupMPU( void )
                                        prvGetMPURegionSizeSetting( ( uint32_t ) __privileged_data_end__ - ( uint32_t ) __privileged_data_start__ ) |
                                        ( portMPU_REGION_ENABLE );
 
-        /* By default allow everything to access the general peripherals.  The
-         * system peripherals and registers are protected. */
+        /* D1: only the trusted SHIM/logger may access MMIO. In particular,
+         * unprivileged NET must not program ETH MAC/DMA or UART registers. */
         portMPU_REGION_BASE_ADDRESS_REG = ( portPERIPHERALS_START_ADDRESS ) |
                                           ( portMPU_REGION_VALID ) |
                                           ( portGENERAL_PERIPHERALS_REGION );
 
-        portMPU_REGION_ATTRIBUTE_REG = ( portMPU_REGION_READ_WRITE | portMPU_REGION_EXECUTE_NEVER ) |
+        portMPU_REGION_ATTRIBUTE_REG = ( portMPU_REGION_PRIVILEGED_READ_WRITE | portMPU_REGION_EXECUTE_NEVER ) |
                                        ( prvGetMPURegionSizeSetting( portPERIPHERALS_END_ADDRESS - portPERIPHERALS_START_ADDRESS ) ) |
                                        ( portMPU_REGION_ENABLE );
 

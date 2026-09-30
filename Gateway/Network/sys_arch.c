@@ -59,6 +59,10 @@ volatile uint32_t gateway_d1_try_post_failures;
 volatile uint32_t gateway_d1_try_post_handle;
 #endif
 osThreadId_t gateway_tcpip_task;
+static QueueHandle_t gateway_tcpip_mbox;
+extern osSemaphoreId_t gateway_tcpip_boot_sem;
+static StackType_t tcpip_stack[TCPIP_THREAD_STACKSIZE/sizeof(StackType_t)] __attribute__((aligned(4096)));
+static StaticTask_t tcpip_tcb __attribute__((section(".gateway_privileged")));
 
 #if defined(LWIP_PROVIDE_ERRNO)
 int errno;
@@ -72,7 +76,9 @@ err_t sys_mbox_new(sys_mbox_t *mbox, int size)
   osMessageQDef(QUEUE, size, void *);
   *mbox = osMessageCreate(osMessageQ(QUEUE), NULL);
 #else
-  *mbox = osMessageQueueNew(size, sizeof(void *), NULL);
+  *mbox = (__get_CONTROL() & 1U) ?
+      (osMessageQueueId_t)gateway_d1_cleanup_create_mbox((unsigned)size) :
+      osMessageQueueNew(size, sizeof(void *), NULL);
 #endif
 #if SYS_STATS
   ++lwip_stats.sys.mbox.used;
@@ -83,12 +89,17 @@ err_t sys_mbox_new(sys_mbox_t *mbox, int size)
 #endif /* SYS_STATS */
   if(*mbox == NULL)
     return ERR_MEM;
+  if(!gateway_tcpip_mbox) gateway_tcpip_mbox=(QueueHandle_t)*mbox;
 
   /* The lwIP control thread creates the mailboxes later used by the
    * network-facing task. V11 ACLs do not grant that access implicitly. */
-  vGrantAccessToQueue((TaskHandle_t)gateway_platform_network_task_handle(),
-                      (QueueHandle_t)*mbox);
-  gateway_d1_cleanup_register((QueueHandle_t)*mbox);
+  if((__get_CONTROL() & 1U)==0U) {
+    vGrantAccessToQueue((TaskHandle_t)gateway_platform_network_task_handle(),
+                        (QueueHandle_t)*mbox);
+    if(gateway_tcpip_task)
+      vGrantAccessToQueue((TaskHandle_t)gateway_tcpip_task,(QueueHandle_t)*mbox);
+    gateway_d1_cleanup_register((QueueHandle_t)*mbox);
+  }
 
   return ERR_OK;
 }
@@ -309,7 +320,9 @@ err_t sys_sem_new(sys_sem_t *sem, u8_t count)
   osSemaphoreDef(SEM);
   *sem = osSemaphoreCreate (osSemaphore(SEM), 1);
 #else
-  *sem = osSemaphoreNew(UINT16_MAX, count, NULL);
+  *sem = (__get_CONTROL() & 1U) ?
+      (osSemaphoreId_t)gateway_d1_cleanup_create_sem(UINT16_MAX,count) :
+      osSemaphoreNew(UINT16_MAX, count, NULL);
 #endif
 
   if(*sem == NULL)
@@ -320,9 +333,13 @@ err_t sys_sem_new(sys_sem_t *sem, u8_t count)
     return ERR_MEM;
   }
 
-  vGrantAccessToQueue((TaskHandle_t)gateway_platform_network_task_handle(),
-                      (QueueHandle_t)*sem);
-  gateway_d1_cleanup_register((QueueHandle_t)*sem);
+  if((__get_CONTROL() & 1U)==0U) {
+    vGrantAccessToQueue((TaskHandle_t)gateway_platform_network_task_handle(),
+                        (QueueHandle_t)*sem);
+    if(gateway_tcpip_task)
+      vGrantAccessToQueue((TaskHandle_t)gateway_tcpip_task,(QueueHandle_t)*sem);
+    gateway_d1_cleanup_register((QueueHandle_t)*sem);
+  }
 
   if(count == 0)	// Means it can't be taken
   {
@@ -440,6 +457,12 @@ osMutexDef(lwip_sys_mutex);
 #else
 osMutexId_t lwip_sys_mutex;
 #endif
+void gateway_sys_grant_net_input(TaskHandle_t task)
+{
+  configASSERT(task && gateway_tcpip_mbox && lwip_sys_mutex);
+  vGrantAccessToQueue(task,gateway_tcpip_mbox);
+  vGrantAccessToQueue(task,(QueueHandle_t)((uintptr_t)lwip_sys_mutex >> 1U));
+}
 // Initialize sys arch
 void sys_init(void)
 {
@@ -526,13 +549,29 @@ sys_thread_t sys_thread_new(const char *name, lwip_thread_fn thread , void *arg,
   return osThreadCreate(&os_thread_def, arg);
 #else
   TaskHandle_t task = NULL;
-  if (stacksize <= 0 || (stacksize % (int)sizeof(StackType_t)) != 0 ||
-      xTaskCreate((TaskFunction_t)thread, name,
-                  (configSTACK_DEPTH_TYPE)(stacksize / (int)sizeof(StackType_t)),
-                  arg, (UBaseType_t)prio | portPRIVILEGE_BIT, &task) != pdPASS)
+  const TaskParameters_t parameters={
+    .pvTaskCode=(TaskFunction_t)thread,.pcName=name,
+    .usStackDepth=TCPIP_THREAD_STACKSIZE/sizeof(StackType_t),
+    .pvParameters=arg,.uxPriority=(UBaseType_t)osPriorityBelowNormal|portPRIVILEGE_BIT,
+    .puxStackBuffer=tcpip_stack,
+    .xRegions={
+      {(void *)0x20000000UL,512U*1024U,
+       portMPU_REGION_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
+       portMPU_REGION_CACHEABLE_BUFFERABLE|(0xE0UL<<8)},
+      {(void *)0x20020000UL,16U*1024U,
+       portMPU_REGION_PRIVILEGED_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
+       portMPU_REGION_CACHEABLE_BUFFERABLE},
+      {NULL,0,0}},.pxTaskBuffer=&tcpip_tcb};
+  if (stacksize != TCPIP_THREAD_STACKSIZE ||
+      xTaskCreateRestrictedStatic(&parameters,&task) != pdPASS)
       gateway_panic(GATEWAY_FAULT_ALLOC);
   gateway_tcpip_task = (osThreadId_t)task;
   if (!gateway_tcpip_task) gateway_panic(GATEWAY_FAULT_ALLOC);
+  vGrantAccessToQueue(task,gateway_tcpip_mbox);
+  vGrantAccessToQueue(task,(QueueHandle_t)((uintptr_t)lwip_sys_mutex>>1U));
+  vGrantAccessToQueue(task,(QueueHandle_t)gateway_tcpip_boot_sem);
+  gateway_d1_cleanup_grant(task);
+  vTaskPrioritySet(task,(UBaseType_t)prio);
   return gateway_tcpip_task;
 #endif
 }

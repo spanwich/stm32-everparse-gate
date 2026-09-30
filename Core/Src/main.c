@@ -62,11 +62,11 @@ ETH_DMADescTypeDef DMARxDscrTab[ETH_RX_DESC_CNT] __attribute__((section(".RxDecr
 ETH_DMADescTypeDef DMATxDscrTab[ETH_TX_DESC_CNT] __attribute__((section(".TxDecripSection"))); /* Ethernet Tx DMA Descriptors */
 #endif
 
-ETH_TxPacketConfig TxConfig;
+ETH_TxPacketConfig TxConfig __attribute__((section(".gateway_privileged")));
 
-ETH_HandleTypeDef heth;
+ETH_HandleTypeDef heth __attribute__((section(".gateway_privileged")));
 
-UART_HandleTypeDef huart3;
+UART_HandleTypeDef huart3 __attribute__((section(".gateway_privileged")));
 
 /* USER CODE BEGIN PV */
 

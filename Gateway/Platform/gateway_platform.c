@@ -27,21 +27,27 @@
 #endif
 extern UART_HandleTypeDef huart3;
 static StackType_t gateway_stack[GATEWAY_STACK_BYTES / sizeof(StackType_t)] __attribute__((aligned(8192)));
-static _Alignas(8) StackType_t diagnostic_stack[DIAGNOSTIC_STACK_BYTES / sizeof(StackType_t)];
+static _Alignas(8) StackType_t diagnostic_stack[DIAGNOSTIC_STACK_BYTES / sizeof(StackType_t)] __attribute__((section(".gateway_privileged")));
 static StaticTask_t gateway_tcb __attribute__((section(".gateway_privileged")));
 static StaticTask_t diagnostic_tcb __attribute__((section(".gateway_privileged")));
-static StaticSemaphore_t log_mutex_cb;
+static StaticSemaphore_t log_mutex_cb __attribute__((section(".gateway_privileged")));
+typedef struct { uint16_t length; char bytes[512]; } LogMessage;
+static StaticQueue_t log_queue_cb __attribute__((section(".gateway_privileged")));
+static uint8_t log_queue_storage[4U*sizeof(LogMessage)] __attribute__((section(".gateway_privileged")));
+static StackType_t log_stack[1024] __attribute__((section(".gateway_privileged"),aligned(4096)));
+static StaticTask_t log_tcb __attribute__((section(".gateway_privileged")));
+static QueueHandle_t log_queue __attribute__((section(".gateway_privileged")));
+static QueueHandle_t unpriv_log_queue;
 static osThreadId_t gateway_task, diagnostic_task;
 void *gateway_platform_network_task_handle(void) { return (void *)gateway_task; }
 #if GATEWAY_PAPER_CONTROL
 TaskHandle_t gateway_paper_core_task(void) { return (TaskHandle_t)gateway_task; }
 TaskHandle_t gateway_paper_diagnostics_task(void) { return (TaskHandle_t)diagnostic_task; }
 #endif
-static osMutexId_t log_mutex;
+static osMutexId_t log_mutex __attribute__((section(".gateway_privileged")));
 void gateway_platform_grant_log_access(void *task)
 {
-    vGrantAccessToQueue((TaskHandle_t)task,
-                        (QueueHandle_t)((uintptr_t)log_mutex >> 1U));
+    vGrantAccessToQueue((TaskHandle_t)task,log_queue);
 }
 static volatile uint32_t log_drops;
 static volatile uint32_t tests_complete;
@@ -81,6 +87,28 @@ static void dropped(void)
     uint32_t mask = __get_PRIMASK();
     __disable_irq(); ++log_drops; __set_PRIMASK(mask);
 }
+static void run_logger(void *argument)
+{
+    (void)argument;
+    for(;;) {
+        LogMessage message;
+        if(xQueueReceive(log_queue,&message,portMAX_DELAY)!=pdPASS) continue;
+        if(message.length>sizeof(message.bytes)) gateway_panic(GATEWAY_FAULT_ASSERT);
+        if(osMutexAcquire(log_mutex,100U)!=osOK) { dropped(); continue; }
+        if(HAL_UART_Transmit(&huart3,(uint8_t *)message.bytes,message.length,1000U)!=HAL_OK)
+            dropped();
+        (void)osMutexRelease(log_mutex);
+    }
+}
+__attribute__((noinline)) static int enqueue_log(const char *line, size_t n)
+{
+    LogMessage message={.length=(uint16_t)n};
+    memcpy(message.bytes,line,n);
+    if(!unpriv_log_queue || xQueueSend(unpriv_log_queue,&message,pdMS_TO_TICKS(100))!=pdPASS) {
+        dropped(); return -1;
+    }
+    return 0;
+}
 int gateway_log_write(const char *text, size_t length)
 {
     if (__get_IPSR() != 0U || !text) return -1;
@@ -92,6 +120,10 @@ int gateway_log_write(const char *text, size_t length)
         line[n++] = text[i];
     }
     bool running = osKernelGetState() == osKernelRunning;
+    if(running && (__get_CONTROL() & 1U)) {
+        if(enqueue_log(line,n)!=0) return -1;
+        return (int)length;
+    }
     if (running && (!log_mutex || osMutexAcquire(log_mutex, 100U) != osOK)) {
         dropped(); return -1;
     }
@@ -102,7 +134,7 @@ int gateway_log_write(const char *text, size_t length)
 }
 int gateway_log_binary(const void *bytes, size_t length)
 {
-    if (__get_IPSR() != 0U || !bytes || length > UINT16_MAX ||
+    if ((__get_CONTROL() & 1U) || __get_IPSR() != 0U || !bytes || length > UINT16_MAX ||
         osKernelGetState() != osKernelRunning || !log_mutex ||
         osMutexAcquire(log_mutex, 1000U) != osOK) return -1;
     HAL_StatusTypeDef result = HAL_UART_Transmit(&huart3, (uint8_t *)bytes,
@@ -203,6 +235,11 @@ void gateway_platform_start(void)
         .cb_mem = &log_mutex_cb, .cb_size = sizeof(log_mutex_cb)};
     log_mutex = osMutexNew(&mutex_attr);
     if (!log_mutex) gateway_panic(GATEWAY_FAULT_STARTUP);
+    log_queue=xQueueCreateStatic(4U,sizeof(LogMessage),log_queue_storage,&log_queue_cb);
+    unpriv_log_queue=log_queue;
+    if(!log_queue || !xTaskCreateStatic(run_logger,"gateway_log",1024U,NULL,
+        (UBaseType_t)osPriorityLow|portPRIVILEGE_BIT,log_stack,&log_tcb))
+        gateway_panic(GATEWAY_FAULT_STARTUP);
     gateway_d1_auth_secrets_init();
     gateway_d1_auth_start();
     gateway_d1_cleanup_start();
@@ -217,9 +254,9 @@ void gateway_platform_start(void)
         .xRegions={
             {(void *)0x20000000UL,512U*1024U,
                 portMPU_REGION_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
-                /* Stage 2 still consumes DMA-backed lwIP pbufs; SHIM copy
-                 * removes this access in D1.7 step 4. Exclude AUTH now. */
-                portMPU_REGION_CACHEABLE_BUFFERABLE|(0x60UL<<8)},
+                /* The Ethernet input path copies DMA frames into lwIP pool
+                 * buffers before NET sees them. Deny the whole DMA bank. */
+                portMPU_REGION_CACHEABLE_BUFFERABLE|(0xE0UL<<8)},
             {NULL,0,0},
             {(void *)0x20020000UL,16U*1024U,
                 portMPU_REGION_PRIVILEGED_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|

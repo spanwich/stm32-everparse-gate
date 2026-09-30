@@ -8,4 +8,6 @@ void gateway_d1_cleanup_grant(void *task);
 void gateway_d1_cleanup_register(QueueHandle_t handle);
 void gateway_d1_cleanup_forget(QueueHandle_t handle);
 bool gateway_d1_cleanup_enqueue(QueueHandle_t handle);
+QueueHandle_t gateway_d1_cleanup_create_mbox(unsigned count);
+QueueHandle_t gateway_d1_cleanup_create_sem(unsigned maximum,unsigned initial);
 #endif
