@@ -1,10 +1,12 @@
 /* Section 14 experiment (labelled variant, GATEWAY_PAPER_GATE_N32 = 1).
  *
- * 1. Switch-model policy as data: the SCALANCE XB-200 policy (254 rules,
- *    n = 32) is copied from flash data into a RAM rule table and decided by the
- *    unchanged extracted GateLowGateDecide against 17,760 oracle vectors.
+ * 1. Policy as data: the policy in paper_gate_n32_data.h (GATE_N32_POLICY;
+ *    now the OPNsense 19.1.7 endpoint policy, 420 rules, n = 53; first run:
+ *    SCALANCE XB-200, 254 rules, n = 32) is copied from flash data into a RAM
+ *    rule table and decided by the unchanged extracted GateLowGateDecide
+ *    against its oracle vectors.
  * 2. Cost: DWT cycles of the decision for first match, last rule and absent
- *    path at n = 1 and n = 32, and, at n = 1, of the previous monolithic
+ *    path at n = 1 and n = GATE_N32_PARTITIONS, and, at n = 1, of the previous monolithic
  *    RbacPolicy access validator on the same 75-byte envelope.
  * Runs in the privileged core task after the self-tests, interrupts enabled:
  * observed distributions, not WCET. */
@@ -113,8 +115,8 @@ void gateway_paper_gate_n32_run(void)
             mismatches++;
         }
     }
-    gateway_log("[GATE-N32] policy=siemens-scalance-xb200 n=%u vectors=%u accepts=%lu mismatches=%lu fail_closed=%lu\n",
-                (unsigned)GATE_N32_PARTITIONS, (unsigned)GATE_N32_VECTORS, accepts, mismatches, fail_closed);
+    gateway_log("[GATE-N32] policy=%s n=%u vectors=%u accepts=%lu mismatches=%lu fail_closed=%lu\n",
+                GATE_N32_POLICY, (unsigned)GATE_N32_PARTITIONS, (unsigned)GATE_N32_VECTORS, accepts, mismatches, fail_closed);
 
     GATE_SPEC_SESSION top = { .role = 0xFF, .sscope = 0xFFFF, .count = 0 };
     GATE_SPEC_REQUEST absent = { .rpath = 0x7FFF0001u, .meth = 1 };
