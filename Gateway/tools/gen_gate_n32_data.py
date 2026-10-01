@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Generate Gateway/Paper/paper_gate_n32_data.h: the SCALANCE XB-200 switch
 policy (254 rules, n = 32 partitions) and its oracle vectors, produced by the
-papers repo's experiments/verified-combiner/test/gen_vectors.py. Data only; the
+paper-experiments repo's verified-combiner/test/gen_vectors.py. Data only; the
 gate code is the unchanged extracted GateLowGateDecide."""
 import hashlib, subprocess
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
-gen = Path('/home/iamfo470/phd/papers/experiments/verified-combiner/test/gen_vectors.py')
+gen = Path('/home/iamfo470/phd/paper-experiments/verified-combiner/test/gen_vectors.py')
 text = subprocess.check_output(['python3', str(gen), '--policy', 'siemens-scalance-xb200'], text=True)
 lines = text.split('\n')
 assert lines[0].startswith('P ')
