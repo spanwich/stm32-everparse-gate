@@ -49,16 +49,10 @@ bool Mediation_Extern_check(uint8_t kind, uint32_t length, uint8_t *request,
     return accepted;
 }
 
-static void unpack_policy(Policy *out, const uint8_t *in)
-{
-    memset(out,0,sizeof(*out)); out->num_rules=in[0];
-    for(unsigned i=0;i<MAX_RULES;++i) {
-        const uint8_t *b=in+1+8*i;
-        out->rules[i]=(PolicyRule){(uint32_t)b[0]|((uint32_t)b[1]<<8)|
-            ((uint32_t)b[2]<<16)|((uint32_t)b[3]<<24),b[4],b[5],
-            (uint16_t)((uint16_t)b[6]|((uint16_t)b[7]<<8))};
-    }
-}
+uint8_t gateway_policy_update(uint8_t role, uint8_t count, uint8_t *body,
+                              uint32_t paths[8], uint8_t masks[8],
+                              uint8_t min_roles[8], uint16_t scopes[8],
+                              uint8_t *num_rules);
 static void pack_policy(uint8_t out[65], const Policy *in)
 {
     memset(out,0,65); out[0]=in->num_rules;
@@ -106,7 +100,19 @@ uint32_t Mediation_Extern_invoke(uint8_t kind, uint32_t length, uint8_t *request
         return (uint32_t)status;
     }
     if(kind==GATEWAY_UPDATE) {
-        unpack_policy(&c->policy,p->body);
+        /* Commit through the verified update gate: the rules are exactly those
+         * the validated bytes encode. A disagreement with the check above
+         * fails closed and leaves the live policy unchanged. */
+        uint32_t paths[MAX_RULES]; uint8_t masks[MAX_RULES], roles[MAX_RULES], nr=0;
+        uint16_t scopes[MAX_RULES];
+        if(gateway_policy_update(p->role,p->rate_count,(uint8_t *)p->body,
+                                 paths,masks,roles,scopes,&nr)!=1) {
+            c->result=GATEWAY_DENIED;
+            return (uint32_t)message(c,GATE_STATUS_DENIED,"{\"status\":\"denied\"}");
+        }
+        memset(&c->policy,0,sizeof(c->policy)); c->policy.num_rules=nr;
+        for(unsigned i=0;i<MAX_RULES;++i)
+            c->policy.rules[i]=(PolicyRule){paths[i],masks[i],roles[i],scopes[i]};
         c->result=GATEWAY_POLICY_UPDATED;
         return (uint32_t)message(c,GATE_STATUS_OK,"{\"status\":\"ok\",\"message\":\"policy updated\"}");
     }

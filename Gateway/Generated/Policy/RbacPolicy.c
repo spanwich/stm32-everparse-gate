@@ -102,10 +102,10 @@ RbacPolicyValidateLoginRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterrateCount);
   }
-  uint64_t positionAfterpathHash;
+  uint64_t positionAfterpathId;
   if (EverParseIsSuccess(positionAfterLoginRequest1))
   {
-    positionAfterpathHash = positionAfterLoginRequest1;
+    positionAfterpathId = positionAfterLoginRequest1;
   }
   else
   {
@@ -116,25 +116,25 @@ RbacPolicyValidateLoginRequest(
       Ctxt,
       Input,
       positionAfterrateCount);
-    positionAfterpathHash = positionAfterLoginRequest1;
+    positionAfterpathId = positionAfterLoginRequest1;
   }
-  if (EverParseIsError(positionAfterpathHash))
+  if (EverParseIsError(positionAfterpathId))
   {
-    return positionAfterpathHash;
+    return positionAfterpathId;
   }
-  uint32_t pathHash = Load32Le(Input + (uint32_t)positionAfterrateCount);
+  uint32_t pathId = Load32Le(Input + (uint32_t)positionAfterrateCount);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes3 = 1ULL <= (InputLength - positionAfterpathHash);
+  BOOLEAN hasBytes3 = 1ULL <= (InputLength - positionAfterpathId);
   uint64_t positionAfterLoginRequest2;
   if (hasBytes3)
   {
-    positionAfterLoginRequest2 = positionAfterpathHash + 1ULL;
+    positionAfterLoginRequest2 = positionAfterpathId + 1ULL;
   }
   else
   {
     positionAfterLoginRequest2 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterpathHash);
+        positionAfterpathId);
   }
   uint64_t positionAftermethod;
   if (EverParseIsSuccess(positionAfterLoginRequest2))
@@ -149,14 +149,14 @@ RbacPolicyValidateLoginRequest(
       EverParseGetValidatorErrorKind(positionAfterLoginRequest2),
       Ctxt,
       Input,
-      positionAfterpathHash);
+      positionAfterpathId);
     positionAftermethod = positionAfterLoginRequest2;
   }
   if (EverParseIsError(positionAftermethod))
   {
     return positionAftermethod;
   }
-  uint8_t method = Input[(uint32_t)positionAfterpathHash];
+  uint8_t method = Input[(uint32_t)positionAfterpathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes4 = 1ULL <= (InputLength - positionAftermethod);
   uint64_t positionAfterCheck;
@@ -181,8 +181,9 @@ RbacPolicyValidateLoginRequest(
     KRML_MAYBE_UNUSED_VAR(check);
     BOOLEAN
     checkConstraintIsOk =
-      pathHash == RBACPOLICY____PATH_LOGIN && (method & RBACPOLICY____METHOD_POST) == RBACPOLICY____METHOD_POST &&
-        rateCount < RBACPOLICY____MAX_RATE;
+      pathId == RBACPOLICY____PATH_LOGIN &&
+        ((uint32_t)method & (uint32_t)RBACPOLICY____METHOD_POST) == RBACPOLICY____METHOD_POST
+      && rateCount < RBACPOLICY____MAX_RATE;
     uint64_t
     positionAfterCheck1 = EverParseCheckConstraintOk(checkConstraintIsOk, positionAfterCheck);
     if (EverParseIsError(positionAfterCheck1))
@@ -524,23 +525,23 @@ RbacPolicyValidatePolicyBlob(
       positionAfternumRules);
     res0 = positionAfterPolicyBlob2;
   }
-  uint64_t positionAfterr0PathHash = res0;
-  if (EverParseIsError(positionAfterr0PathHash))
+  uint64_t positionAfterr0PathId = res0;
+  if (EverParseIsError(positionAfterr0PathId))
   {
-    return positionAfterr0PathHash;
+    return positionAfterr0PathId;
   }
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes4 = 1ULL <= (InputLength - positionAfterr0PathHash);
+  BOOLEAN hasBytes4 = 1ULL <= (InputLength - positionAfterr0PathId);
   uint64_t positionAfterr0Method;
   if (hasBytes4)
   {
-    positionAfterr0Method = positionAfterr0PathHash + 1ULL;
+    positionAfterr0Method = positionAfterr0PathId + 1ULL;
   }
   else
   {
     positionAfterr0Method =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterr0PathHash);
+        positionAfterr0PathId);
   }
   uint64_t positionAfterPolicyBlob3;
   if (EverParseIsError(positionAfterr0Method))
@@ -549,8 +550,8 @@ RbacPolicyValidatePolicyBlob(
   }
   else
   {
-    uint8_t r0Method = Input[(uint32_t)positionAfterr0PathHash];
-    BOOLEAN r0MethodConstraintIsOk = r0Method <= 63U;
+    uint8_t r0Method = Input[(uint32_t)positionAfterr0PathId];
+    BOOLEAN r0MethodConstraintIsOk = r0Method <= RBACPOLICY____METHOD_MASK_ALL;
     uint64_t
     positionAfterr0Method1 =
       EverParseCheckConstraintOk(r0MethodConstraintIsOk,
@@ -660,25 +661,25 @@ RbacPolicyValidatePolicyBlob(
                 positionAfterr0ReqScope);
               res2 = positionAfterPolicyBlob6;
             }
-            uint64_t positionAfterr1PathHash = res2;
-            if (EverParseIsError(positionAfterr1PathHash))
+            uint64_t positionAfterr1PathId = res2;
+            if (EverParseIsError(positionAfterr1PathId))
             {
-              positionAfterPolicyBlob4 = positionAfterr1PathHash;
+              positionAfterPolicyBlob4 = positionAfterr1PathId;
             }
             else
             {
               /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-              BOOLEAN hasBytes8 = 1ULL <= (InputLength - positionAfterr1PathHash);
+              BOOLEAN hasBytes8 = 1ULL <= (InputLength - positionAfterr1PathId);
               uint64_t positionAfterr1Method;
               if (hasBytes8)
               {
-                positionAfterr1Method = positionAfterr1PathHash + 1ULL;
+                positionAfterr1Method = positionAfterr1PathId + 1ULL;
               }
               else
               {
                 positionAfterr1Method =
                   EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-                    positionAfterr1PathHash);
+                    positionAfterr1PathId);
               }
               uint64_t positionAfterPolicyBlob7;
               if (EverParseIsError(positionAfterr1Method))
@@ -687,8 +688,8 @@ RbacPolicyValidatePolicyBlob(
               }
               else
               {
-                uint8_t r1Method = Input[(uint32_t)positionAfterr1PathHash];
-                BOOLEAN r1MethodConstraintIsOk = r1Method <= 63U;
+                uint8_t r1Method = Input[(uint32_t)positionAfterr1PathId];
+                BOOLEAN r1MethodConstraintIsOk = r1Method <= RBACPOLICY____METHOD_MASK_ALL;
                 uint64_t
                 positionAfterr1Method1 =
                   EverParseCheckConstraintOk(r1MethodConstraintIsOk,
@@ -798,25 +799,25 @@ RbacPolicyValidatePolicyBlob(
                             positionAfterr1ReqScope);
                           res4 = positionAfterPolicyBlob10;
                         }
-                        uint64_t positionAfterr2PathHash = res4;
-                        if (EverParseIsError(positionAfterr2PathHash))
+                        uint64_t positionAfterr2PathId = res4;
+                        if (EverParseIsError(positionAfterr2PathId))
                         {
-                          positionAfterPolicyBlob8 = positionAfterr2PathHash;
+                          positionAfterPolicyBlob8 = positionAfterr2PathId;
                         }
                         else
                         {
                           /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-                          BOOLEAN hasBytes12 = 1ULL <= (InputLength - positionAfterr2PathHash);
+                          BOOLEAN hasBytes12 = 1ULL <= (InputLength - positionAfterr2PathId);
                           uint64_t positionAfterr2Method;
                           if (hasBytes12)
                           {
-                            positionAfterr2Method = positionAfterr2PathHash + 1ULL;
+                            positionAfterr2Method = positionAfterr2PathId + 1ULL;
                           }
                           else
                           {
                             positionAfterr2Method =
                               EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-                                positionAfterr2PathHash);
+                                positionAfterr2PathId);
                           }
                           uint64_t positionAfterPolicyBlob11;
                           if (EverParseIsError(positionAfterr2Method))
@@ -825,8 +826,9 @@ RbacPolicyValidatePolicyBlob(
                           }
                           else
                           {
-                            uint8_t r2Method = Input[(uint32_t)positionAfterr2PathHash];
-                            BOOLEAN r2MethodConstraintIsOk = r2Method <= 63U;
+                            uint8_t r2Method = Input[(uint32_t)positionAfterr2PathId];
+                            BOOLEAN
+                            r2MethodConstraintIsOk = r2Method <= RBACPOLICY____METHOD_MASK_ALL;
                             uint64_t
                             positionAfterr2Method1 =
                               EverParseCheckConstraintOk(r2MethodConstraintIsOk,
@@ -938,26 +940,26 @@ RbacPolicyValidatePolicyBlob(
                                         positionAfterr2ReqScope);
                                       res6 = positionAfterPolicyBlob14;
                                     }
-                                    uint64_t positionAfterr3PathHash = res6;
-                                    if (EverParseIsError(positionAfterr3PathHash))
+                                    uint64_t positionAfterr3PathId = res6;
+                                    if (EverParseIsError(positionAfterr3PathId))
                                     {
-                                      positionAfterPolicyBlob12 = positionAfterr3PathHash;
+                                      positionAfterPolicyBlob12 = positionAfterr3PathId;
                                     }
                                     else
                                     {
                                       /* Checking that we have enough space for a UINT8, i.e., 1 byte */
                                       BOOLEAN
-                                      hasBytes16 = 1ULL <= (InputLength - positionAfterr3PathHash);
+                                      hasBytes16 = 1ULL <= (InputLength - positionAfterr3PathId);
                                       uint64_t positionAfterr3Method;
                                       if (hasBytes16)
                                       {
-                                        positionAfterr3Method = positionAfterr3PathHash + 1ULL;
+                                        positionAfterr3Method = positionAfterr3PathId + 1ULL;
                                       }
                                       else
                                       {
                                         positionAfterr3Method =
                                           EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-                                            positionAfterr3PathHash);
+                                            positionAfterr3PathId);
                                       }
                                       uint64_t positionAfterPolicyBlob15;
                                       if (EverParseIsError(positionAfterr3Method))
@@ -966,8 +968,10 @@ RbacPolicyValidatePolicyBlob(
                                       }
                                       else
                                       {
-                                        uint8_t r3Method = Input[(uint32_t)positionAfterr3PathHash];
-                                        BOOLEAN r3MethodConstraintIsOk = r3Method <= 63U;
+                                        uint8_t r3Method = Input[(uint32_t)positionAfterr3PathId];
+                                        BOOLEAN
+                                        r3MethodConstraintIsOk =
+                                          r3Method <= RBACPOLICY____METHOD_MASK_ALL;
                                         uint64_t
                                         positionAfterr3Method1 =
                                           EverParseCheckConstraintOk(r3MethodConstraintIsOk,
@@ -1086,29 +1090,28 @@ RbacPolicyValidatePolicyBlob(
                                                     positionAfterr3ReqScope);
                                                   res8 = positionAfterPolicyBlob18;
                                                 }
-                                                uint64_t positionAfterr4PathHash = res8;
-                                                if (EverParseIsError(positionAfterr4PathHash))
+                                                uint64_t positionAfterr4PathId = res8;
+                                                if (EverParseIsError(positionAfterr4PathId))
                                                 {
-                                                  positionAfterPolicyBlob16 =
-                                                    positionAfterr4PathHash;
+                                                  positionAfterPolicyBlob16 = positionAfterr4PathId;
                                                 }
                                                 else
                                                 {
                                                   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
                                                   BOOLEAN
                                                   hasBytes20 =
-                                                    1ULL <= (InputLength - positionAfterr4PathHash);
+                                                    1ULL <= (InputLength - positionAfterr4PathId);
                                                   uint64_t positionAfterr4Method;
                                                   if (hasBytes20)
                                                   {
                                                     positionAfterr4Method =
-                                                      positionAfterr4PathHash + 1ULL;
+                                                      positionAfterr4PathId + 1ULL;
                                                   }
                                                   else
                                                   {
                                                     positionAfterr4Method =
                                                       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-                                                        positionAfterr4PathHash);
+                                                        positionAfterr4PathId);
                                                   }
                                                   uint64_t positionAfterPolicyBlob19;
                                                   if (EverParseIsError(positionAfterr4Method))
@@ -1120,8 +1123,10 @@ RbacPolicyValidatePolicyBlob(
                                                   {
                                                     uint8_t
                                                     r4Method =
-                                                      Input[(uint32_t)positionAfterr4PathHash];
-                                                    BOOLEAN r4MethodConstraintIsOk = r4Method <= 63U;
+                                                      Input[(uint32_t)positionAfterr4PathId];
+                                                    BOOLEAN
+                                                    r4MethodConstraintIsOk =
+                                                      r4Method <= RBACPOLICY____METHOD_MASK_ALL;
                                                     uint64_t
                                                     positionAfterr4Method1 =
                                                       EverParseCheckConstraintOk(r4MethodConstraintIsOk,
@@ -1261,15 +1266,14 @@ RbacPolicyValidatePolicyBlob(
                                                                 positionAfterr4ReqScope);
                                                               res10 = positionAfterPolicyBlob22;
                                                             }
-                                                            uint64_t
-                                                            positionAfterr5PathHash = res10;
+                                                            uint64_t positionAfterr5PathId = res10;
                                                             if
                                                             (
-                                                              EverParseIsError(positionAfterr5PathHash)
+                                                              EverParseIsError(positionAfterr5PathId)
                                                             )
                                                             {
                                                               positionAfterPolicyBlob20 =
-                                                                positionAfterr5PathHash;
+                                                                positionAfterr5PathId;
                                                             }
                                                             else
                                                             {
@@ -1278,18 +1282,18 @@ RbacPolicyValidatePolicyBlob(
                                                               hasBytes24 =
                                                                 1ULL <=
                                                                   (InputLength -
-                                                                    positionAfterr5PathHash);
+                                                                    positionAfterr5PathId);
                                                               uint64_t positionAfterr5Method;
                                                               if (hasBytes24)
                                                               {
                                                                 positionAfterr5Method =
-                                                                  positionAfterr5PathHash + 1ULL;
+                                                                  positionAfterr5PathId + 1ULL;
                                                               }
                                                               else
                                                               {
                                                                 positionAfterr5Method =
                                                                   EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-                                                                    positionAfterr5PathHash);
+                                                                    positionAfterr5PathId);
                                                               }
                                                               uint64_t positionAfterPolicyBlob23;
                                                               if
@@ -1304,10 +1308,11 @@ RbacPolicyValidatePolicyBlob(
                                                               {
                                                                 uint8_t
                                                                 r5Method =
-                                                                  Input[(uint32_t)positionAfterr5PathHash];
+                                                                  Input[(uint32_t)positionAfterr5PathId];
                                                                 BOOLEAN
                                                                 r5MethodConstraintIsOk =
-                                                                  r5Method <= 63U;
+                                                                  r5Method <=
+                                                                    RBACPOLICY____METHOD_MASK_ALL;
                                                                 uint64_t
                                                                 positionAfterr5Method1 =
                                                                   EverParseCheckConstraintOk(r5MethodConstraintIsOk,
@@ -1472,15 +1477,15 @@ RbacPolicyValidatePolicyBlob(
                                                                             positionAfterPolicyBlob26;
                                                                         }
                                                                         uint64_t
-                                                                        positionAfterr6PathHash =
+                                                                        positionAfterr6PathId =
                                                                           res12;
                                                                         if
                                                                         (
-                                                                          EverParseIsError(positionAfterr6PathHash)
+                                                                          EverParseIsError(positionAfterr6PathId)
                                                                         )
                                                                         {
                                                                           positionAfterPolicyBlob24
-                                                                          = positionAfterr6PathHash;
+                                                                          = positionAfterr6PathId;
                                                                         }
                                                                         else
                                                                         {
@@ -1489,20 +1494,20 @@ RbacPolicyValidatePolicyBlob(
                                                                           hasBytes28 =
                                                                             1ULL <=
                                                                               (InputLength -
-                                                                                positionAfterr6PathHash);
+                                                                                positionAfterr6PathId);
                                                                           uint64_t
                                                                           positionAfterr6Method;
                                                                           if (hasBytes28)
                                                                           {
                                                                             positionAfterr6Method =
-                                                                              positionAfterr6PathHash
+                                                                              positionAfterr6PathId
                                                                               + 1ULL;
                                                                           }
                                                                           else
                                                                           {
                                                                             positionAfterr6Method =
                                                                               EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-                                                                                positionAfterr6PathHash);
+                                                                                positionAfterr6PathId);
                                                                           }
                                                                           uint64_t
                                                                           positionAfterPolicyBlob27;
@@ -1518,10 +1523,11 @@ RbacPolicyValidatePolicyBlob(
                                                                           {
                                                                             uint8_t
                                                                             r6Method =
-                                                                              Input[(uint32_t)positionAfterr6PathHash];
+                                                                              Input[(uint32_t)positionAfterr6PathId];
                                                                             BOOLEAN
                                                                             r6MethodConstraintIsOk =
-                                                                              r6Method <= 63U;
+                                                                              r6Method <=
+                                                                                RBACPOLICY____METHOD_MASK_ALL;
                                                                             uint64_t
                                                                             positionAfterr6Method1 =
                                                                               EverParseCheckConstraintOk(r6MethodConstraintIsOk,
@@ -1697,16 +1703,16 @@ RbacPolicyValidatePolicyBlob(
                                                                                         positionAfterPolicyBlob30;
                                                                                     }
                                                                                     uint64_t
-                                                                                    positionAfterr7PathHash =
+                                                                                    positionAfterr7PathId =
                                                                                       res14;
                                                                                     if
                                                                                     (
-                                                                                      EverParseIsError(positionAfterr7PathHash)
+                                                                                      EverParseIsError(positionAfterr7PathId)
                                                                                     )
                                                                                     {
                                                                                       positionAfterPolicyBlob28
                                                                                       =
-                                                                                        positionAfterr7PathHash;
+                                                                                        positionAfterr7PathId;
                                                                                     }
                                                                                     else
                                                                                     {
@@ -1716,7 +1722,7 @@ RbacPolicyValidatePolicyBlob(
                                                                                         1ULL <=
                                                                                           (InputLength
                                                                                           -
-                                                                                            positionAfterr7PathHash);
+                                                                                            positionAfterr7PathId);
                                                                                       uint64_t
                                                                                       positionAfterr7Method;
                                                                                       if
@@ -1724,7 +1730,7 @@ RbacPolicyValidatePolicyBlob(
                                                                                       {
                                                                                         positionAfterr7Method
                                                                                         =
-                                                                                          positionAfterr7PathHash
+                                                                                          positionAfterr7PathId
                                                                                           + 1ULL;
                                                                                       }
                                                                                       else
@@ -1732,7 +1738,7 @@ RbacPolicyValidatePolicyBlob(
                                                                                         positionAfterr7Method
                                                                                         =
                                                                                           EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-                                                                                            positionAfterr7PathHash);
+                                                                                            positionAfterr7PathId);
                                                                                       }
                                                                                       uint64_t
                                                                                       positionAfterPolicyBlob31;
@@ -1749,11 +1755,12 @@ RbacPolicyValidatePolicyBlob(
                                                                                       {
                                                                                         uint8_t
                                                                                         r7Method =
-                                                                                          Input[(uint32_t)positionAfterr7PathHash];
+                                                                                          Input[(uint32_t)positionAfterr7PathId];
                                                                                         BOOLEAN
                                                                                         r7MethodConstraintIsOk =
                                                                                           r7Method
-                                                                                          <= 63U;
+                                                                                          <=
+                                                                                            RBACPOLICY____METHOD_MASK_ALL;
                                                                                         uint64_t
                                                                                         positionAfterr7Method1 =
                                                                                           EverParseCheckConstraintOk(r7MethodConstraintIsOk,
@@ -2204,7 +2211,7 @@ RbacPolicyValidatePolicyBlob(
                                                                                           EverParseGetValidatorErrorKind(positionAfterPolicyBlob31),
                                                                                           Ctxt,
                                                                                           Input,
-                                                                                          positionAfterr7PathHash);
+                                                                                          positionAfterr7PathId);
                                                                                         positionAfterPolicyBlob28
                                                                                         =
                                                                                           positionAfterPolicyBlob31;
@@ -2254,7 +2261,7 @@ RbacPolicyValidatePolicyBlob(
                                                                               EverParseGetValidatorErrorKind(positionAfterPolicyBlob27),
                                                                               Ctxt,
                                                                               Input,
-                                                                              positionAfterr6PathHash);
+                                                                              positionAfterr6PathId);
                                                                             positionAfterPolicyBlob24
                                                                             =
                                                                               positionAfterPolicyBlob27;
@@ -2301,7 +2308,7 @@ RbacPolicyValidatePolicyBlob(
                                                                   EverParseGetValidatorErrorKind(positionAfterPolicyBlob23),
                                                                   Ctxt,
                                                                   Input,
-                                                                  positionAfterr5PathHash);
+                                                                  positionAfterr5PathId);
                                                                 positionAfterPolicyBlob20 =
                                                                   positionAfterPolicyBlob23;
                                                               }
@@ -2344,7 +2351,7 @@ RbacPolicyValidatePolicyBlob(
                                                       EverParseGetValidatorErrorKind(positionAfterPolicyBlob19),
                                                       Ctxt,
                                                       Input,
-                                                      positionAfterr4PathHash);
+                                                      positionAfterr4PathId);
                                                     positionAfterPolicyBlob16 =
                                                       positionAfterPolicyBlob19;
                                                   }
@@ -2381,7 +2388,7 @@ RbacPolicyValidatePolicyBlob(
                                           EverParseGetValidatorErrorKind(positionAfterPolicyBlob15),
                                           Ctxt,
                                           Input,
-                                          positionAfterr3PathHash);
+                                          positionAfterr3PathId);
                                         positionAfterPolicyBlob12 = positionAfterPolicyBlob15;
                                       }
                                     }
@@ -2417,7 +2424,7 @@ RbacPolicyValidatePolicyBlob(
                               EverParseGetValidatorErrorKind(positionAfterPolicyBlob11),
                               Ctxt,
                               Input,
-                              positionAfterr2PathHash);
+                              positionAfterr2PathId);
                             positionAfterPolicyBlob8 = positionAfterPolicyBlob11;
                           }
                         }
@@ -2453,7 +2460,7 @@ RbacPolicyValidatePolicyBlob(
                   EverParseGetValidatorErrorKind(positionAfterPolicyBlob7),
                   Ctxt,
                   Input,
-                  positionAfterr1PathHash);
+                  positionAfterr1PathId);
                 positionAfterPolicyBlob4 = positionAfterPolicyBlob7;
               }
             }
@@ -2487,7 +2494,7 @@ RbacPolicyValidatePolicyBlob(
     EverParseGetValidatorErrorKind(positionAfterPolicyBlob3),
     Ctxt,
     Input,
-    positionAfterr0PathHash);
+    positionAfterr0PathId);
   return positionAfterPolicyBlob3;
 }
 
@@ -2625,10 +2632,10 @@ RbacPolicyValidateAccessRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterauthScope);
   }
-  uint64_t positionAfterr0PathHash;
+  uint64_t positionAfterr0PathId;
   if (EverParseIsSuccess(positionAfterAccessRequest2))
   {
-    positionAfterr0PathHash = positionAfterAccessRequest2;
+    positionAfterr0PathId = positionAfterAccessRequest2;
   }
   else
   {
@@ -2639,25 +2646,25 @@ RbacPolicyValidateAccessRequest(
       Ctxt,
       Input,
       positionAfterauthScope);
-    positionAfterr0PathHash = positionAfterAccessRequest2;
+    positionAfterr0PathId = positionAfterAccessRequest2;
   }
-  if (EverParseIsError(positionAfterr0PathHash))
+  if (EverParseIsError(positionAfterr0PathId))
   {
-    return positionAfterr0PathHash;
+    return positionAfterr0PathId;
   }
-  uint32_t r0PathHash = Load32Le(Input + (uint32_t)positionAfterauthScope);
+  uint32_t r0PathId = Load32Le(Input + (uint32_t)positionAfterauthScope);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes4 = 1ULL <= (InputLength - positionAfterr0PathHash);
+  BOOLEAN hasBytes4 = 1ULL <= (InputLength - positionAfterr0PathId);
   uint64_t positionAfterAccessRequest3;
   if (hasBytes4)
   {
-    positionAfterAccessRequest3 = positionAfterr0PathHash + 1ULL;
+    positionAfterAccessRequest3 = positionAfterr0PathId + 1ULL;
   }
   else
   {
     positionAfterAccessRequest3 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterr0PathHash);
+        positionAfterr0PathId);
   }
   uint64_t positionAfterr0Method;
   if (EverParseIsSuccess(positionAfterAccessRequest3))
@@ -2672,14 +2679,14 @@ RbacPolicyValidateAccessRequest(
       EverParseGetValidatorErrorKind(positionAfterAccessRequest3),
       Ctxt,
       Input,
-      positionAfterr0PathHash);
+      positionAfterr0PathId);
     positionAfterr0Method = positionAfterAccessRequest3;
   }
   if (EverParseIsError(positionAfterr0Method))
   {
     return positionAfterr0Method;
   }
-  uint8_t r0Method = Input[(uint32_t)positionAfterr0PathHash];
+  uint8_t r0Method = Input[(uint32_t)positionAfterr0PathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes5 = 1ULL <= (InputLength - positionAfterr0Method);
   uint64_t positionAfterAccessRequest4;
@@ -2762,10 +2769,10 @@ RbacPolicyValidateAccessRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterr0ReqScope);
   }
-  uint64_t positionAfterr1PathHash;
+  uint64_t positionAfterr1PathId;
   if (EverParseIsSuccess(positionAfterAccessRequest6))
   {
-    positionAfterr1PathHash = positionAfterAccessRequest6;
+    positionAfterr1PathId = positionAfterAccessRequest6;
   }
   else
   {
@@ -2776,25 +2783,25 @@ RbacPolicyValidateAccessRequest(
       Ctxt,
       Input,
       positionAfterr0ReqScope);
-    positionAfterr1PathHash = positionAfterAccessRequest6;
+    positionAfterr1PathId = positionAfterAccessRequest6;
   }
-  if (EverParseIsError(positionAfterr1PathHash))
+  if (EverParseIsError(positionAfterr1PathId))
   {
-    return positionAfterr1PathHash;
+    return positionAfterr1PathId;
   }
-  uint32_t r1PathHash = Load32Le(Input + (uint32_t)positionAfterr0ReqScope);
+  uint32_t r1PathId = Load32Le(Input + (uint32_t)positionAfterr0ReqScope);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes8 = 1ULL <= (InputLength - positionAfterr1PathHash);
+  BOOLEAN hasBytes8 = 1ULL <= (InputLength - positionAfterr1PathId);
   uint64_t positionAfterAccessRequest7;
   if (hasBytes8)
   {
-    positionAfterAccessRequest7 = positionAfterr1PathHash + 1ULL;
+    positionAfterAccessRequest7 = positionAfterr1PathId + 1ULL;
   }
   else
   {
     positionAfterAccessRequest7 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterr1PathHash);
+        positionAfterr1PathId);
   }
   uint64_t positionAfterr1Method;
   if (EverParseIsSuccess(positionAfterAccessRequest7))
@@ -2809,14 +2816,14 @@ RbacPolicyValidateAccessRequest(
       EverParseGetValidatorErrorKind(positionAfterAccessRequest7),
       Ctxt,
       Input,
-      positionAfterr1PathHash);
+      positionAfterr1PathId);
     positionAfterr1Method = positionAfterAccessRequest7;
   }
   if (EverParseIsError(positionAfterr1Method))
   {
     return positionAfterr1Method;
   }
-  uint8_t r1Method = Input[(uint32_t)positionAfterr1PathHash];
+  uint8_t r1Method = Input[(uint32_t)positionAfterr1PathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes9 = 1ULL <= (InputLength - positionAfterr1Method);
   uint64_t positionAfterAccessRequest8;
@@ -2899,10 +2906,10 @@ RbacPolicyValidateAccessRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterr1ReqScope);
   }
-  uint64_t positionAfterr2PathHash;
+  uint64_t positionAfterr2PathId;
   if (EverParseIsSuccess(positionAfterAccessRequest10))
   {
-    positionAfterr2PathHash = positionAfterAccessRequest10;
+    positionAfterr2PathId = positionAfterAccessRequest10;
   }
   else
   {
@@ -2913,25 +2920,25 @@ RbacPolicyValidateAccessRequest(
       Ctxt,
       Input,
       positionAfterr1ReqScope);
-    positionAfterr2PathHash = positionAfterAccessRequest10;
+    positionAfterr2PathId = positionAfterAccessRequest10;
   }
-  if (EverParseIsError(positionAfterr2PathHash))
+  if (EverParseIsError(positionAfterr2PathId))
   {
-    return positionAfterr2PathHash;
+    return positionAfterr2PathId;
   }
-  uint32_t r2PathHash = Load32Le(Input + (uint32_t)positionAfterr1ReqScope);
+  uint32_t r2PathId = Load32Le(Input + (uint32_t)positionAfterr1ReqScope);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes12 = 1ULL <= (InputLength - positionAfterr2PathHash);
+  BOOLEAN hasBytes12 = 1ULL <= (InputLength - positionAfterr2PathId);
   uint64_t positionAfterAccessRequest11;
   if (hasBytes12)
   {
-    positionAfterAccessRequest11 = positionAfterr2PathHash + 1ULL;
+    positionAfterAccessRequest11 = positionAfterr2PathId + 1ULL;
   }
   else
   {
     positionAfterAccessRequest11 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterr2PathHash);
+        positionAfterr2PathId);
   }
   uint64_t positionAfterr2Method;
   if (EverParseIsSuccess(positionAfterAccessRequest11))
@@ -2946,14 +2953,14 @@ RbacPolicyValidateAccessRequest(
       EverParseGetValidatorErrorKind(positionAfterAccessRequest11),
       Ctxt,
       Input,
-      positionAfterr2PathHash);
+      positionAfterr2PathId);
     positionAfterr2Method = positionAfterAccessRequest11;
   }
   if (EverParseIsError(positionAfterr2Method))
   {
     return positionAfterr2Method;
   }
-  uint8_t r2Method = Input[(uint32_t)positionAfterr2PathHash];
+  uint8_t r2Method = Input[(uint32_t)positionAfterr2PathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes13 = 1ULL <= (InputLength - positionAfterr2Method);
   uint64_t positionAfterAccessRequest12;
@@ -3036,10 +3043,10 @@ RbacPolicyValidateAccessRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterr2ReqScope);
   }
-  uint64_t positionAfterr3PathHash;
+  uint64_t positionAfterr3PathId;
   if (EverParseIsSuccess(positionAfterAccessRequest14))
   {
-    positionAfterr3PathHash = positionAfterAccessRequest14;
+    positionAfterr3PathId = positionAfterAccessRequest14;
   }
   else
   {
@@ -3050,25 +3057,25 @@ RbacPolicyValidateAccessRequest(
       Ctxt,
       Input,
       positionAfterr2ReqScope);
-    positionAfterr3PathHash = positionAfterAccessRequest14;
+    positionAfterr3PathId = positionAfterAccessRequest14;
   }
-  if (EverParseIsError(positionAfterr3PathHash))
+  if (EverParseIsError(positionAfterr3PathId))
   {
-    return positionAfterr3PathHash;
+    return positionAfterr3PathId;
   }
-  uint32_t r3PathHash = Load32Le(Input + (uint32_t)positionAfterr2ReqScope);
+  uint32_t r3PathId = Load32Le(Input + (uint32_t)positionAfterr2ReqScope);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes16 = 1ULL <= (InputLength - positionAfterr3PathHash);
+  BOOLEAN hasBytes16 = 1ULL <= (InputLength - positionAfterr3PathId);
   uint64_t positionAfterAccessRequest15;
   if (hasBytes16)
   {
-    positionAfterAccessRequest15 = positionAfterr3PathHash + 1ULL;
+    positionAfterAccessRequest15 = positionAfterr3PathId + 1ULL;
   }
   else
   {
     positionAfterAccessRequest15 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterr3PathHash);
+        positionAfterr3PathId);
   }
   uint64_t positionAfterr3Method;
   if (EverParseIsSuccess(positionAfterAccessRequest15))
@@ -3083,14 +3090,14 @@ RbacPolicyValidateAccessRequest(
       EverParseGetValidatorErrorKind(positionAfterAccessRequest15),
       Ctxt,
       Input,
-      positionAfterr3PathHash);
+      positionAfterr3PathId);
     positionAfterr3Method = positionAfterAccessRequest15;
   }
   if (EverParseIsError(positionAfterr3Method))
   {
     return positionAfterr3Method;
   }
-  uint8_t r3Method = Input[(uint32_t)positionAfterr3PathHash];
+  uint8_t r3Method = Input[(uint32_t)positionAfterr3PathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes17 = 1ULL <= (InputLength - positionAfterr3Method);
   uint64_t positionAfterAccessRequest16;
@@ -3173,10 +3180,10 @@ RbacPolicyValidateAccessRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterr3ReqScope);
   }
-  uint64_t positionAfterr4PathHash;
+  uint64_t positionAfterr4PathId;
   if (EverParseIsSuccess(positionAfterAccessRequest18))
   {
-    positionAfterr4PathHash = positionAfterAccessRequest18;
+    positionAfterr4PathId = positionAfterAccessRequest18;
   }
   else
   {
@@ -3187,25 +3194,25 @@ RbacPolicyValidateAccessRequest(
       Ctxt,
       Input,
       positionAfterr3ReqScope);
-    positionAfterr4PathHash = positionAfterAccessRequest18;
+    positionAfterr4PathId = positionAfterAccessRequest18;
   }
-  if (EverParseIsError(positionAfterr4PathHash))
+  if (EverParseIsError(positionAfterr4PathId))
   {
-    return positionAfterr4PathHash;
+    return positionAfterr4PathId;
   }
-  uint32_t r4PathHash = Load32Le(Input + (uint32_t)positionAfterr3ReqScope);
+  uint32_t r4PathId = Load32Le(Input + (uint32_t)positionAfterr3ReqScope);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes20 = 1ULL <= (InputLength - positionAfterr4PathHash);
+  BOOLEAN hasBytes20 = 1ULL <= (InputLength - positionAfterr4PathId);
   uint64_t positionAfterAccessRequest19;
   if (hasBytes20)
   {
-    positionAfterAccessRequest19 = positionAfterr4PathHash + 1ULL;
+    positionAfterAccessRequest19 = positionAfterr4PathId + 1ULL;
   }
   else
   {
     positionAfterAccessRequest19 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterr4PathHash);
+        positionAfterr4PathId);
   }
   uint64_t positionAfterr4Method;
   if (EverParseIsSuccess(positionAfterAccessRequest19))
@@ -3220,14 +3227,14 @@ RbacPolicyValidateAccessRequest(
       EverParseGetValidatorErrorKind(positionAfterAccessRequest19),
       Ctxt,
       Input,
-      positionAfterr4PathHash);
+      positionAfterr4PathId);
     positionAfterr4Method = positionAfterAccessRequest19;
   }
   if (EverParseIsError(positionAfterr4Method))
   {
     return positionAfterr4Method;
   }
-  uint8_t r4Method = Input[(uint32_t)positionAfterr4PathHash];
+  uint8_t r4Method = Input[(uint32_t)positionAfterr4PathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes21 = 1ULL <= (InputLength - positionAfterr4Method);
   uint64_t positionAfterAccessRequest20;
@@ -3310,10 +3317,10 @@ RbacPolicyValidateAccessRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterr4ReqScope);
   }
-  uint64_t positionAfterr5PathHash;
+  uint64_t positionAfterr5PathId;
   if (EverParseIsSuccess(positionAfterAccessRequest22))
   {
-    positionAfterr5PathHash = positionAfterAccessRequest22;
+    positionAfterr5PathId = positionAfterAccessRequest22;
   }
   else
   {
@@ -3324,25 +3331,25 @@ RbacPolicyValidateAccessRequest(
       Ctxt,
       Input,
       positionAfterr4ReqScope);
-    positionAfterr5PathHash = positionAfterAccessRequest22;
+    positionAfterr5PathId = positionAfterAccessRequest22;
   }
-  if (EverParseIsError(positionAfterr5PathHash))
+  if (EverParseIsError(positionAfterr5PathId))
   {
-    return positionAfterr5PathHash;
+    return positionAfterr5PathId;
   }
-  uint32_t r5PathHash = Load32Le(Input + (uint32_t)positionAfterr4ReqScope);
+  uint32_t r5PathId = Load32Le(Input + (uint32_t)positionAfterr4ReqScope);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes24 = 1ULL <= (InputLength - positionAfterr5PathHash);
+  BOOLEAN hasBytes24 = 1ULL <= (InputLength - positionAfterr5PathId);
   uint64_t positionAfterAccessRequest23;
   if (hasBytes24)
   {
-    positionAfterAccessRequest23 = positionAfterr5PathHash + 1ULL;
+    positionAfterAccessRequest23 = positionAfterr5PathId + 1ULL;
   }
   else
   {
     positionAfterAccessRequest23 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterr5PathHash);
+        positionAfterr5PathId);
   }
   uint64_t positionAfterr5Method;
   if (EverParseIsSuccess(positionAfterAccessRequest23))
@@ -3357,14 +3364,14 @@ RbacPolicyValidateAccessRequest(
       EverParseGetValidatorErrorKind(positionAfterAccessRequest23),
       Ctxt,
       Input,
-      positionAfterr5PathHash);
+      positionAfterr5PathId);
     positionAfterr5Method = positionAfterAccessRequest23;
   }
   if (EverParseIsError(positionAfterr5Method))
   {
     return positionAfterr5Method;
   }
-  uint8_t r5Method = Input[(uint32_t)positionAfterr5PathHash];
+  uint8_t r5Method = Input[(uint32_t)positionAfterr5PathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes25 = 1ULL <= (InputLength - positionAfterr5Method);
   uint64_t positionAfterAccessRequest24;
@@ -3447,10 +3454,10 @@ RbacPolicyValidateAccessRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterr5ReqScope);
   }
-  uint64_t positionAfterr6PathHash;
+  uint64_t positionAfterr6PathId;
   if (EverParseIsSuccess(positionAfterAccessRequest26))
   {
-    positionAfterr6PathHash = positionAfterAccessRequest26;
+    positionAfterr6PathId = positionAfterAccessRequest26;
   }
   else
   {
@@ -3461,25 +3468,25 @@ RbacPolicyValidateAccessRequest(
       Ctxt,
       Input,
       positionAfterr5ReqScope);
-    positionAfterr6PathHash = positionAfterAccessRequest26;
+    positionAfterr6PathId = positionAfterAccessRequest26;
   }
-  if (EverParseIsError(positionAfterr6PathHash))
+  if (EverParseIsError(positionAfterr6PathId))
   {
-    return positionAfterr6PathHash;
+    return positionAfterr6PathId;
   }
-  uint32_t r6PathHash = Load32Le(Input + (uint32_t)positionAfterr5ReqScope);
+  uint32_t r6PathId = Load32Le(Input + (uint32_t)positionAfterr5ReqScope);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes28 = 1ULL <= (InputLength - positionAfterr6PathHash);
+  BOOLEAN hasBytes28 = 1ULL <= (InputLength - positionAfterr6PathId);
   uint64_t positionAfterAccessRequest27;
   if (hasBytes28)
   {
-    positionAfterAccessRequest27 = positionAfterr6PathHash + 1ULL;
+    positionAfterAccessRequest27 = positionAfterr6PathId + 1ULL;
   }
   else
   {
     positionAfterAccessRequest27 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterr6PathHash);
+        positionAfterr6PathId);
   }
   uint64_t positionAfterr6Method;
   if (EverParseIsSuccess(positionAfterAccessRequest27))
@@ -3494,14 +3501,14 @@ RbacPolicyValidateAccessRequest(
       EverParseGetValidatorErrorKind(positionAfterAccessRequest27),
       Ctxt,
       Input,
-      positionAfterr6PathHash);
+      positionAfterr6PathId);
     positionAfterr6Method = positionAfterAccessRequest27;
   }
   if (EverParseIsError(positionAfterr6Method))
   {
     return positionAfterr6Method;
   }
-  uint8_t r6Method = Input[(uint32_t)positionAfterr6PathHash];
+  uint8_t r6Method = Input[(uint32_t)positionAfterr6PathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes29 = 1ULL <= (InputLength - positionAfterr6Method);
   uint64_t positionAfterAccessRequest28;
@@ -3584,10 +3591,10 @@ RbacPolicyValidateAccessRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterr6ReqScope);
   }
-  uint64_t positionAfterr7PathHash;
+  uint64_t positionAfterr7PathId;
   if (EverParseIsSuccess(positionAfterAccessRequest30))
   {
-    positionAfterr7PathHash = positionAfterAccessRequest30;
+    positionAfterr7PathId = positionAfterAccessRequest30;
   }
   else
   {
@@ -3598,25 +3605,25 @@ RbacPolicyValidateAccessRequest(
       Ctxt,
       Input,
       positionAfterr6ReqScope);
-    positionAfterr7PathHash = positionAfterAccessRequest30;
+    positionAfterr7PathId = positionAfterAccessRequest30;
   }
-  if (EverParseIsError(positionAfterr7PathHash))
+  if (EverParseIsError(positionAfterr7PathId))
   {
-    return positionAfterr7PathHash;
+    return positionAfterr7PathId;
   }
-  uint32_t r7PathHash = Load32Le(Input + (uint32_t)positionAfterr6ReqScope);
+  uint32_t r7PathId = Load32Le(Input + (uint32_t)positionAfterr6ReqScope);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes32 = 1ULL <= (InputLength - positionAfterr7PathHash);
+  BOOLEAN hasBytes32 = 1ULL <= (InputLength - positionAfterr7PathId);
   uint64_t positionAfterAccessRequest31;
   if (hasBytes32)
   {
-    positionAfterAccessRequest31 = positionAfterr7PathHash + 1ULL;
+    positionAfterAccessRequest31 = positionAfterr7PathId + 1ULL;
   }
   else
   {
     positionAfterAccessRequest31 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterr7PathHash);
+        positionAfterr7PathId);
   }
   uint64_t positionAfterr7Method;
   if (EverParseIsSuccess(positionAfterAccessRequest31))
@@ -3631,14 +3638,14 @@ RbacPolicyValidateAccessRequest(
       EverParseGetValidatorErrorKind(positionAfterAccessRequest31),
       Ctxt,
       Input,
-      positionAfterr7PathHash);
+      positionAfterr7PathId);
     positionAfterr7Method = positionAfterAccessRequest31;
   }
   if (EverParseIsError(positionAfterr7Method))
   {
     return positionAfterr7Method;
   }
-  uint8_t r7Method = Input[(uint32_t)positionAfterr7PathHash];
+  uint8_t r7Method = Input[(uint32_t)positionAfterr7PathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes33 = 1ULL <= (InputLength - positionAfterr7Method);
   uint64_t positionAfterAccessRequest32;
@@ -3721,10 +3728,10 @@ RbacPolicyValidateAccessRequest(
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
         positionAfterr7ReqScope);
   }
-  uint64_t positionAfterreqPathHash;
+  uint64_t positionAfterreqPathId;
   if (EverParseIsSuccess(positionAfterAccessRequest34))
   {
-    positionAfterreqPathHash = positionAfterAccessRequest34;
+    positionAfterreqPathId = positionAfterAccessRequest34;
   }
   else
   {
@@ -3735,25 +3742,25 @@ RbacPolicyValidateAccessRequest(
       Ctxt,
       Input,
       positionAfterr7ReqScope);
-    positionAfterreqPathHash = positionAfterAccessRequest34;
+    positionAfterreqPathId = positionAfterAccessRequest34;
   }
-  if (EverParseIsError(positionAfterreqPathHash))
+  if (EverParseIsError(positionAfterreqPathId))
   {
-    return positionAfterreqPathHash;
+    return positionAfterreqPathId;
   }
-  uint32_t reqPathHash = Load32Le(Input + (uint32_t)positionAfterr7ReqScope);
+  uint32_t reqPathId = Load32Le(Input + (uint32_t)positionAfterr7ReqScope);
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
-  BOOLEAN hasBytes36 = 1ULL <= (InputLength - positionAfterreqPathHash);
+  BOOLEAN hasBytes36 = 1ULL <= (InputLength - positionAfterreqPathId);
   uint64_t positionAfterAccessRequest35;
   if (hasBytes36)
   {
-    positionAfterAccessRequest35 = positionAfterreqPathHash + 1ULL;
+    positionAfterAccessRequest35 = positionAfterreqPathId + 1ULL;
   }
   else
   {
     positionAfterAccessRequest35 =
       EverParseSetValidatorErrorPos(EVERPARSE_VALIDATOR_ERROR_NOT_ENOUGH_DATA,
-        positionAfterreqPathHash);
+        positionAfterreqPathId);
   }
   uint64_t positionAfterreqMethod;
   if (EverParseIsSuccess(positionAfterAccessRequest35))
@@ -3768,14 +3775,14 @@ RbacPolicyValidateAccessRequest(
       EverParseGetValidatorErrorKind(positionAfterAccessRequest35),
       Ctxt,
       Input,
-      positionAfterreqPathHash);
+      positionAfterreqPathId);
     positionAfterreqMethod = positionAfterAccessRequest35;
   }
   if (EverParseIsError(positionAfterreqMethod))
   {
     return positionAfterreqMethod;
   }
-  uint8_t reqMethod = Input[(uint32_t)positionAfterreqPathHash];
+  uint8_t reqMethod = Input[(uint32_t)positionAfterreqPathId];
   /* Checking that we have enough space for a UINT8, i.e., 1 byte */
   BOOLEAN hasBytes37 = 1ULL <= (InputLength - positionAfterreqMethod);
   uint64_t positionAfterRateOk;
@@ -3834,29 +3841,37 @@ RbacPolicyValidateAccessRequest(
         /* start: checking constraint */
         BOOLEAN
         accessOk_refinementConstraintIsOk =
-          (r0PathHash == reqPathHash && (r0Method & reqMethod) == reqMethod && authState >= r0MinRole &&
-            ((uint32_t)authScope & (uint32_t)r0ReqScope) == r0ReqScope)
+          (r0PathId == reqPathId && ((uint32_t)r0Method & (uint32_t)reqMethod) == reqMethod &&
+            authState >= r0MinRole
+          && ((uint32_t)authScope & (uint32_t)r0ReqScope) == r0ReqScope)
           ||
-            (r1PathHash == reqPathHash && (r1Method & reqMethod) == reqMethod && authState >= r1MinRole &&
-              ((uint32_t)authScope & (uint32_t)r1ReqScope) == r1ReqScope)
+            (r1PathId == reqPathId && ((uint32_t)r1Method & (uint32_t)reqMethod) == reqMethod &&
+              authState >= r1MinRole
+            && ((uint32_t)authScope & (uint32_t)r1ReqScope) == r1ReqScope)
           ||
-            (r2PathHash == reqPathHash && (r2Method & reqMethod) == reqMethod && authState >= r2MinRole &&
-              ((uint32_t)authScope & (uint32_t)r2ReqScope) == r2ReqScope)
+            (r2PathId == reqPathId && ((uint32_t)r2Method & (uint32_t)reqMethod) == reqMethod &&
+              authState >= r2MinRole
+            && ((uint32_t)authScope & (uint32_t)r2ReqScope) == r2ReqScope)
           ||
-            (r3PathHash == reqPathHash && (r3Method & reqMethod) == reqMethod && authState >= r3MinRole &&
-              ((uint32_t)authScope & (uint32_t)r3ReqScope) == r3ReqScope)
+            (r3PathId == reqPathId && ((uint32_t)r3Method & (uint32_t)reqMethod) == reqMethod &&
+              authState >= r3MinRole
+            && ((uint32_t)authScope & (uint32_t)r3ReqScope) == r3ReqScope)
           ||
-            (r4PathHash == reqPathHash && (r4Method & reqMethod) == reqMethod && authState >= r4MinRole &&
-              ((uint32_t)authScope & (uint32_t)r4ReqScope) == r4ReqScope)
+            (r4PathId == reqPathId && ((uint32_t)r4Method & (uint32_t)reqMethod) == reqMethod &&
+              authState >= r4MinRole
+            && ((uint32_t)authScope & (uint32_t)r4ReqScope) == r4ReqScope)
           ||
-            (r5PathHash == reqPathHash && (r5Method & reqMethod) == reqMethod && authState >= r5MinRole &&
-              ((uint32_t)authScope & (uint32_t)r5ReqScope) == r5ReqScope)
+            (r5PathId == reqPathId && ((uint32_t)r5Method & (uint32_t)reqMethod) == reqMethod &&
+              authState >= r5MinRole
+            && ((uint32_t)authScope & (uint32_t)r5ReqScope) == r5ReqScope)
           ||
-            (r6PathHash == reqPathHash && (r6Method & reqMethod) == reqMethod && authState >= r6MinRole &&
-              ((uint32_t)authScope & (uint32_t)r6ReqScope) == r6ReqScope)
+            (r6PathId == reqPathId && ((uint32_t)r6Method & (uint32_t)reqMethod) == reqMethod &&
+              authState >= r6MinRole
+            && ((uint32_t)authScope & (uint32_t)r6ReqScope) == r6ReqScope)
           ||
-            (r7PathHash == reqPathHash && (r7Method & reqMethod) == reqMethod && authState >= r7MinRole &&
-              ((uint32_t)authScope & (uint32_t)r7ReqScope) == r7ReqScope);
+            (r7PathId == reqPathId && ((uint32_t)r7Method & (uint32_t)reqMethod) == reqMethod &&
+              authState >= r7MinRole
+            && ((uint32_t)authScope & (uint32_t)r7ReqScope) == r7ReqScope);
         /* end: checking constraint */
         positionAfterAccessRequest37 =
           EverParseCheckConstraintOk(accessOk_refinementConstraintIsOk,
