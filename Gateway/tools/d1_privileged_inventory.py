@@ -19,6 +19,7 @@ TASKS = {  # entry: (source site, privilege note)
     'watchdog_task': ('Gateway/Platform/gateway_platform.c:310', 'privileged'),
     'run_core': ('Gateway/Platform/gateway_platform.c:319', 'privileged; drops privilege before serving HTTP (NET)'),
     'run_diagnostics': ('Gateway/Platform/gateway_platform.c:339', 'privileged'),
+    'run_target_reset': ('Gateway/Platform/gateway_target_reset.c:97', 'privileged USART3 RX / TGT_NRST'),
     'cleanup_task': ('Gateway/Network/d1_kernel_cleanup.c:93', 'privileged kernel-object worker'),
     'tcpip_thread': ('Gateway/Network/sys_arch.c:553', 'privileged; drops privilege after network setup (NET)'),
     'input_thread': ('Gateway/Network/ethernetif.c:401', 'privileged SHIM RX'),

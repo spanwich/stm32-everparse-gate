@@ -73,6 +73,26 @@ heap is separate from libc allocation and any future lwIP/TLS budgets. The main
 stack linker reservation is 4096 bytes, separate from task stacks. Neither that
 reservation nor task high-water readings prove worst-case interrupt stack bounds.
 
+## External target reset (PA0)
+
+`Platform/gateway_target_reset.c` lets the serial console reset a second board.
+Wire J21 pin 9 (NRST) to PA0 (`TGT_NRST`) and J21 pin 10 to Nucleo GND; both
+boards are 3.3 V. PA0 is open-drain with no pull and its latch is set before the
+pin is configured, so it idles released and can never drive the line high.
+
+USART3 RX is interrupt-driven (`USART3_IRQn`, priority 5) into a 32-byte queue
+read by the privileged low-priority `gateway_treset` task. Commands are whole
+lines terminated by CR or LF, case-sensitive, at most 16 characters:
+
+- `RESET` pulls PA0 low for 100 ms, then releases it and replies `[TRESET] pulse 100ms`.
+  Pulses are at least 500 ms apart (`[TRESET] busy`); bytes received during a
+  pulse are discarded.
+- `STATUS` replies `[TRESET] line=released|low rx_drops=N`.
+- Anything else replies `[TRESET] unknown command`.
+
+From the host: `Gateway/tools/target_reset.py [RESET|STATUS]`. It opens the VCP
+read/write, so stop any other serial reader first.
+
 ## Build and repeat tests
 
 From the project root:

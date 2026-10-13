@@ -341,6 +341,8 @@ void gateway_platform_start(void)
         (UBaseType_t)(GATEWAY_PAPER_CONTROL ? osPriorityAboveNormal : osPriorityLow) |
         portPRIVILEGE_BIT, diagnostic_stack, &diagnostic_tcb);
     if (!gateway_task || !diagnostic_task) gateway_panic(GATEWAY_FAULT_STARTUP);
+    extern void gateway_target_reset_start(void);
+    gateway_target_reset_start();
 #if GATEWAY_PAPER_CONTROL
     extern void gateway_paper_control_start(void);
     gateway_paper_control_start();
