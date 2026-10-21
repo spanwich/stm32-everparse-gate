@@ -34,6 +34,28 @@
 /* Timing-distribution extension of the GATE_N32 variant (2026-10-21): 10,000
  * samples per case, min/mean/p50/p99/max, constructed worst-case path,
  * interrupts enabled and masked, update-gate commit. Requires GATE_N32 = 1. */
+/* A1 (2026-10-22): word-at-a-time memcpy/memset replacing newlib-nano's byte
+ * loops (Gateway/Platform/gateway_memops.c). */
+#ifndef GATEWAY_FAST_MEMOPS
+#define GATEWAY_FAST_MEMOPS 0
+#endif
+/* A2 (2026-10-22): FreeRTOS queue.c, the memops, the gate path and the update
+ * gate execute from ITCM RAM (linker script and startup swapped in at build
+ * time; unprivileged tasks get an ITCM read-only/execute region). Requires
+ * GATEWAY_FAST_MEMOPS = 1. */
+#ifndef GATEWAY_ITCM
+#define GATEWAY_ITCM 0
+#endif
+/* MPU region granting the shared ITCM window (0x2000-0x3FFF: memops, gate,
+ * update gate) read-only/execute to every task that runs unprivileged, including
+ * those that drop privilege at runtime (platform network task, lwIP tcpip).
+ * 0x0-0x7FF stays unmapped (null guard); 0x800-0x1FFF (queue.c) is
+ * privileged-only. Expands to an empty slot when GATEWAY_ITCM = 0. */
+#if GATEWAY_ITCM
+#define GATEWAY_ITCM_SHARED_REGION {(void *)0x00002000UL,8U*1024U,portMPU_REGION_READ_ONLY}
+#else
+#define GATEWAY_ITCM_SHARED_REGION {NULL,0,0}
+#endif
 #ifndef GATEWAY_PAPER_TIMING_DIST
 #define GATEWAY_PAPER_TIMING_DIST 0
 #endif

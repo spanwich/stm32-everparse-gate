@@ -327,7 +327,7 @@ void gateway_platform_start(void)
                 /* The Ethernet input path copies DMA frames into lwIP pool
                  * buffers before NET sees them. Deny the whole DMA bank. */
                 portMPU_REGION_CACHEABLE_BUFFERABLE|(0xE0UL<<8)},
-            {NULL,0,0},
+            GATEWAY_ITCM_SHARED_REGION, /* drops privilege at runtime */
             {(void *)0x20020000UL,16U*1024U,
                 portMPU_REGION_PRIVILEGED_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
                 portMPU_REGION_CACHEABLE_BUFFERABLE}},

@@ -417,7 +417,7 @@ err_t gateway_ethernet_init(struct netif *n)
             {(void *)0x20020000UL,16U*1024U,
                 portMPU_REGION_PRIVILEGED_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
                 portMPU_REGION_CACHEABLE_BUFFERABLE},
-            {NULL,0,0}},.pxTaskBuffer=&net_input_tcb};
+            GATEWAY_ITCM_SHARED_REGION},.pxTaskBuffer=&net_input_tcb};
     if(xTaskCreateRestrictedStatic(&net_params,&net_input_task)!=pdPASS) net_input_task=NULL;
     if(!net_input_task) return ERR_MEM;
     vGrantAccessToQueue(net_input_task,shim_ready_frames);

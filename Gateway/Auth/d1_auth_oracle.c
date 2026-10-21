@@ -145,7 +145,7 @@ void gateway_d1_auth_start(void)
         .uxPriority=(UBaseType_t)osPriorityHigh4,.puxStackBuffer=auth_stack,
         .xRegions={{(void *)0x20060000UL,16U*1024U,
             portMPU_REGION_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
-            portMPU_REGION_CACHEABLE_BUFFERABLE},{NULL,0,0},{NULL,0,0}},
+            portMPU_REGION_CACHEABLE_BUFFERABLE},GATEWAY_ITCM_SHARED_REGION,{NULL,0,0}},
         .pxTaskBuffer=&auth_tcb};
     TaskHandle_t task=NULL;
     if(xTaskCreateRestrictedStatic(&parameters,&task)!=pdPASS || !task)

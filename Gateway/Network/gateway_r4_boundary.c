@@ -289,9 +289,16 @@ void gateway_r4_boundary_start(void)
             {(void *)0x20000000UL,128U*1024U,
                 portMPU_REGION_PRIVILEGED_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
                 portMPU_REGION_CACHEABLE_BUFFERABLE},
+#if GATEWAY_ITCM
+            /* RAM_APP (0x20020000, RW) is already granted by region 0 and not
+             * overridden by region 1 (which ends at 0x2001FFFF); the slot is
+             * reused for the shared ITCM code in A2. */
+            GATEWAY_ITCM_SHARED_REGION},
+#else
             {(void *)0x20020000UL,16U*1024U,
                 portMPU_REGION_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
                 portMPU_REGION_CACHEABLE_BUFFERABLE}},
+#endif
         .pxTaskBuffer=&app_tcb};
     TaskHandle_t app=NULL;
     if(xTaskCreateRestrictedStatic(&app_params,&app)!=pdPASS) app=NULL;
@@ -302,7 +309,7 @@ void gateway_r4_boundary_start(void)
         .puxStackBuffer=gate_stack,
         .xRegions={{(void *)0x20050000UL,64U*1024U,
             portMPU_REGION_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
-            portMPU_REGION_CACHEABLE_BUFFERABLE},{NULL,0,0},{NULL,0,0}},
+            portMPU_REGION_CACHEABLE_BUFFERABLE},GATEWAY_ITCM_SHARED_REGION,{NULL,0,0}},
         .pxTaskBuffer=&gate_tcb};
     TaskHandle_t gate=NULL;
     if(xTaskCreateRestrictedStatic(&gate_params,&gate)!=pdPASS) gate=NULL;

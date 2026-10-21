@@ -561,7 +561,7 @@ sys_thread_t sys_thread_new(const char *name, lwip_thread_fn thread , void *arg,
       {(void *)0x20020000UL,16U*1024U,
        portMPU_REGION_PRIVILEGED_READ_WRITE|portMPU_REGION_EXECUTE_NEVER|
        portMPU_REGION_CACHEABLE_BUFFERABLE},
-      {NULL,0,0}},.pxTaskBuffer=&tcpip_tcb};
+      GATEWAY_ITCM_SHARED_REGION /* tcpip drops privilege at runtime */},.pxTaskBuffer=&tcpip_tcb};
   if (stacksize != TCPIP_THREAD_STACKSIZE ||
       xTaskCreateRestrictedStatic(&parameters,&task) != pdPASS)
       gateway_panic(GATEWAY_FAULT_ALLOC);
