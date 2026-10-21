@@ -1,63 +1,74 @@
-/* Word-at-a-time memcpy/memset (A1, 2026-10-22), behind GATEWAY_FAST_MEMOPS.
+/* memcpy/memset built on Low*-verified loops (A1v, 2026-10-22), behind
+ * GATEWAY_FAST_MEMOPS. Replaces newlib-nano's byte loops, which FreeRTOS runs
+ * inside the kernel critical section for every ~1.5 KB queue copy.
  *
- * newlib-nano's memcpy/memset copy one byte per loop iteration. FreeRTOS copies
- * every queue item with memcpy inside a critical section, so the byte loop sets
- * the gateway's longest interrupt-disabled intervals (~1.5 KB pipeline messages,
- * 13.1-13.7k cycles with caches off). These strong definitions replace the
- * library versions at link time.
+ * ../Generated/Memops/Memops.c is KaRaMeL's extraction of Memops.Low.fst
+ * (paper-experiments/verified-memops), included verbatim. Each loop is proved
+ * memory safe and functionally correct: it writes only its destination, which
+ * afterwards equals the source (copy) or n copies of the value (fill); the word
+ * loops are unrolled by four. replicate(b) is proved to have every byte equal b.
  *
- * Determinism: the cost depends only on n and on the relative alignment of the
- * pointers, never on the data. When source and destination share alignment the
- * bulk moves 16 bytes per iteration with word accesses; otherwise it falls back
- * to bytes (no unaligned word accesses, which would fault on device memory).
- * Semantics are those of ISO C memcpy/memset; overlapping memcpy is undefined
- * as usual (memmove is unchanged). */
+ * This shim is the unverified remainder (trusted, reviewed):
+ *  - alignment dispatch: when source and destination share alignment, split
+ *    [0, n) into a byte head up to the next word boundary, whole words, and a
+ *    byte tail; otherwise copy bytes only (no unaligned word access);
+ *  - reinterpreting word-aligned byte memory as uint32_t words;
+ *  - establishing the loops' preconditions: lengths as computed here; liveness
+ *    and, for memcpy, non-overlap are the caller's ISO C obligations.
+ * Cost depends only on n and the pointers' alignment, never on the data.
+ * Every function in this file starts on a 32-byte boundary, so its position
+ * relative to the flash fetch lines does not change between builds. */
 #include "paper_experiment.h"
 #if GATEWAY_ITCM && !GATEWAY_FAST_MEMOPS
-#error "GATEWAY_ITCM places the word-at-a-time memops in ITCM; set GATEWAY_FAST_MEMOPS = 1"
+#error "GATEWAY_ITCM places the verified memops in ITCM; set GATEWAY_FAST_MEMOPS = 1"
 #endif
 #if GATEWAY_FAST_MEMOPS
 #include <stddef.h>
 #include <stdint.h>
 
-typedef uint32_t __attribute__((may_alias)) gateway_word_t;
+/* GCC must not turn the verified loops back into memcpy/memset calls (which
+ * would recurse), nor reorder accesses across the byte/word reinterpretation. */
+#pragma GCC optimize("no-tree-loop-distribute-patterns", "no-strict-aliasing")
 
-/* Keep GCC from recognising these loops as memcpy/memset and calling
- * themselves recursively. */
-#define GATEWAY_MEMOPS_ATTR __attribute__((optimize("no-tree-loop-distribute-patterns"), used))
+/* 32-byte alignment pins every function's position relative to the flash fetch
+ * lines. GCC merges these attributes into the verbatim definitions below. */
+#define GATEWAY_MEMOPS_ALIGNED __attribute__((aligned(32)))
+GATEWAY_MEMOPS_ALIGNED void Memops_Low_copy_u8(uint8_t *dst, uint8_t *src, uint32_t n);
+GATEWAY_MEMOPS_ALIGNED void Memops_Low_fill_u8(uint8_t *dst, uint32_t n, uint8_t v);
+GATEWAY_MEMOPS_ALIGNED void Memops_Low_copy_u32(uint32_t *dst, uint32_t *src, uint32_t n);
+GATEWAY_MEMOPS_ALIGNED void Memops_Low_fill_u32(uint32_t *dst, uint32_t n, uint32_t w);
+GATEWAY_MEMOPS_ALIGNED uint32_t Memops_Low_replicate(uint8_t b);
+#include "../Generated/Memops/Memops.c"
 
-GATEWAY_MEMOPS_ATTR void *memcpy(void *restrict dst, const void *restrict src, size_t n)
+GATEWAY_MEMOPS_ALIGNED void *memcpy(void *restrict dst, const void *restrict src, size_t n)
 {
     uint8_t *d = (uint8_t *)dst;
-    const uint8_t *s = (const uint8_t *)src;
+    uint8_t *s = (uint8_t *)(uintptr_t)src;   /* the loops never write src */
     if ((((uintptr_t)d ^ (uintptr_t)s) & 3u) == 0u) {
-        while (n != 0u && ((uintptr_t)d & 3u) != 0u) { *d++ = *s++; n--; }
-        gateway_word_t *dw = (gateway_word_t *)(void *)d;
-        const gateway_word_t *sw = (const gateway_word_t *)(const void *)s;
-        while (n >= 16u) {
-            gateway_word_t a = sw[0], b = sw[1], c = sw[2], e = sw[3];
-            dw[0] = a; dw[1] = b; dw[2] = c; dw[3] = e;
-            dw += 4; sw += 4; n -= 16u;
-        }
-        while (n >= 4u) { *dw++ = *sw++; n -= 4u; }
-        d = (uint8_t *)dw;
-        s = (const uint8_t *)sw;
+        size_t head = (4u - ((uintptr_t)d & 3u)) & 3u;
+        if (head > n) head = n;
+        Memops_Low_copy_u8(d, s, (uint32_t)head);
+        d += head; s += head; n -= head;
+        size_t words = n >> 2;
+        Memops_Low_copy_u32((uint32_t *)(void *)d, (uint32_t *)(void *)s, (uint32_t)words);
+        d += words << 2; s += words << 2; n &= 3u;
     }
-    while (n != 0u) { *d++ = *s++; n--; }
+    Memops_Low_copy_u8(d, s, (uint32_t)n);
     return dst;
 }
 
-GATEWAY_MEMOPS_ATTR void *memset(void *dst, int value, size_t n)
+GATEWAY_MEMOPS_ALIGNED void *memset(void *dst, int value, size_t n)
 {
     uint8_t *d = (uint8_t *)dst;
-    const uint8_t byte = (uint8_t)value;
-    while (n != 0u && ((uintptr_t)d & 3u) != 0u) { *d++ = byte; n--; }
-    const gateway_word_t word = (gateway_word_t)byte * 0x01010101u;
-    gateway_word_t *dw = (gateway_word_t *)(void *)d;
-    while (n >= 16u) { dw[0] = word; dw[1] = word; dw[2] = word; dw[3] = word; dw += 4; n -= 16u; }
-    while (n >= 4u) { *dw++ = word; n -= 4u; }
-    d = (uint8_t *)dw;
-    while (n != 0u) { *d++ = byte; n--; }
+    uint8_t byte = (uint8_t)value;
+    size_t head = (4u - ((uintptr_t)d & 3u)) & 3u;
+    if (head > n) head = n;
+    Memops_Low_fill_u8(d, (uint32_t)head, byte);
+    d += head; n -= head;
+    size_t words = n >> 2;
+    Memops_Low_fill_u32((uint32_t *)(void *)d, (uint32_t)words, Memops_Low_replicate(byte));
+    d += words << 2; n &= 3u;
+    Memops_Low_fill_u8(d, (uint32_t)n, byte);
     return dst;
 }
 #endif
