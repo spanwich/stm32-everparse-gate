@@ -26,9 +26,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* GCC must not turn the verified loops back into memcpy/memset calls (which
- * would recurse), nor reorder accesses across the byte/word reinterpretation. */
-#pragma GCC optimize("no-tree-loop-distribute-patterns", "no-strict-aliasing")
+/* -Os: the same level as all other verified generated code (Gateway/Generated
+ * is -Os in both build configurations). GCC must not turn the verified loops
+ * back into memcpy/memset calls (which would recurse), nor reorder accesses
+ * across the byte/word reinterpretation. */
+#pragma GCC optimize("Os", "no-tree-loop-distribute-patterns", "no-strict-aliasing")
 
 /* 32-byte alignment pins every function's position relative to the flash fetch
  * lines. GCC merges these attributes into the verbatim definitions below. */
