@@ -309,15 +309,45 @@ static volatile uint32_t gateway_critical_start __attribute__((section(".gateway
 static volatile uint32_t gateway_critical_max __attribute__((section(".gateway_privileged")));
 static volatile uint32_t gateway_critical_anomalies __attribute__((section(".gateway_privileged")));
 static volatile uint32_t gateway_critical_window_active __attribute__((section(".gateway_privileged")));
+/* Attribution table: diagnostic only, in ordinary RAM (the privileged region
+ * is full in control images); written only from privileged critical-section code. */
+typedef struct { uint32_t caller, task, max, count; } GatewayCritRank;
+static volatile uint32_t gateway_critical_caller;
+static volatile uint32_t gateway_critical_task;
+static GatewayCritRank gateway_critical_rank[8];
 void gateway_r4_critical_reset(void)
 {
     gateway_critical_window_active=0U;
     gateway_critical_start=0U;
     gateway_critical_max=0U;
     gateway_critical_anomalies=0U;
+    for(unsigned i=0;i<8U;i++) gateway_critical_rank[i]=(GatewayCritRank){0U,0U,0U,0U};
 }
 void gateway_r4_critical_window(uint32_t active) { gateway_critical_window_active=active; }
 uint32_t gateway_r4_critical_max(void) { return gateway_critical_max; }
+/* Caller attribution (2026-10-21): the return address of the outermost
+ * vPortEnterCritical and the running TCB, and a top-8 table of the longest
+ * sections by caller. Only privileged code can enter critical sections here. */
+static void gateway_critical_note(uint32_t spent)
+{
+    unsigned slot=8U, low=0U;
+    for(unsigned i=0;i<8U;i++) {
+        if(gateway_critical_rank[i].caller==gateway_critical_caller && gateway_critical_rank[i].count) { slot=i; break; }
+        if(gateway_critical_rank[i].max<gateway_critical_rank[low].max) low=i;
+    }
+    if(slot==8U) {
+        if(spent<=gateway_critical_rank[low].max) return;
+        slot=low; gateway_critical_rank[slot].caller=gateway_critical_caller;
+        gateway_critical_rank[slot].max=0U; gateway_critical_rank[slot].count=0U;
+    }
+    gateway_critical_rank[slot].count++;
+    if(spent>gateway_critical_rank[slot].max) { gateway_critical_rank[slot].max=spent; gateway_critical_rank[slot].task=gateway_critical_task; }
+}
+void gateway_r4_critical_rank(unsigned i, uint32_t *caller, uint32_t *task, uint32_t *max, uint32_t *count)
+{
+    *caller=gateway_critical_rank[i].caller; *task=gateway_critical_rank[i].task;
+    *max=gateway_critical_rank[i].max; *count=gateway_critical_rank[i].count;
+}
 uint32_t gateway_r4_critical_anomalies(void) { return gateway_critical_anomalies; }
 #endif
 
@@ -1070,7 +1100,12 @@ void vPortEnterCritical( void )
         portDISABLE_INTERRUPTS();
         #if GATEWAY_R4_CONTROL
             if( uxCriticalNesting == 0U && gateway_critical_window_active )
+            {
+                extern TaskHandle_t pxCurrentTCB;
                 gateway_critical_start = gatewayDWT_CYCCNT;
+                gateway_critical_caller = ( uint32_t ) __builtin_return_address( 0 );
+                gateway_critical_task = ( uint32_t ) pxCurrentTCB;
+            }
         #endif
         uxCriticalNesting++;
     #endif /* if ( configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS == 1 ) */
@@ -1119,7 +1154,11 @@ void vPortExitCritical( void )
                 {
                     uint32_t spent = gatewayDWT_CYCCNT - gateway_critical_start;
                     if( spent & 0x80000000UL ) gateway_critical_anomalies++;
-                    else if( spent > gateway_critical_max ) gateway_critical_max = spent;
+                    else
+                    {
+                        if( spent > gateway_critical_max ) gateway_critical_max = spent;
+                        gateway_critical_note( spent );
+                    }
                 }
             #endif
             portENABLE_INTERRUPTS();

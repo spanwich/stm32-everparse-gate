@@ -34,6 +34,7 @@ extern void gateway_r4_critical_reset(void);
 extern uint32_t gateway_r4_critical_max(void);
 extern uint32_t gateway_r4_critical_anomalies(void);
 extern void gateway_r4_critical_window(uint32_t active);
+extern void gateway_r4_critical_rank(unsigned i, uint32_t *caller, uint32_t *task, uint32_t *max, uint32_t *count);
 extern void gateway_d1_eth_isr_reset(void);
 extern uint32_t gateway_d1_eth_isr_max(void);
 extern uint32_t gateway_d1_eth_isr_count(void);
@@ -156,6 +157,13 @@ static void control_task(void *unused)
                 (unsigned long)critical_max,(unsigned long)critical_anomalies,
                 (unsigned long)tim_isr_max,(unsigned long)eth_isr_max,
                 (unsigned long)eth_irqs,(unsigned long)stack_free);
+    for(unsigned i=0;i<8U;i++) {
+        uint32_t caller,task,cmax,count;
+        gateway_r4_critical_rank(i,&caller,&task,&cmax,&count);
+        if(count) gateway_log("[CRIT] rank=%u caller=0x%08lx task=0x%08lx max_cycles=%lu count=%lu task_name=%s\n",
+                              i,(unsigned long)caller,(unsigned long)task,(unsigned long)cmax,(unsigned long)count,
+                              task ? pcTaskGetName((TaskHandle_t)task) : "-");
+    }
     /* This observer suspends scheduling and scans stacks, so run it only after
      * the 10,000-sample deadline window has closed, but before the long UART
      * transfer used to export the exact samples. */

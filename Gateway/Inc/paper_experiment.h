@@ -31,6 +31,12 @@
 #ifndef GATEWAY_PAPER_GATE_N32
 #define GATEWAY_PAPER_GATE_N32 0
 #endif
+/* Timing-distribution extension of the GATE_N32 variant (2026-10-21): 10,000
+ * samples per case, min/mean/p50/p99/max, constructed worst-case path,
+ * interrupts enabled and masked, update-gate commit. Requires GATE_N32 = 1. */
+#ifndef GATEWAY_PAPER_TIMING_DIST
+#define GATEWAY_PAPER_TIMING_DIST 0
+#endif
 /* D1.8 final-image probes (separate labelled images): 1-15 run in NET, 20 GATE,
  * 21 APP, 22 AUTH. See Gateway/tools/d1_run_final_probes.py. */
 #ifndef GATEWAY_D1_PROBE
