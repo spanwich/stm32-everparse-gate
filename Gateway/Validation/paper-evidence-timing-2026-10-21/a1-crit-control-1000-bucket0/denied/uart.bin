@@ -1,0 +1,435 @@
+884 margin=OK lwip=0/436 err=0
+[HEARTBEAT] PASS 301/301 stack_free_bytes=3448/812 margin=OK heap_free=65048 heap_min=64768 log_drops=1
+[NET] link=1 req=730 rx=4386 tx=2950 drop=2 txerr=0 stack=5296/3756/1884 margin=OK lwip=0/436 err=0
+[HEARTBEAT] PASS 301/301 stack_free_bytes=3448/812 margin=OK heap_free=65048 heap_min=64768 log_drops=1
+[NET] link=1 req=730 rx=4386 tx=2950 drop=2 txerr=0 stack=5296/3756/1884 margin=OK lwip=0/436 err=0
+[HEARTBEAT] PASS 301/301 stack_free_bytes=3448/812 margin=OK heap_free=65048 heap_min=64768 log_drops=1
+[NET] link=1 req=730 rx=4386 tx=2950 drop=2 txerr=0 stack=5296/3756/1884 margin=OK lwip=0/436 err=0
+[HEARTBEAT] PASS 301/301 stack_free_bytes=3448/812 margin=OK heap_free=65048 heap_min=64768 log_drops=1
+[NET] link=1 req=730 rx=4386 tx=2950 drop=2 txerr=0 stack=5296/3756/1884 Ì
+[BOOT] policy_gate core validation; STM32F767ZI
+[BOOT] SYSCLK=96000000 HCLK=96000000 UART3=115200 FreeRTOS=V11.3.1
+[BOOT] lab Bearer HTTP transport; no TLS
+=== find_header_end test suite ===
+
+  PASS: standard GET request (result=33)
+  PASS: incomplete headers (result=35)
+  PASS: empty buffer (result=0)
+  PASS: 1 byte (result=1)
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=6964/1832 margin=OK heap_free=65528 heap_min=65512 log_drops=0
+  PASS: 2 bytes (result=2)
+  PASS: 3 bytes (result=3)
+  PASS: pattern at offset 0 (result=0)
+  PASS: pattern at offset 1 (result=1)
+  PASS: pattern at last position (result=6)
+  PASS: single CRLFs only (result=28)
+  PASS: first of multiple occurrences (result=4)
+  PASS: binary data (result=2)
+  PASS: realistic POST (header_end=96, body starts at 100)
+
+=== Results: 13/13 passed ===
+=== parse_method test suite ===
+
+  PASS: GET request (code=1 end=4)
+  PASS: POST request (code=2 end=5)
+  PASS: PUT request (code=4 end=4)
+  PASS: GET minimal (code=1 end=4)
+  PASS: PUT minimal (code=4 end=4)
+  PASS: POST minimal (code=2 end=5)
+  PASS: DELETE (code=8 end=7)
+  PASS: HEAD (code=32 end=5)
+  PASS: PATCH (code=16 end=6)
+  PASS: OPTIONS (code=0 end=0)
+  PASS: empty (code=0 end=0)
+  PASS: 1 byte (code=0 end=0)
+  PASS: 2 bytes (code=0 end=0)
+  PASS: 3 bytes (code=0 end=0)
+  PASS: POST no space (4 bytes) (code=0 end=0)
+  PASS: get lowercase (code=0 end=0)
+  PASS: Get mixed (code=0 end=0)
+
+=== Results: 17/17 passed ===
+=== extract_path_id test suite ===
+
+  PASS: GET /api/login (id=0x11111111 root=0)
+  PASS: POST /api/login (id=0x11111111 root=0)
+  PASS: GET /api/logout (id=0x22222222 root=0)
+  PASS: GET /api/status (id=0x33333333 root=0)
+  PASS: GET /api/policy (id=0x44444444 root=0)
+  PASS: PUT /api/policy (id=0x44444444 root=0)
+  PASS: GET / (root) (id=0x00000000 root=1)
+  PASS: /api/login?foo=bar (id=0x11111111 root=0)
+  PASS: /api/status?v=1 (id=0x33333333 root=0)
+  PASS: unknown /api/foo (id=0x00000000 root=0)
+  PASS: unknown /favicon.ico (id=0x00000000 root=0)
+  PASS: unknown /api/loginx (too long) (id=0x00000000 root=0)
+  PASS: unknown /api/logi (too short) (id=0x00000000 root=0)
+  PASS: path traversal /../etc/passwd (id=0x00000000 root=0)
+  PASS: path traversal /api/..hidden (id=0x00000000 root=0)
+  PASS: path traversal /api/../login (id=0x00000000 root=0)
+  PASS: null byte in path (id=0x00000000 root=0)
+  PASS: empty path (method_end == header_end) (id=0x00000000 root=0)
+  PASS: root with CR delimiter (id=0x00000000 root=1)
+  PASS: root with query (id=0x00000000 root=1)
+
+--- find_path_end tests ---
+  PASS: find_path_end space
+  PASS: find_path_end query
+  PASS: find_path_end CR
+  PASS: find_path_end no delimiter
+
+--- check_no_traversal tests ---
+  PASS: no traversal clean
+  PASS: traversal detected
+  PASS: traversal at start
+  PASS: single char safe
+
+--- check_no_null tests ---
+  PASS: no null clean
+  PASS: null detected
+
+=== Results: 30/30 passed ===
+=== parse_content_length test suite ===
+
+  PASS: Content-Length: 42 (val=42)
+  PASS: Content-Length: 0 (val=0)
+  PASS: Content-Length: 100 (val=100)
+  PASS: Content-Length: 1361 (max) (val=1361)
+  PASS: content-length: 42 (val=42)
+  PASS: content-length: 200 (val=200)
+  PASS: Content-Length: 1362 (over max) (val=1362)
+  PASS: Content-Length: 9999 (way over) (val=1362)
+  PASS: no CL header (val=0)
+  PASS: empty headers (val=0)
+  PASS: CL with extra spaces (val=50)
+  PASS: CL no space after colon (val=50)
+  PASS: CL among other headers (val=77)
+  PASS: CL at very start (after request line CRLF) (val=10)
+  PASS: partial header name (Content-Lengt) (val=0)
+  PASS: Content-Length: 5 (val=5)
+
+--- parse_digits tests ---
+  PASS: parse_digits 123
+  PASS: parse_digits 0
+  PASS: parse_digits 1362 clamped
+  PASS: parse_digits stops at non-digit
+
+--- skip_spaces tests ---
+  PASS: skip 3 spaces
+  PASS: skip no spaces
+
+=== Results: 22/22 passed ===
+=== extract_security_params test suite ===
+
+--- Known endpoints ---
+  PASS: GET /api/status (hash=0x33333333 method=1 body=0 olen=175)
+  PASS: GET /api/policy (hash=0x44444444 method=1 body=0 olen=175)
+  PASS: POST /api/login with body (hash=0x11111111 method=2 body=11 olen=186)
+  PASS: POST /api/logout (hash=0x22222222 method=2 body=0 olen=175)
+  PASS: PUT /api/policy with body (hash=0x44444444 method=4 body=5 olen=180)
+
+--- Dashboard ---
+  PASS: GET / (dashboard) (hash=0x00000000 method=1 body=0 olen=175)
+
+--- Error codes ---
+  PASS: no headers (incomplete) -> INCOMPLETE
+  PASS: DELETE method code (hash=0x33333333 method=8 body=0 olen=175)
+  PASS: HEAD method code (hash=0x33333333 method=32 body=0 olen=175)
+  PASS: path traversal -> PATH_TRAVERSAL
+  PASS: path traversal in api -> PATH_TRAVERSAL
+  PASS: unknown endpoint -> PATH_UNKNOWN
+  PASS: unknown short path -> PATH_UNKNOWN
+  PASS: body too large -> BODY_TOO_LARGE
+  PASS: body incomplete -> INCOMPLETE
+
+--- Wire format details ---
+  PASS: body bytes + zeroed region
+
+--- Edge cases ---
+  PASS: empty input -> INCOMPLETE
+  PASS: just CRLF -> METHOD_UNKNOWN
+  PASS: CL 0 no body (hash=0x33333333 method=1 body=0 olen=175)
+  PASS: path with query (hash=0x11111111 method=1 body=0 olen=175)
+
+--- Bearer token extraction ---
+  PASS: bearer token present (tlen=11)
+  PASS: no bearer token (tlen=0, region zeroed)
+  PASS: token truncated to 128 (tlen=128)
+  PASS: bearer + body (tlen=7 body=5)
+
+=== Results: 24/24 passed ===
+=== IPC.Extract test suite ===
+
+--- populate_auth_fields ---
+  PASS: auth basic: role=ADMIN(2)
+  PASS: auth basic: scope=0x0003
+  PASS: auth basic: subject_id_len=5
+  PASS: auth basic: subject_id='admin'
+  PASS: role clamp: raw=99 -> clamped=2
+  PASS: role boundary: raw=2 -> unchanged=2
+  PASS: subject_id_len clamp: raw=50 -> clamped=32
+  PASS: subject_id_len zero: len=0
+  PASS: subject_id zero: region untouched
+  PASS: scope endianness: lo=0x00, hi=0x3F
+
+--- populate_rate_field ---
+  PASS: rate basic: val=42
+  PASS: rate zero: val=0
+  PASS: rate max: val=255
+
+=== Results: 13/13 passed ===
+[Legacy vectors] 119/119
+=== Adapter and buffer boundaries ===
+  PASS: initial guards
+  PASS: empty input incomplete
+  PASS: no policy call before extraction
+  PASS: no dispatch before authorization
+  PASS: 4096-byte unterminated header
+  PASS: unterminated input unchanged
+  PASS: unterminated buffers intact
+  PASS: 4097 bytes rejected before extractor
+  PASS: oversized buffers intact
+  PASS: 4096-byte complete request
+  PASS: maximum request unchanged
+  PASS: 1361-byte body fills output
+  PASS: maximum body copied
+  PASS: maximum body input stable
+  PASS: 1362-byte body rejected
+  PASS: huge body length rejected
+  PASS: every fragmented prefix incomplete
+  PASS: complete fragmented request accepted
+  PASS: malformed request classification
+  PASS: malformed request cannot dispatch
+  PASS: malformed request classification
+  PASS: malformed request cannot dispatch
+  PASS: malformed request classification
+  PASS: malformed request cannot dispatch
+  PASS: 32-byte trusted identity
+  PASS: identity fields and separate auth storage
+  PASS: invalid identity revokes prior identity
+  PASS: invalid identity cannot evaluate
+  PASS: adapter rejects invalid role
+  PASS: adapter rejects oversized subject
+  PASS: adapter rejects missing identity
+  PASS: short security header rejected
+  PASS: corrupt body length rejected before copy
+  PASS: guard corruption stops processing
+=== Policy and dispatch boundaries ===
+[PolicyGate] path=0x33333333 method=1 role=OPERATOR scope=0x0001
+  PASS: operator sensor read allowed at 49
+  PASS: authorized dispatch occurs once
+  PASS: status response matches reference
+  PASS: forward result cannot be replayed
+[PolicyGate] path=0x33333333 method=1 role=OPERATOR scope=0x0001
+  PASS: rate 50 denied
+  PASS: rate denial cannot dispatch
+[PolicyGate] path=0x33333333 method=1 role=NONE scope=0x0001
+  PASS: insufficient role denied
+[PolicyGate] path=0x33333333 method=1 role=ADMIN scope=0x0000
+  PASS: admin still requires scope
+[PolicyGate] path=0x33333333 method=2 role=ADMIN scope=0xffff
+  PASS: wrong method denied
+[PolicyGate] path=0x11111111 method=1 role=ADMIN scope=0xffff
+  PASS: unmatched path denied by policy
+[PolicyGate] path=0x44444444 method=1 role=OPERATOR scope=0x0004
+  PASS: policy read requires admin
+[PolicyGate] path=0x44444444 method=1 role=ADMIN scope=0x0004
+  PASS: admin policy read allowed
+  PASS: policy read response
+[PolicyGate] path=0x22222222 method=2 role=OPERATOR scope=0x0000
+  PASS: zero-scope rule allowed
+[PolicyGate] path=0x33333333 method=1 role=ADMIN scope=0xffff
+  PASS: all requested scope bits allowed
+[PolicyGate] path=0x33333333 method=1 role=ADMIN scope=0x0001
+  PASS: partial scope mask denied
+[PolicyGate] path=0x44444444 method=4 role=OPERATOR scope=0xffff
+  PASS: non-admin policy update denied
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: rate-limited policy update unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: zero rules rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: nine rules rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: invalid rule method rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: invalid rule role rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: short policy body rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: trailing policy bytes rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: valid policy update commits
+  PASS: policy update does not dispatch
+  PASS: stored policy slot preserved
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=6180/884 margin=OK heap_free=65528 heap_min=65512 log_drops=0
+[PolicyGate] path=0x33333333 method=1 role=OPERATOR scope=0x0001
+  PASS: updated active rule works
+[PolicyGate] path=0x44444444 method=1 role=ADMIN scope=0xffff
+  PASS: stored slot matches despite count one
+  PASS: policy tests retain buffer guards
+  PASS: EverParse access allow directly
+  PASS: EverParse rejects every truncated access length
+  PASS: EverParse rate predicate independently denies
+  PASS: EverParse scope predicate independently denies
+  PASS: EverParse policy allow directly
+  PASS: EverParse rejects every truncated policy length
+  PASS: EverParse policy admin predicate
+  PASS: EverParse policy rate predicate
+  PASS: HTTP every two-fragment split
+  PASS: HTTP byte fragments
+  PASS: HTTP processing cannot replay
+  PASS: HTTP framing/auth case 1
+  PASS: HTTP framing/auth case 2
+  PASS: HTTP framing/auth case 3
+  PASS: HTTP framing/auth case 4
+  PASS: HTTP framing/auth case 5
+  PASS: HTTP framing/auth case 6
+  PASS: HTTP framing/auth case 7
+  PASS: HTTP framing/auth case 8
+  PASS: HTTP framing/auth case 9
+  PASS: HTTP framing/auth case 10
+  PASS: HTTP framing/auth case 11
+  PASS: HTTP framing/auth case 12
+  PASS: HTTP framing/auth case 13
+  PASS: HTTP framing/auth case 14
+  PASS: HTTP framing/auth case 15
+  PASS: HTTP framing/auth case 16
+  PASS: HTTP framing/auth case 17
+  PASS: HTTP framing/auth case 18
+  PASS: HTTP framing/auth case 19
+  PASS: HTTP framing/auth case 20
+  PASS: HTTP framing/auth case 21
+  PASS: HTTP framing/auth case 22
+  PASS: HTTP framing/auth case 23
+  PASS: HTTP framing/auth case 24
+  PASS: HTTP framing/auth case 25
+  PASS: HTTP framing/auth case 26
+  PASS: HTTP framing/auth case 27
+  PASS: HTTP maximum binary body
+  PASS: HTTP incomplete body waits
+  PASS: HTTP 4096 unterminated header
+  PASS: HTTP overlong bearer rejected
+  PASS: HTTP binary admin policy update
+  PASS: Bearer failed lookup clears identity
+  PASS: HTTP response framing and challenge
+  PASS: HTTP response small buffer fails
+  PASS: Dashboard served without authentication
+  PASS: Dashboard cannot bypass incomplete framing
+  PASS: Dashboard POST is not a public route
+  PASS: Dashboard rejects body
+  PASS: Dashboard rejects lookalike route
+  PASS: HTML header
+  PASS: HTML header bounds
+  PASS: Admin login with byte fragmentation
+  PASS: Issued token matches independent HMAC vector
+  PASS: Issued token Bearer encoding
+  PASS: Issued admin token status
+  PASS: Issued admin token policy
+  PASS: Issued admin token logout
+  PASS: Original stateless logout retains token validity
+  PASS: Every token nibble authenticated
+  PASS: Operator login accepts whitespace/order/ASCII escape
+  PASS: Issued operator status
+  PASS: Issued operator denied policy
+  PASS: Login JSON/credential rejection 0
+  PASS: Login JSON/credential rejection 1
+  PASS: Login JSON/credential rejection 2
+  PASS: Login JSON/credential rejection 3
+  PASS: Login JSON/credential rejection 4
+  PASS: Login JSON/credential rejection 5
+  PASS: Login JSON/credential rejection 6
+  PASS: Login JSON/credential rejection 7
+  PASS: Login JSON/credential rejection 8
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=3448/884 margin=OK heap_free=65528 heap_min=65512 log_drops=0
+  PASS: Login JSON/credential rejection 9
+  PASS: Login JSON/credential rejection 10
+  PASS: Login JSON/credential rejection 11
+  PASS: Login JSON/credential rejection 12
+  PASS: Login JSON/credential rejection 13
+  PASS: Password length boundary
+  PASS: Password length boundary
+  PASS: Password length boundary
+  PASS: Credential helper enforces its own bound
+  PASS: Every truncated login body rejected
+  PASS: Login output bounds
+  PASS: Login leaves guards intact
+  PASS: Public JavaScript with fragmented headers
+  PASS: Demo GET requires authentication
+  PASS: Demo rejects non-GET
+  PASS: Demo query retains alias
+  PASS: Operator demo denied by default
+  PASS: Admin demo allowed
+  PASS: Demo has distinct integration route ID
+  PASS: Status remains allowed independently
+  PASS: Operator cannot inspect policy
+  PASS: Admin reads actual rules
+  PASS: Operator cannot change live policy
+  PASS: Admin enables operator demo
+  PASS: Operator demo succeeds immediately
+  PASS: Demo still enforces rate predicate
+  PASS: Admin disables operator demo
+  PASS: Operator demo denied immediately
+  PASS: Admin retains demo access
+  PASS: Admin disables operator status
+  PASS: Operator status denied
+  PASS: Admin status remains allowed
+  PASS: Policy readback reflects edited role
+  PASS: Live policy integration guards
+  PASS: Mediation public handler explicitly admitted
+  PASS: Mediation public invocation consumed
+  PASS: Mediation public class cannot select API
+  PASS: Mediation public method restricted
+  PASS: Mediation stored slot matches despite count one
+  PASS: Mediation decision cannot dispatch twice
+  PASS: Mediation operator cannot commit candidate
+  PASS: Mediation commits exact active candidate
+  PASS: Mediation policy transaction consumed
+  PASS: Mediation malformed login has no effect
+EQUIVALENCE_OK,engine=stm32-linked-everparse,comparisons=lu
+[PAPER CORPUS] comparisons=12527 failures=0
+  PASS: paper reference 12527-case equivalence
+[CORE SELFTEST] PASS 301/301; synthetic identity only
+[ETH] link=UP phy=2 epoch=1
+[HTTP] READY 192.168.40.128/24:80 lab_bearer=1 RAM policy; no TLS
+[CTRL R4] START hz=1000 high=1
+[CTRL R4] hz=1000 high=1 samples=10000 misses=0 lost_releases=0 gap_anomalies=0 max_cycles=14298 critical_max_cycles=7834 critical_anomalies=0 isr_max_cycles=1465 eth_isr_max_cycles=2813 eth_isr_count=4654 stack_free=2852
+[CRIT] rank=0 caller=0x08020953 task=0x20001600 max_cycles=475 count=928 task_name=Ñ!y~Ô.JFíÓä¶;ö´gÕ˚v~œ+
+[CRIT] rank=1 caller=0x08007caf task=0x200067dc max_cycles=1631 count=27088 task_name=Ñ!y~Ô.JFíÓä¶;ö´gÕ˚v~œ+
+[CRIT] rank=2 caller=0x08003eaf task=0x20001600 max_cycles=525 count=928 task_name=Ñ!y~Ô.JFíÓä¶;ö´gÕ˚v~œ+
+[CRIT] rank=3 caller=0x08004923 task=0x2000896c max_cycles=7834 count=55446 task_name=Ñ!y~Ô.JFíÓä¶;ö´gÕ˚v~œ+
+[CRIT] rank=4 caller=0x08004ce9 task=0x2000a800 max_cycles=5146 count=26970 task_name=Ñ!y~Ô.JFíÓä¶;ö´gÕ˚v~œ+
+[CRIT] rank=5 caller=0x08005acb task=0x20001600 max_cycles=385 count=928 task_name=Ñ!y~Ô.JFíÓä¶;ö´gÕ˚v~œ+
+[CRIT] rank=6 caller=0x08008e47 task=0x200067dc max_cycles=361 count=11469 task_name=Ñ!y~Ô.JFíÓä¶;ö´gÕ˚v~œ+
+[CRIT] rank=7 caller=0x08020cc3 task=0x20005c00 max_cycles=686 count=2784 task_name=Ñ!y~Ô.JFíÓä¶;ö´gÕ˚v~œ+
+PGC1Ë ç  d  h     ⁄-    ¥    ^  ò  -  .  é  i  Ω    ñ  i  +  Ñ  ‹    …  =  O  |  ä  Í  ;  ‰  ]  ™  »  ≈  :  Õ  õ  ö  ^  È  j  D  9  O  œ  ]  x  ü  p  ø  P  ö  -  "  ˚  Ì  T  ì  Ò  Ø  X  o  ÿ3  w     ﬁ  &  I  Ó  =      *  x  =  ˆ  2  <  ¿    …  n  §  ]  M      M  n  /  Z%  Á  /  O  Ï  Ü  w  D  w  V  û  ç  k  z    ]  P  á  3  ?  õ  -  `  A  ä  Q  .  @  ≠  é  E    Ø    ]  x  Q  O  
+    ]  y  m    }  œ  a  ˇ  M  	  +  ù  O  ï  Ù   ò  X  n  ƒ1  5  A  ©  b  Á  ]  P  ]  W  4  ˆ  ç  c  M  †  ?  ö  .  ≥  .    1     i  r!  w  M  F  Q  ¢  ¢  -  Õ  ú  +  n  ﬂ  Ω  ˛%  á  X  "  È5  ä  j  	  ù   .  ]  5  ;  ﬁ  `    Ë  Ü  ©  A  é  †  ¢  ]    é  [  5  á  ﬁ  ö$  ∂  ]  O  Ø  E  Ç    ^  W    õ  Ω  z+  Ø  i  ä  Ñ4  O  ù  Æ  ˝!  ©  n  '  L  n    ˇ  N  k  ˇ  ‹  ˇ%  ô  e  ƒ  ≥  ˝  ä  °  «  .  m)  L  :  $  (  !  »  ñ  â  Ì  Æ  ¡     3  ]  —  Ÿ  ÷  º  ¯    È  Æ  z#  O  {  i  Ω  Î    w  \  ¨"  Ω  O  á  i  ù  ö0  W  @  ©  é  A%  H  `  â.  h"  ö  I  H  ]  …  À  i  å  ≥  Z  Ã  -  %      -  W  i  ï  -  n  o  ¯  N  )  O  Ç  <  ´  ¿  O  ™  ·  ∏  $  m  	  ”   R  L  5  @  á  5  ?  ~  õ  +  ]  o  n  Ω  ˛  Ø  X  =  #  ö  ˝    õ"  	  j  «  >  n  }    i  |  Ó  ›  _&  Y  Ø  ©  Ä   '  ÿ  O  z  Ì  Õ)  C  =  Ω#    ∞  ª  ó  â  é  ^  r  Æ  +  ]  õ  Z  V  ©  J  @  \  M  ç!  µ    y     z    ∂  a  ®!  ï     ò  X  ≥  ç0  E  8  Ç  ^  æ  !  ˘  ©  Æ  N  Ò#  #    ¿    °  \  +  ]  »     å  	  9  ?  ^  M  ö!  ˘  (  |  P    A  W  c  F!  Ω  è  á  X  õ  M.  `  Í  "  Ó  L  ¡  ˙  	    Q  Á#  #  ˙  ≥    A  m  <  ]  à  ô    <  ÿ    h  )  ö!  Ÿ  ?  O  _  ¡  †  ]  Â  ˚,  î  ì  Å  k  ù  ]  ˘  k  ≠  ì    Ö  ™  /  ¶  $  ç  ç&  ]  ﬁ  ™  h  Ô  Ü  Ö  ı  È  µ,  j  O  Œ  Y  >  µ%  à    `  ¥    È  d  ›  U  ¢  ê0  p  X  Æ  Ó3  E  5  ©  d+  à  j  P    ﬁ    {  .  Ö  X  ì  º(  °  Ó  á  8$  ˘  l  <  Ÿ  ﬂ  W  )  ö!  Ÿ  ?  P  _  O  œ  ˛  ≈  ¶+    U  á  X  ö  n  I  k  Æ  ì  Ø  ]  π  a  3  ?  `  =  È  Ç  m  ¿  ü  ë  _  3  …  g*  ˝  k  à  _  r  (0  M  V  [  }  ^  l  Y  O  @    ú  Õ  n  Ñ  {  3  ÿ  å  Œ  _  ˛  ˙!  ¢  ]  6  K  E  ö  å  y  M    æ  ™  ]  0,  {  L  ∞  ›    ]  x    F  º  O  $  ç  T  Å  ^  m  ñ  >  p  W  =  5  `  ¢  N  ¢1    W  E  ]  n  `  â  v  M  Õ  É  ?2  ?  ™  Ö  õ  ]  ö  œ    b  ∫%  ≈  _  O  Ø  O  π  ^    e  W  !  Ω  .  n  i  ¿  
+0  \  ö  ≠  –  œ  n  `  Z  5    ]  õ  I  	  ]  2  Ô  Æ  ]  z  ^  æ  A    "  Õ&  Æ  ≠  Y  ø  `  '  N    €  v  Å  ¢  ´  n  X  C  7  ˘  @  ©  #  ≈  /  P  ]  Ö  5  	  i  ≈  +  `  ø  C  ⁄  o  ù  ]  Í  ›  N  u  ˇ  ø  á    ¶  õ  ∫  ∏    ﬁ  n  Ü  z    Œ  }  ê  Å     5  ©    j  I  4  0  N  ◊    ≠  c  -  -  Î  º  ∂  ∞  X  /  ’  O  '  …  Ø  î  Ö  O  ∫  ’  Q  n  õ  I  	  Î  *  Ô  _  j    õ  A  a2  A  Ø  	  0  2  ]  º  	  É  O  a  Ô  Ú  M  Œ  Q  /  /  Ú  Œ  +  ±  =  N  2  w  ^  `  P  ﬂ  t   P  U   *  W  )  ç  Ω  g*  Ø  X  Y  43  X  Í  M  π!  È  X  ⁄  Ö  ©  A  ^  X  ]  M  ë  ﬁ&  v    ©  s     8  Y  G  o  ,  n  T  À%  ;  ë  )  C  (    I  B  \  +  Ö  à  ô  ô  |    ¬  W  )  ö!  Ÿ  ?  M  `  Ø  0  ^  %  V,  5  3  Ø  W  ±  u  ©  ´  )  K  P  ]  Y  `  {2  »  Î  1*  )  ]  ª  à  ù  æ  ]  h'  ]  3  :  À  n    z  {  ˝  O  +    V  ˇ  »  …  Å  Ω  ›  Å  i  K    ò  Ø  	  ‚  V  <  ˘  ∂  ∂  ⁄  +  >  ^  â  -  ô  œ  Ó  Ñ  †  u     5  ©    i  I  N  ∞  ^    O  ÿ  >  u  ﬁ  v  Ω  «  á  W  q  X2  @  F  ©  Ò  w  ]  <  ]  ]  E    |  R  M  †  ﬂ  ö  ?  ≠  .  •  $  O  ò  ?!  [  Ö  !  ‚  }  5    õ  f  à  ™  f  ∑  Z   á  X  Ñ  s2  @  5  ©  Ú  v  ]  l  y  C  @  ∂  {  a  I  _  ≠  ï  ¢  Z    6  —  `  @  N  ]  ,    G  é,  |    „  +  ˛  x  0  ‘  ‡  '  s  ó  ]  O  ö  Æ  ]     K  @  ã  Ÿ  X  ›  l*  )  ]  »    å  ≈  Ö  ÿ#  ^  ≤.  ´  /  ≠  m  Æ  ò       O  Ù  Ì  )  ‰  [  @  ò  2  p  W  /  Ã6  J     i  ¢.  ?  ]  ÿ  ^  è  *  ]  ÷  ,  …  X  !/  v  j  ^  y  N  å  G  Y  z  :$  %    5  Ø  O  9  V  ê  °  n  ‹  ï  M  n  i     Ü4  h  ö  Æ  0  œ  h  `  Z  ’  D  n  õ  I  	  Ω  2  Ô  n  ]  ¡  ]  =    ˘  ä  Ì'  Œ  -!  á    V  á  M  ˘  ;  w  A  µ  _  n  X  [  ó  @  0  æ  ò    3  @  7  7  Z  ^  
+  [  	    ß  N  Æ  Ñ  ù  ^  ä  5  ©  Ù  i  I  Q  ?  N  ˜  X  :  >  »  Î  e  ï  ﬁ  á  W  f  õ1  >  -  ©  —  ˜  ]  P  Ö  „  5  ˜  |  R  M  ü  ˇ    ”  ]  ≠  ÿ  @  J  j  h  	  ó  ≠(  -  s  ß"  ±  “  ©  S  e  x  Ω    ò  h  å  Z+  ]  Ÿ  k  M  b  O  P  "  {  ê  €  ∑  ‰    J  B  \  +  ]    n  ∫  I  ÿ  ‡  W  )  ç!  ¡  à  È  *  :  a  v  P  #  Ω  Æ  ©  X  π  -0  P  F  	  Ø  â"  	  5   ,     ã  	  (  j  	  T  W  Ó     o  ´  {  /  ÿ  –  Ì  {  ^  ñ  k  Ó  +  Œ  M  â  ®  ä  e  Ω      p  X  2  .  @  O  	  ø  ˜  ]  i  n  £  @  ∂  w  b    ü  p  f  N  π  A  ∏  §  J  ^  ì  w  M  K  O    e  F  v  È  +  ^  è  ï  œ&  ô  W  A  "7  ù  ¢  …   !  ^  W  r    ≠  Ω  æ  h  ú  )  ¡  ¸   Ω  R  %  ¡  v  ÿ  P    N  Õ&  â  t  A  ú  -  t  E  N  È  h  &  Ω  •.  á  W  Ø  ¢-  E  ™  Æ  ™%  €  ]    î  …  _  Ü  Ÿ  i  m  S  C&  
+  ø  ¥      ]  ÿ  Ô    >  ⁄)  C  J  K$    p      ˙  Ì  Æ  ¬    ,  ]  Ã  Í  ◊  …  Y  `  È  ≠  z#  ¡  P  q  r  ˆ  ~  ì  ˛  n  ê  o    Ú        J  M  2  w  M  O  O  0  e  6  ÷  I  3  È  Ô  ¶  ◊%  á  X  j      y  q  	  Ä  "0  Ó  O  +  ˝-  ﬂ  ﬁ  D%  [    Ÿ  …  å  Ê  n  ∞  ]  Î+  _  N  n  n    %  O  †  ,    F  ˛  È  Ü  u  Ω  ≤.  q  X  ¿  π1  4  J  M  ™%  €  ]  '  •  …  N  ]  Ÿ  	  d  †  ¢%  ô  e  Ω  S  ù  y     '  -  z)  L  U  ™#  ˚  ¿  h  7  )  -  N  a  N  =  n  H  Y  ’  ú  9  ?  h  )  ˙!  Ë    t  Ω  Ÿ    (  #  ü!  Ω  .  á  X  ù  Z.  O  Ÿ  "  Ó  M  ¡      m  N  ◊#  !  ˘  ≥  (  R  ¸  +  ]  ª  Ö  o  )     ø  W  …  ç!  8  z  1  j  O  œ  M  ∏  ô+  ¥  f  ò  j  ´  ]  ˘  k  Æ  †     È  Ÿ  p  Ô3  e  ˛  ,+  ^  W  u    ç  e  ]  x#  ^  R.  ´  –  M  n  N  8  Ç  ö  y  î  N  +  ˝  ^  {  Ø  N  Ô  Ú  !  +    J  Æ  í  w  M  O  ∞  P  E!  O  v!  n  x  N  å  ¶  Ø*  á  X  å  M%  4  ê  F  _  M  T  ∏  =  e/  +  I    o  o  î  '  Ö  ô  É  Œ  {     O  	  ¢    '  {  ò  ç  ÷    ˙  i  Ö  ˇ  ˙  Ω    à  X  º  z)  *  †  O  N  3  Õ  A  û  <     9  ˆ  >  d  È  v  Ì  ò  ]       ~  Z    ü  M  ]  Õ  π  ¬  O  `  È  á  {  X  n  ï  ÿ  ¨  i  å  Z.  E  ÿ  "  Ó  ]  “  ˙  ∂  ≠  @  ‡#    
+  ¿    °  e  +  ]  €  
+  e  ©  ô  ü  n  M  Ì!  Œ  (  i     ⁄        ˝!  æ  O  á  X  ê  ç0  O  E  	  n  I#  …  O  .  "  J  )  H  W  …  ∫  	  å  ù  n  Ã  -  _%  O  À  Ì  {  )  b  5  Ø  O  b  N  ^  n    í  Ω  )+  p  X  Ó  ﬁ2  N  Y  	  A  µ  ]  i  J  v  5     i  M  n  è  à2  é  Y  ]  ˙  T  M  ^  ‚  Y  ⁄#  ÿ  “  5  Æ  `  Î  8  ã  @      ï  ^    X  ‡  w2  @  L  	    P  _  O  ˙  u  ‰  n  í  È  I  Ï  *  Ô  Æ  ^  å  n  M  o  +  b  ≠%  M  ö    ©    Ω  7    ù  È  ä  ¢  A*  á  X  å  N  )  Î  i  C  è  Ö  Y  P  %2  ˝  Í  l*  )  W  M  ª  °    ]  g#  M  ª.    Ô  {  I  Œ  ñ  È  n  _  ⁄  ?  y     Ω  Ó  Ì  ø  ´  }  f.  +     Ó  ò  s  -$  <  Y  ÿ  ,  Ô    M  π  È  )  Õ  «  å  ô  Ñ  Ω  n  *  O  	  b  ◊  v  P  Í  ﬂ  Ñ  ä  ˚  j  ;  M  Ä  Ω  Û!  Ø  X  x  A1  ›  `  	  _  ˜  ]  X  ^  £  Q  »  {  a    ü  _  Æ  _  «  N  %  ‰    …  ª!  à  ^  O  P  ﬂ  t   O  V   ⁄  [  …  å  ì  R*  á  X  À  4  P  
+    ˝!  ©  ]  á  Z  ä  Í    X  Ö  Æ  ú  –&  ∫    °  s     ÿ     '  Ó  :*  M  H  ´$  {  ·  …  2  »  ≠  3  Å  ú  <  n  ®  π  ¿  ú  9  @  o  ^  ö!  “    t  Ω  Ÿ    (  #  Ï!  Ω  é  á  X  Ø  /  E  8  O  ≠  L  ¡  k  v  n  @  ∞#  Ì  9  S  )  ≥  \  +  ]  {  ô  Ù  I  È  ﬂ  W  )  ç!  Ÿ  ?  `  p  Ø  0  ]  x  ,  ‘  ‡  ò  ^  °  ]  @  M  	  ·,  '  Ö  W  [  b  $  È  ˇ  ˛  	    1  œ  í  ]  ﬂ  g  x  r  O  	  ]  ∏    '  á  ë  `  ]  ›  €  N  v  Ω  p  Ø  W  ≠(  Ô  D  ä  K  …  ô  ¨  m       ^  Ì    (  â  Ç  m  `  ¢  ë  _  +  ©  ï,  |  Ä  ¯  ©  ˆ  ^  V  ]  £  Q  «  c  b    ü  _  e  ˇ  ≠  Ó  ≈  D  }  …  ƒ!  â  ^  K  O    Ù  5  3  ˙  <  ]  Ô  Ω  '  á  X  S  Á2  j  b  N  |  ^  X  É  (  ≠  >  	  õ  ç  i    /   O  Ω  :  ò  .  _  G  p  Œ  :$  I    O  Æ  a  Û  m  M  ]  m  å  Ω  à+  ò  X  y  5  O  ]  m  ˙"  i  ]  Á  ]  Á  ù  À  i  È  Ö  ‡  ˛#  π  2  ˆ  †  Ó  ∏  o  ã  X  ≠(  2  a  ·"  H    ;    h  m  T  ≤  º  +  ]  ª    8  i  ™  †  {  M  M"  Ø  {  È  *  :  a  w  ^  #  Ω  `  ò  W  å  +  D  _  	  ™  $,  N  Ò  Y  £+  é  *  á   æ  ÷  d  Ó  ï  Ÿ  ]  ¡  n  ò+  Y  O  Œ  X  2  %  a  Ï    ¥  7  ç  ]  o  ≈  Ω  2  á  X  å  ≠%  Q  a  E  M    ä  ô    ≤.  `  N  ]  ›  Ó  \  u  ˇ  `  Ñ  å  X  Ω  5  ©  N  l  È  -     ›  ø  Î  
+    E  *  Ô  Ω  ]  á  i  ù  ö-  5    K  à  [  h  P  M  {  \  {  M  p  ã  Õ  ﬂ  Æ  œ  Ç  î  á  _  ä  .  «    	  )1  è  x  ±  Á0  Î  3  ∂  	  ∞  ¢  ≠  d  &  1  Z"  x  À  ø    V  ¥  ô  9  ê  ∫  ¡  ¿  ©  ◊  M  æ  ¡  á  i  @  ∫     z  -  P  “  ©  `  :  m  $  n  ª  i  )  }  2  Ô  n  ]  {  ]  õ  ¿  ¬    ≠%  E  -  ê  ˇ  =  v  ,  ©  ù  	    ¢  h  n  X  C  ◊  Y  @  ©  #  %  z/  5  Õ  .  À  n  D  ≈  E  0  ‘  s  g  o  Ø  ]  P  ö  Æ  e  e  n  Q  Î  F  O  ﬁ  ^*  )  h  ^  (  å    ]  g#  N  √.  ´  œ  N  j  M  á  O  º  V  4  ç  …  „  M  n  Ω  21  ò  X  O  z4  O  5  _  +  :'  *  V!  _    4  R  p  k  ;    Ω  ¿  Õ  •  h  \  B$  Z  Ω  Õ  J#  i  o  g  ’  t  2  .  4      `0  Å  ˝  ,  ]  ª  n  !  â    ¬  Y  …  ç!  È  ã  1  ∞  O  ∞  Œ  …  Ê*  e  Ù  á  W  å  ç  X  j  	  `  ∑1  d  z  G  M    Ä  ¶  å#  k  ]  !  Ω  {    X  C  7  x  O  	  3  <  :0  O  M  n  k  	  j  e  Â     ﬂ  K  ˘  ë  ù  n  ä  *  i  '  ?  ]     j  W  M  Î  ù  ©  ]  ?  Ä  Ω  ë  _  3  â  Ã*  
+  {  w  Y  s  ï0  Q  >  {  w  N  B  ´  ø  ‡  N  Õ  …  j    n  M  x    _  {    Z%  z  Ö  M  k  ^  ï  ˚  ô  Æ      ±  b  Ë+  {  ?  O  ›  ~  ]  Â  ﬂ  5  Æ  E  „  M  ~  Ò  æ    ô  M  ò  X  s  ~0     «  Œ  Ô  ¥  I  P  /'  Z  y  ≠     C  ≠  k  ´  ù    ]  x  ]  Ô  ô     n  {  n    }  œ  O      )  3    Œ  Ü  √!  •  i  x  %.  @  O  	  ¿  C  n  ;  I  √  O  ÷  ]  Ä  ﬂ  π  0    Ø  Ú  °  Ö  Q  ä  )  "  x  M  P  ¿  P  4!  O  !  n  b  N  ñ  Ω  <*  Ø  W  ˙  M  w    j  M  3  M  K  M  +  ™     w  Y  Ø  	  )  <  £  Ö  »  n  ]  Z    Ô  _  n  ⁄    m  $  O  8  á  ç  e  n  Ω  ›    Ω  u  ¨  ]  @  @  ©  Ü  e  h  ©  Ç  6  $  ≠  A,  M  Ü  Ë  ®  :  £  n  9)  n  ö  Á  Í  Ì  é  @  [  Ω  ˝  <    E  ˜  Ñ  ò  n  Ω  $  é  X  î  D1  -  è  ø  -  x  w  Y  '  w  5  g  ñ  7  N  X  À/  e  π  n  ä  N  ñ  O    B  Ì$  •  ?  5  Æ  B  $  Ó  ~  ë  ^  Ω  ≤  M  n  X  S  o3  `  Á  )    Ë  ]  O  k  ’  ±  ]  õ  I  	  K  C     n  _  {  ]  é    "  b  &  M  Ì  P  †  ,  o  <  ´  ˛  i  ¡  ï  ›    h  L    ò  Ø  	  ‚  V  <  ÿ  ˜  V    x  ›  û  h  Õ  ö  .  Ô  É  å  h  *  5  ©  ı  i  I  5  ê  K  w  ´  ]  i  I  N  T  ¢  Ò  á  W  o  ”3  O  ÿ  ^  M  Å    ø-  N  U%  `  T  P  B  ˚  6    Ø  Ê  Ö  ∞  â  Î+  Y  O  Œ  o  O  ¬%  _  ]  T  ÿ  B  à  h  W   ˛  >  ‹  ∂  l  ƒ  n  7  8  _  n  Ì  -  ö!  ‚  |  O  Ω  Ö     ª  )  Œ  ¢  Î  n  W  ”  >7  Í  >  Ÿ  M  ¯  .  ˝    Z  a  2  Æ  }  ˝  É  Ì  ñ  ì  \    ñ  Ÿ  r  Ø  i  n  Â  ]  ¸  ª  M  O  ã      X  N  O  O  Ó  Ú  .  E  —  ]  m      x  æ  `  P  ‡  t   O  U   …  ^  …  ï  ö  R*  á  X  ∫  €3  `  J  ≠  ⁄!  I  ]    O    Í    Y  k  Ó  –  &  
+  Æ  ¥     ]  Ÿ  Ô  '  >  ⁄)  C  7  #  ˚    »  ß  â  ç  M  ¬  Æ  +  n  ?  :    \  ò  †  k  ^  ˙!  µ  »  n  O  π  A  h  c  2!  ¢  /  á  x  õ  /  W  8  Ç  M  ¨  !  Y  v    N  ¨$  !  ∫  s  w    _  +  Ö  ;  Y  ª  \  ™    È  ≠  m#  P  {  h  y  ä  °    ¡  ü!  ±  è  ò  z  æ  /  O  ˘  ∫      í  ∫  v  Õ  @  ¬#    ™  ¿    °  \  +  Ö  {  ™  ß  È  Ÿ  ‡  W  )  Ì!  J  }  ë  _  O  0  N    Ã+  Ö  Ç  á  ^  å  N  4  +  ~  |)  ƒ  j  ƒ  _  ^  q  j  Ô  Ì  	  ˜  1  œ  §  n  ?  ∂  Ü  r  P  	  n  ≈    '  á  $  _  ]  Í  §  û  e  Ω  p  Ø  X  @  (  e  E  	  ◊,  *       ¿  é  ç  O  g  …  s  æ     Ω  í  `  +  i  ’-  J  a  «  )  >  W    i  É  `  W  ›  Û  M  Œ    Ä    Ú  n  ÿ    ›  N  £  â  M  O  ∞  ?  ’   O  Ü!  ~  x  M  å  Ω  §*  á  i  À  î3  E  }  )  I%  ©  j  á  O  m  =    X  ]  æ  ú  Q&  Z    ©  s     J  a  á  Ì  -*  M  W  ˛$  à  ó  …  V  ª  Æ  3  !  Ì  k  ]    ≠  <    X  £  |  …  ö!  8  ü  O  `     †  ^  Â  ∏,  4  3  á  u  í  ]  N  z  …  Æ  Ø  â  Q  `  Ü  $  ~  ü)  i  h  ˘  »  í  ¶  ^  g#  M  b.  K  –  Ì  Å  N  á  Ω    `  Á  E  6  ƒ  ÿ  N  ¬    ò  X  N  à6    O  	  R.  >  j  π  Ü  N  [  *  µ*  ë  ç  ù  Ø  Ω  @1  ò  i  Ó  4  O  5  ©  ,  H  j  O  p  ü  ›  k  >  •  I     +  N  ´  Ö  ”  Í  S  )  5  ©  h  ∏  u  '    1  o  Ω  ›  ‹  W  *  ó  ^  Ø  W  \  ’#  Z  j  ~  È"  i  ]  :  t  <  E  `  Y  È  ]  ˇ  Á&  e  ø  í  ñ  X  Å-  X  Z  Y  	  n  i  «  b  ˘  Ë    Ö  Ô  ç  ]  Õ  ö  .  O  è  ù  ^  *  5  ©    b  I  Q  @  ˝  6    P  2  )  Î  e  Ω  ¸  á  W  q  *.  Q  A  ©  ≤  7  ]  X  n  £  N    b  a    §  ´  ¿  Ø     A    §  ù  ø  π  x  Æ  O    ?  5!  `  Ü!  æ  x  Æ  å  Ω  »*  ò  i  Z  0/  P  ù  ≠  ⁄!  I  h  á  @  h  =  ˜  X  [  ^  ù  Õ&  e    ©  s   '  ä  Ô  «  /  Õ)  E  H  Ã#    –  »  ˆ  î  Ì  ≠     ¶  Ω  Ö  M  M  √  Z  l  	  ]  Õ  ó  /  B0  u  F  	  f  ≈  +  ¿    K  
+  o  å  ]  Ω    i  '  Ò  n  j    W  ¿  0  O  v  î  Æ  †  æ  π  `  ,  ∂  G)  J  _  w  Y  s  Œ.  D  Ë  Ö    Õ  –  œ    p  i  ü  —  ]  9/  =  {  q  `  Œ  …  7  Â  ´  ]  n  *  N  	  ∞  B  î  n    ≥  [  •  -  O  5  Z    #  v  ¸  5  Æ  E  £  T  H  w  …  å  Ω  a)  á  i  J  Ö.  N    …  
+$  N  {  ]  >  ]  ]  ø  æ  €  j  n  Å)  Ω  ≠  á  Õ)  ‡  t&  `  g  m  W  >  t#  X  `  ‘  G  -  :  i  v  å  ò  Æ  π  Ñ  |  ‡  6  œ  )  4  ñ  6  [  ÿ  Œ       L  T  (  û  f  ï  v   ò  h  x  2  4  P  	    G  Ö  Z  W  „  @  V  ¢  r    ú  ø  f  N  π  A  ≈  Ò  *  …  4!  b  L  5  R  £  ‘  -  Õ  ú  +  W  ‡  Ω  ˛%  á  X  !  ˆ5    j    ù   -  ]  i  ª  M  a    H  ç  i  °  ﬁ  Ô  ù  c  •  -  O  5  Y  Õ  ⁄#  ñ  E  P  Ø  E  b  N  \  ~  N  å  ï  §*  á  X  À  ™3  O  ™    ˝!  I  ]  '  ]  n  Í    X  n  M  <  Ù%  Z  N  ¿  ≥  ˛  ÿ  a  '  -  z)  C  J   $  ª  !  h  ñ  à  -  M  a  Æ  =  {  s  y  Ü  ¸  ò  ü  x  _  ˙!  ò  v  $  Y  O  ·  _  %  ,  ‘  r  á  ^     O  π  –  ã  W  )  L  =  ª#      [  6  )  -  ^  r  N  +  ]  €  ˘  l  I  Í  ﬂ  W  )  ç!  8  ü  `  k    ê  ]  ÿ  π,  4  ‡  ò  _  å  m  9    ÿ  V  Â  ∏  )  á0  f  4  ∫  ^    V  6  	  Ω  ü  n  i    ¡3  P  ÿ  é  ç  I  ˇ  X  ê  Í  d  é  @  Æ  ü  F    å  /  ]  æ  Ö  v  j  P  n  ]  +  ˇ  `  ø  `  ˘  ç  í  ª  d  K  Ω    ò  X  p  »1  ,  5  ©  ¢    ]  W  m  Ö  X  ®  -  >  M  ü  ?  ˘  é  ≠  .    ë    …  Ö!  w  T  F  @  ¢  4  +    ‹  H  n  .  ì  ˇ%  á  X  !  ∞1  Í  B  …  n!  Ì  W  h  »  æ  P    õ  ç  i    :   `  æ  :  ò  -  A  5  á  ﬂ  ˙$  ∂  e  O  Æ  O  Ù  ~  Æ  W  n  ç  Ω  {+  ò  i  ∫  4  O  ù  ≠  "  ©  n  ß  t  ß  @  n  ∏  I  z  @  ‚#    ù  ˆ  ì  Ó  	    k  ]  M(  2  l  P"  à  ê  Ë  ∂  ﬂ    M  Ú    +  ]  ˚  Y  n  ¸  ™  ±  {  M  M"  ´    {  `  ã  M  ≠  é  ‘  Æ  N  v  i    {  Ô  4    _  {    $       F  .  M  I  <  J  f  ï  ∞  á  X  Ç  ]2  @  5  ©  ë    ]  g  j  Ö  4  W  °  b  ≠  ü  ˝  Ì  ¢  ï  ]  -  ?  ¡  «  Ô  ≠  W  7  ﬂ  G  é,  Å  x  |  4  J  ÿ  0  Â  ‡  '  ^  Ω  ]  O  ⁄  ^  \  Ø  â  @  K  9  O  ä  *  …  W  M  ª  ê    Ü  #  M  ˙-  K  p  é  W  ^  ÿ  Ç  í  +  ’  .  	  4  Æ  Æ  Ω  ı0  p  X  Æ  (5     O  	  ·-  >  y      –  j  s  M  ∏  ©  s  n)  n  Æ  ]  ≥"  W  D  B  '  n  :-  Ì  *  –'  †  q  Ë  ^  h  M    ¬    +  n  ®  ∫  π  ú  9  @  ^  â  ˙!  Ø  à  Á  }    ¬  Ë  ^  #  ô  Ø  á  X  î  ⁄/  V  8  "  N  ≠  !  π  v  ~  N  ´$  !  π  ”  ÷    v  +  ]  {  ö  ı  ‹  I  Q  X  â  Ì!  8  ü  w  q  !  Ô  ]  ò  ¬.  N  Ω  2  •  X  Ø  õ    O  	  R.  O  j  y  P  ~    ]  ÷  Â  )  X  e/  f  Y  ]  |  ˇ  Y  9  O    M  ø  K  l-  7  Ì  P  °-  X  ‘  K  §  æ  π  ®  X  ç  Ì*  
+  â  `  M  C  ö  i  ]  ^  Z  ß  M  d  Ó  ç  ;  æ    á  X  œ  03  @  ›  ^  è  …  j  1  ]  ∏  ©  ^  Ê  ˜  X  ⁄-  ∑  \  o  n  »  ]  I  |    í  ]  i  ⁄   x  ﬂ  O  Y  O  œ  _  ≈  H,  ’  ”  á  ^  π  Ö  Í    M  ì  ∞  n  ∏  `  ·2  3  Í  _*  )  ]  ª  (  ù  ≤  Ö  Q'  n  J  Z  +  n  m  {  ;  ]  †  ,  ¥  I  ó  ƒ  ÿ    ï  ˜  Å  i  ù  Î2  A  Z  	  €1  
+  h  X  Í  ~  5  @  ©  ^    Ç  %2  .  ô  R  ö  n  ª  p  "  ¬  &  x    `  ø  O  9  Õ  â  }  È  Æ  ¢  *  n  X  C  ˜    
+    â  È  ç  ù  n  m  )  i  =  ˆ  2  Ü  ?  ô  ?  Æ  .    $    i  B!  â  ^  O  I  ”  ï  5  }  ˙  =  ^  è  ï  £&  á  X  Û  é6  Í  B  …  l!  Ì  W  F    ç  O  	  ;  é  i  ≤  ÿ  Ô  å  `  8  .  W  >  q  -  z#  )  Ÿ  P  Æ  `  t  M  M  ]  Æ  y  ï  °  ©  z  Ω  m#    ∞  -  ^  ^    +  n  ≈,  ›  ≠  ˇ  Í  e  y  Y  è  O  m  æ  u  O  -  ©  Ω  •  -  J  §  !  Ø  ∞  }  â  Ç  ~     Ω  ≠  _  m/  È  7(  *  X  ò  Ø  K  J  .  M  h  É  *  ]  ˝  Ø  y  z     ‡  ~  ù  ]  ]  5  ©  @  ˆ  ]  1  O  +  d  H1  »  D    i  å  Ω  π  á  &  A    y  +    Ö  ∂  ≈     ∆  [  ∫  M  Y  ^  i  t  g  å  :  Ñ  ]  ]     ¿  	  ¢      P  9  ?  ‰  ä  ˙  k  ;  M  n  Ω  ﬁ!  á  X  x  Y2  @  ∞  	  0  2  ]  E  È    E  à  m  r  n  π  0      Ú    ≈  ë  }  )  “!  w  ^  `  E  ƒ  Ù  5  ’  J  D  I  N  ü  ø&  Ø  X  B  ˙6  J  ¢  )  π!  N  W  s  Ë  Ö  ™  ´  4  ô  M  "  !  J  ø  	    É  ÿ  P  ´  ˛  :'  *  p  œ  è    ≈  H  Ó  È  Ö    ¬  §.  ò  i    ¡.  @  -  ©  ‘)    n  9    ^  z  Ö  X  â  z  Ä  c'  !  n  v  ”   (  Í  Y  Á  N  ç*  M  H  Q    F  B  n  ]  0  n  v  Ω    á  X  å  M+  ]  I  ‚  ≠  Q  Å  z  ©  I     &!  ˜    /  )  *  \  é  Ö  Ë  ç  4  X  Ÿ  N  _  {  :  Ÿ  m  $  O  9  Á  Ì  ≈  â  Í  Ω  `   ê  h  Ω  ⁄/  O  Y        í  +  ÷  -  P  ]%  ÷  y  '  '  ≠  e  +  ]  €  ˘    È  x    ]  …  ç!  ÿ  ?  `  Y  O  œ  M  ∏  {+  Ö  v  á  X  å  ≠  y  K  …  T    ]  ∏  O  …2  3  ä  *  …  ]  M  {  å  ∆  n  l!  i  ë-  Î  p  é  W  ^  ÿ  "  £  +  ‘  -  	  5    Ø  æ  W1  ò  X    o1  ä  O  	  ·-  ?  N  Ÿ  ∏  ï  Í  Ö  )  +  …  Y  ë/  v  Y  ^  y  M  ü  O  B  ‚  ö$  •  2  6  Ø  O  Î  I  ô  †  m  |  Ω  N    i  †  J.  @  ∫  	  P  n  Ö  P    ï  §  ]  õ  È  ©  Î  *  Ô  Œ  g  È  j  ˝  @  ¯  }  Ì'  Œ  Õ   Ç    E  (  M    €  v  é  Ω  ™  ñ  X  C  ˜  x  `  	  Ç  7  ç0  O  ]  ]  F  i  e  %  7  Ä  ﬂ  K  
+  Ç  Q'  {  Í  ˙  À  ]  æ  Ö  à  ™  Ó  +  ¥  7  Ë  u  Â  Ó  æ  ó  p  W  Ó  \1  Í  ê  ≠  Ì,  w  ]  *  ò  v  O  ]  È  E  M  i  ∫/  f  Y  ]  ]  é  9  á    p  ˙$       }  C  G     ¸.  W  ›  è  \  u     ¿  É  å  ]    5  ©  
+  z  I  5    =  k  K  j  v  È  N  C  Ω  ë  á  i  ¿  q2  N  K  >  x  t#  Å  l-  ∑  "   Y  ˘  v  <)  j       ‘  á  W  å  M  <  á  	  ¿  a/  §  $  _  ™  Ç#  œ  ⁄"  ñ  ú  é  t  ¢  S+  á  X  z  â4  k  ˝  æ  "  ©  ^  ∫  ?  Ç  }    i  j  Ì  —  «%  ô  e  Œ  ¿  ˛  x  ê  ∫  .  m)  ]  =  À#      ª  ñ  â  û  ^    e  +  ]  €  ˙  K  â  ∏  º  W  …  -!  8  x  1  Z  O  p  Ì  J  8+  ∆  e  á  X  ç  Ó    Î  i  T  Ô  ]  π  O  ^2  ‹  ã  *  …  W  N    å  e  y  Ï   ©  ÷,  Y  O  Õ  ∏  Ÿ  °  ¯  ó  Ï!  @  ◊  8    ¯  |    z    Æ  °  Ö  g  ‚  i  “  W  ˜    i  i  t  -  u2  ±  ≠  J  ø  ¶  €  á  W  N  Õ  P      /  €  â  k  ⁄  U  q  n  \  ©  i  L  3  Ô    Ö    à  ≠  ü  4  m  Ü  Â  ≠  0  è  +    M  ¥  Ë  Õ  ¿  Ω  ë  Q  ,    ˚)  j  _  Y  X  Q  ]  ]  *  :  Ò  I  œ  i  ˜  ï    ∑  ∫  ]  Ú  ^  )(  m  ò  =  W  w  #  p  Œ  `  }  +  ç  ]  ]  ¥  Ω  ”-  Å  W  e  2  4  =  M  ª%  Ë  ^  9  ¥  ^  O  ]  	  )  y  Ä  Ì'  Å  Œ  v  @!  Ë  ô  Ø  ⁄  N  ç*  N  1  |%  H  ë  )  >    m  T  S  º  +  ]  ª    5  …  	  _  È  Æ  Õ#  0  ˚  	  J  7  è  ñ  Z  ,$  ï  ?  ò  X  å  +  D  l  	  
+  Ñ,  M  Q  π  ±+  é  2  /+  ^  W  »  {  å  æ  Ö  b'  o    O    Ω  ^      F    O  y  +  ~  Å  ^  Œ  ï  M  ò  X    Ê/  `  ß  ≠  œ  Œ  ]  w  z  ı  q  ]  \  i  …  k  2       ]  ⁄  ]  Ö  _  ∏  J  ∫%  M  Z  Y    O  »  ^    à    ·  ¬  ˝  n  i  l  ñ  @  ê  Æ  S  –  I  J  p  Ë3  o  ˝  +  M  h  »  (  ç  e  ]  g#  N  √.  k  è  ]  È  Õ  ª    ú  <  u  -  	  #  û  N  ¶  ‘0  é  X  Ø  ô4  O  O  	  Ñ,  )  y  +  ê  ^  ˝  Ö    ≈  	  s  `)  a  3  …  Ö  L     €  Y  Ω  /  n  Æ  ⁄&    O  ÿ  õ  W  y  i  ˆ  e  Ω  ]  n  X  ¿  à  ä  w  	  %  ç  N     _  M  O  N  t  ñ  ∑  ?  à  ç  :  ö  e     E  l  	  R  w  v  ù    ]  g  j  ⁄  \  ª  -  O  Ω  Æ#  ò  X  ·  ¡3  O  ê  Æ  #  _  ]  È  )  M  O  s  O  d  ]  é  è  è  é  Ú  á  =  q  ™  Æ  ì  w  M  `  `  ‡  Ç   O  !  m  O  )  ∞  ¿  +  á  X    R0  s     Õ  È"  i  ]  :  t  I  Q  j  Y  I  ]  ”  ˛#  À  ?  ˆ     >  ∏  œ  +  j  z)  L  T  ™#  ˚    ª  ß  ö  é  N  ¬  Æ  +  ]  ®     Ã  	  ¯  †  n  M  Z"  ¢  (  {  P    A  W  c  )!  Ω  /  ¶  X  î  Õ/  `  E  	  o  ™#  )  6  /,  Ü   ã  i  )  ]  ©  ï  ^    £  _  ≠  o  ó2  @  Ç  Î  i  é  W  6  õ  -  O    Ë  ã  	  B  è  é  å  o  •  -  O  5  _  m  #  ÷  Z  5  º  E  C  E  +  ˇ  ©  å  ¢  1(  á  X  Ö  l1  Í  ¬  ≠  |  ]  W  L  P  n  ™  6  è  W  i  2  Ê  Ω  í  Ü  r  ˆ  }  i  R  	  e  Â  Ä  ö  á  $  †  Í  
+  ¸  ]  ô  å  p  Ø  i  <  ¥%  -  ù  Æ  @%  (  n  g  ’    @  Ö  π  I  n  @  ˛#    ù  ˆ  S  N  …  /  M  m  ≠(  2  P  ~"  Ë    H    i  n  C  R  m  +  ]  ª  π  ,  ¸  ©  ∞  {  M  M"  ∞  €  ‹  *  Î  a  w  ^  ¨"  Ω  Æ  ®  i  ¨  :0  O  X      }  R  y  6  ç  ^  ,&  6  J  œ  ÷    Æ  +  y  õ  j  c  â  y    k  …  ç!  Í  ?  P  Y  P  –  M  ∏  Î+  Ö  Ç  Ø  ^  å  ]  A  '  …  Ø    J  @  Ø  π    s  ’(  I  É  »  õ  Ö  E  y  ß"  M  U.  K  –  N  {  _  Ü  x    O  Ù  Ó  …  U  r  Œ  ï  ¸1  p  W  ø  E5     O    ‚-  >  Ö  )  P  è  H  ]  Œ  .  I  D  Ç  Ø  ´  ]  ≤  6  a  G  E  	  ä  J  w  z  r  —  Ä     J  <  ]  y  æ  j  ò  W  ]  5$    }  ç  ∫#  â  ]  ß  t  ß  ,  ]  i  y  ≠  =  á&  Z  Æ  µ      n  Ÿ  P  z  Ó  ]  	  h  '  Œ  O  p  n  E  7  a  ä  Ω    á  W  ˝  í  E  Å  	  O  ∞  W  @  ˝  n  V  Õ  6    .  Ç  )     v  ]  ˚  ]    O  B  ‚  ö$  +    ∞    O  ö  ﬂ  ã  ﬁ  ©    æ  W  n  i  U  6  π  @  ©    ∏  /  G  .  é  +  y  3  X  Â  0  ‘  Ä  «  Ä  î  ]  _  '  …  f  ∞  â  @  n  &  q  W  ÷(  ©  ]  «  õ  Æ  Â  ]  G"  )  í-  K  p  û  i  M  &  "  °  +  5  ü  i  Ñ  ˛    Ω  à1  p  h  ¿  m5     O  	  A.  ?  j  J  Œ  Ñ  ›  X  …  ,  …  i  â.  d  9  ]  V  n  J  Á  P  –  M%  `  ”  ›     	  §    7  j    Ç  F"  J  ø  	    y  ÿ  P  K  ˛  ⁄&  ñ  k  –  /  O  t  ü  Œ  ]  ≠  î  Ω  ﬂ,  ô  h  ˘  ⁄7  G  A  Y  m  ö$  V  ^  O    O  √  M  ^  n  Æ  å  ò  !*  á  X  ´  3  E  Í  M  π!  È  X  ]  O  ]  j    X  ô  -  ∂  ◊#  π  ﬂ  ˆ  3  }  Y  ‡  +  X  ∫(  2  P  ~"  €  †  Ë  ∑  Á    M  ·  ú     n  á  X  Ø  á  +  K  	  ‰,  *  [    P  ~  }  u  v  Â  )  X  é/  e  Y  o  ã  Æ  h  O  ¢  B  Ì$  •  ü  O    O  ∫  M  ˛  v  h  Ó  ï  Y  n  X  D  Á  j  O  	  a    Õ/  O  û  ˛  ¯  ^  >  8  X  M    T    t  å  m  =  À  ø  À  ù  ^  =  0  ]  `  ·  Õ  ∂  X  .  s  Ω  ë  p  <  ÷   *  ù  [  y  m  ]  n  È  )  M  O  W  ﬁ  d  ø  .  Q  .  .  Ú  ¡  H     l    W  m,  Œ  ,  .'  »    à  M  ˚  Ó  ≠  “    Ú  ]  õ  π  ^  ¸  ©  ±  z  M  M"  O  {  ‹  w  ä  °  ∂  ¡  à!  ±  é  ¨  y  í  z/  E  9  Ç  O  æ  2  π  v  Õ  @  b#  u  …  †  …  ·  ¸  +  ]  ª  o    ©  ò  †  ]  N  Ì!  Í  ?  X  Y  O  œ  M  -  H  ´!  Ÿ  ˇ  %  k  ]    `  K  é  ⁄&  â  n  –  /  `  t  Ì  -  ]  N  ı  Ω  –,  ò  X  ö  S6  }  ›  Ó  $  â  ^  «  4  g  A  n  )  ©  ]  @  &$    2  ˆ  †  Ô  ¯    k  _  M(  3  Q  H"  à    ;    …  O  â  v  ¿  j  Ø  X  ¸    `  `  	  Ñ,  *  ~      –  
+  ]  ˝  X  ©  s  ô)  n  ø  \   #  ∂  S    ⁄  é  ˙-  M  B  –'  †  p  €  ^  h  N    "  o  ˙  ]  ?  (  Î  5  X  `  È  Æ  z#  Å    	  =  ÷  !  7  ^  }#  ¢  n  ®  X  å  ç0  g  R  	  Œ  ©#  )  P  .  "  J  M  H  W  i  µ  ]  ˇ  ‡  ^  k  X  /  ÿ  –  ˇ  y  M  §  +  û  x  è  _  ©  ,  
+  Æ  ï  „   p  h  Û  ˇ.  O  0  M  ±  L  h  È  â  M  O  T  =  R  ^  .  E  .  /  Ú  ¡  ÿ    ™  Æ  ì  w  M  O  O    Â   O  !  ë  y  M  å  ¢  [*  à  X  π  ∫/  P  ˝    ˚"  	  [  :  t  ú  4  Ö     È  ]  Ë  '  ¡  n  î  ‡     9  P  z  Ì  Õ)  T  ö-  è  L  «  8  º  V  Ω"     \  Ω    á  X  å  ö-  Í  Y    Œ  Q  °  z  …  _  5  √"  D  8  ”    ;  m  Å  Ö  {  -  ◊  X  Í  ø  O  W  -  x  r  $  `  J  Á  ‹  ∏  œ  æ  ÿ  ò  i  å  ö-  5  ∏    Õ  z&  6  é  p  œ  O  £  -    h  ç  5  Ω  :,  Ø  X  K  g5     *  .  ©#  …  ]    Ö  ©  4  ]  X  È  i  Ä  Ø#  π  ?  ˆ  ì  ﬁ  X  ·  +  ]  )  >  H  A#  õ  !  h  7  â  .  N  a  Ø  <  Ö  ®  π  ß  <  Ÿ  ‡  y  )  ö!  ∞  €  Á  Ω  ⁄    (  #  Ï!  ï  Ó  á  W  •  :0  O  4  ©  Æ  â"  	  V  _-  ï!  Ÿ  )  H  W  …  «  ©  å  æ  ]  Õ  -  8%  a  ÿ  Ó  z  …  U  -  Ø  `  ¥  C  +  ≠  	  ç  Ω  F)  ò  X  ô  3  E  }  )  S%  ©  â  G  t  G  5  ^  i  n  ≠  ù  ø&  f  Ø  ©  Ä   '  Ÿ      -  m)  M  =  ≠#      ª  ó  à  Ì  æ  ”  Ø  +  _  ;  Y  W  I  È  ﬂ  W  )  Ì!  p  {  È     Ÿ    ∂  ¡  ®!  Ω  ü  ß  X  n  8  V    N    O  2  5  @  Å  u  ›  ~  ¨  ,  ]  o  ò  S%  á  h  s  4  O      ’  M  n  ©  »  ≠  O  â  ˝    h  Ó  Ô  Ô  è  Ú  ﬁ  ,  q  ™  Æ  ê  w  N  O    ∞  •!  O  v!  ∂  x  ≠  å  Ω  ü+    9  u  î  d  Ω  Î  i  9  N  x  Ω    Ì  ç  ¿  «  6  Ç    Û  Ω  ¢  p  +  ∂  Y-  Ω  è  ß  h  h  d  È  â  M  O  V  è    M  Œ    œ  n  Ú  n  Ö  Q  J  M  2  w  M  a  ¡  ?  ‚   P  !  )  O  )  û  Ω   *  Ø  W  Z  /  `  ™  ≠  Ú!  I  ]  z  O  m  J  ˚  X  â  ]  ê  á&  k  ¿  £      )  y  P  ∫  >  z)  C  2  ™#  ˚    [  G  ö  .  M  a  Ø  +  ]  Ë  
+  π  ©  ô  ü  ]  M  ˙!  `  à  È    9  a  w  ^  Ω"  Ω  Æ  á  X  Ω  Õ/  V  Í  "  M  ¨  !  π  i  ﬁ  Q  y#  p  u  Û  …  ‚    <  ]  »  Ö  ˘      ú3  I  ?  Ó  ƒ    Ì  T"  ¡  ”!  w  x    ê  ï  ë*  ò  i  Y  o3  O  =  M  —!  I  n  t  >  `     M  T  »  +  ﬂ.  €    Z  N  €  û  ¿  A  8  û  ]  I  ≠  j  ø    0  A  G  M  I  g)  Q    ù  X  å  ç  π  j  	  `  ∑1  W  Ÿ  N  1  ﬁ  À  #)  ©  ]  »  õ  ç  Â  t  ß"  )  U.  Î  p  Ì  h  _  f  "  ¨    ı  M  æ  J  È  x  ï  ‘)  á  X  ù  æ  x  K  …  K  P  i  È  !  ä3  Ú  ù  +  M  W  h  (  å  ≈  Ö  «#  N  R.  ´  @  ]  ]    ≥  Ω    V  E  Ì  …  C  K  Œ  Ω  ˇ2  }  X  o  û1  ›  O  	  R.  O  y  Y  ∆  ~  6  Ö  ˆ  V  M  `  I0  e    ^  °  o  )  ∞  ¬  b  ≠%  X  ˇ  `    O  Ÿ  m    ~  È  N  Ω  {  n  X  C  ÷  
+  R  	    ∏  /  O  Ó    «  M  Y  W  	  l    ù  Î  Ñ  \  ]    ∞  i  ”  H  ÷  x  ô  ç  ÷  ›  l  ¨      Œ  û  ˝!  á  h  â  ı-  N    i  <  >  n  )  	  #  O  V  }  í  ˇ  n    œ  œ  Ú  a  x  ±  Í  )  '"  x  M  W  o  ∞  "  ∞  ⁄!  v  x    Ö  ¢  Ø*  á  W  Y  ó/  O  O  	  ¨  ¢  ]  O    :  ‰  ∂  ‡  …  V  Ñ    å  ˘  n  Ÿ  M  (&  P  À  Ó  y  …  b  5  Æ  O  ‚  7  ÿ  ^  	  å  ¢  †(  p  X  ö  q.  _     i  ™#  ]  f  ∫  O    Í    Y  q  Ó  q  x%  ´  e  Ì  S  û  ¯  œ  ã  h  {  È  ]  ã  Ï  ,  `  n  3  –  ]  N  ∏  °  ò  i  é  à  X  œ  N  ∂,  r  n  π  á  v  O  ]  I  \  _  `  ˙0    y  ]  ë  o  :  ∞  b    M%  ¯  í  V    O  ö  C  	  `  ç  ≠  Ω  n  n  W  3  À0  O  ß  ø  œ  ⁄  n  O  €  µ  q  Ö  [  	  i    2  Ô    n  È  \  L  ?  Y  ›  Z(  ?  :!  B  Œ  O    m    à    é  ª  ›  n  W  \  '  ô    2  W  ∑  ˝  ∑.  ˛    _  y2  7  à!  /    Ω    á  X  µ  --  5  i    .  Q  °  Ÿ  …  d  w  ^  ]  (  @  3  -  ï  n    X  È  ü  A  -  ©  √  H  ]  <  ]  n  4  ˜  .  c  M  °  ﬂ  ô  .  ≠  .  •  —  "    ≤  L  >  F  _  Ü    -  '  â  ,  n  `  Ω  &  ≠  W  è     *  >  j  M  +  ]  ù  -  Û    ]  j      õ  -  í    j  Ö  ]  “  9  O    n  Ö  ≠  Î    O  Z  ˇ  ç  (  j  K  Ω    á  i  í  o2  @  O  	  ±  6  y  k  {  C  A  ∂  w  a    ü  _  e  Ÿ  E  Ö     È  X,  Y  O  n  d  >  ¥%  á    O  µ    I    >  v  ¶  ™0  p  X  Ø  å4  w  F  	  $,  H  ]      ø  ™  Ö  ˝  ≈  	  s  ˘)  ¡    l  Ä#    R  ¢  .  =  Z(  >  (  ¬  N  O  ’  -  	  5  û  Æ  Ω  ø1  Ø  X  ¿  '5  *  O  	  ·-  >  ]  â  n  ~     n  	  x  i  i  “.  ]  ô  ]  V  Œ  "  Á  p  è  &     í  =  m   i    n  ˆ  k  7  ›  å  D  ä  X  <  )1    b  N  ﬁ1  ’  j  P  {  Ü  y  Å  W  n  Ö  Ã  ˜  å    ]  +  y  ≠  p  Ç  ¬  m&  M  Z  j  Æ  O  '  M    €  à  Ó  ï  K  ñ  W  e  ◊  Q  @  M  á    ?  O  ó  ®  g  M  ˙  ]  	    Ø  _  _  Ñ  å  ^  }  5  ©  ”  |  	  o  -  ¢  d  A  Í  Ø  q  L    Ω  ú  _  ⁄,  _  I)  w  :  µ  M    j  B  ]  Ö  Ÿ    ¸  V  O  q  ü  ˘  é  ≠  Å  ¯  ë  z  	  À   R  >  5  A  †  E  -  l  <  +  W    Ω  %  à  X  a  D0  P  è  ø  #  M  ]  º  {    O    ≠  ©  2  Y  !  à  ≥  n  :!  ›  {  -  [  	  U  ^  Ñ  _  )3  m  r  x  F  V  ø  @  ﬂ  Æ  œ  |  â  j  =  
+  ≠  y  `  È  =  —  ã  _  Î  ù  ©  ]  -     Ω  ë  `  +  i  .  =  à  â  Y  r  »/  @  ˜  \  p  ^  Ô  O  /     ]  _  ”  o  9/  K    f  O  m  i  <    P  ]  j  _  +  °  í  H  v  u  N  Ü  î  ÿ  È  ¯+  f  N  Œ  ]  2  %  l  Æ  E  ‘  M  n  …  /  ¶  Ω  H/  ò  X  œ  ∞2  `  ?  ©  A*  [  ]  G  t  –  w  {  {  ∏  ]  ”  ß'  .    v  ‡   v  9  Y  ö  {  ∫+  m  H  Ã%  ;  ê  ;  ?  ≈  Ú  n  6  ï  Ÿ  ≠  i  í  ö'  O    0  .  {    i  Œ  r2  ò  â  ò  ñ  ò  â  h  ê  e  ]  w  ]  *  I  _  n  N  ç  Ì!  B  ‹  `  *  {    {    !  ¿  J  ñ  W  K  v  ¯  è  C  h  ƒ     f/  W  ÷  _  ≤1  à  ¥   o  ‹  ï  Y  ê  i  °  ⁄,  Í  π    Õ  R  ≤  Î  )  `  P  ⁄  ç  k  @  n  ‹  ó  Q  á  X  ∞  ê6  J  5  …  ]     6  *  ﬂ  ˆ  –  	  ˜  ™  Ó  ≠  “     ˆ  v  ˚  Y  ´  ú  I  Q  Ö  M  Ì!  O  	  ]  _  U  œ  w  ·  )   Ω    ò  i  å  ö-  5      -  b    9  )  N  A  y#  p     †  …  B  \  +  ]  ª  +  ù  I  8  ?  W  )  Ì!  ¿  à  È  j  z      ∂  Á!  ¶  N  á  W  ê  m/  O  i  '  n  Ã  A  y  )  é  `  *%  É  y  °    M  Ω  ±  n  ∫  N  Ã    _  	  j  _    l  Ö2  ı  s    ˜  V  Æ  _  y  Æ  Œ  É  ±  c  N  *  -  »  ‡  	  =  –  }  m  K  ]  	  È  ˇ  T  æ  H  Ø  X  œ  74  `  x  D  K  T%  á  ü,  ?  Ç#  Q  C  p  a  {  )  …  ¶  E  Ö  ∞  â  ã+  _  N  ﬂ  {  2  %  P  ]  O  Ÿ  `  =  Å  ˆ  ]    ?  ∂  î  s0  M    d  X  s  -'    B  Ÿ  ‚  ≠    ;  O  ¿  ^    ¢  Å  á  X  è    f  ß  Æ  p  n  Ö  z  +  ı  q  ]  [  	  i  ´  C  ˇ  n  y  ®  ]  L  @  i  Í  Z(  Œ  -!  Y  Æ  O  i  Ö     »  …  ^  Ø  Ω  ;  ò  W    ç  O  ˝  M  C  :-  0  ∫-  ]  ç'  @  *    m  œ  ì  Ω  B  á  X  _     *  Á  Ó  ∞  e  n  ä  p  *  w  Ω  B-  m  n    ı  U  ∞  ^  ò)  y  Í  X  ™  ]  ]  ¿  2  ›  l   È  5  N    4  X  /  ç  ‰  Å  X  =  æ1  A  P  m  í-  ä  j    Ü  w  A  {  ˆ  T  Æ  `  ˙0    y  Ä  ¢  n  )    ¬  b  ≠%  ∏  _  `  º  O  y  Æ  ^  Ö  h  Ó  Ω  N  n  W  3  E5  R  g  n  è  /  È  O  z  ı  —  Ü    …  â  ç  M  ˇ  ø  Ö  )  ]  ¨  †  ¯  ä  ˙'  -  :!  ‚  n  P  Ω  j    h  …  !  ï  =  _  h  T  7    o  7  o  O  `  ¨,  ˆ  Ù  y  Ÿ  ∂  }(  K  Ï  ‡  î  á  y  å  C  k  {  Ø  Œ  Ö  N  g  b  j  2  Y  ‚    {   Ø  y  ó  ´  á  X  å  M+    8  ‚  ø  R  Å  z  I  ?  Ω  á!      :  )  +  \  ~  Ö  à  -  ö    O  n  õ  K  ;  j  é    Y  C  …  !  l  7  Ω  —  Ø  X  ˝    `  O  	  ◊,  *  j  ^  j  ª  Ù$  P  =$  õ  ú  ç  E  Ω  :,  Ø  X  :  81    ä  ü  
+$  â  ^  Z  ‘  ¸  E  Ö  π  È  Ö  ”  ˛#    ü    `  ù  ∏  /  ∫  n  ∫(  O  ,  V"  {    õ  w  y  ﬂ  M  b  N  +  Ö  ;  k  =  	  ô  †  É  M  Ì!  ™  ı  1  Y  O    é  â  Î+  Ê  Ä  á  ^  å  N  @  +       o  È  8  –  È3  t  ^  ”+  Æ  Ö  ;  õ  9  £  `  F)  {  Ô4    Ω  Õ  ﬁ  v  ®  j  ç  x  d  C  h  ï  •  œ  Ω  ∑  p  X    g/  O  ‚  	  O    W  V     ]  P  â  i  Æ  Õ  ì  ¥2  Ô  Y  ^  Z  ]  n  ¿  b    ∫%  M  Ì  Ô  O  )  Ü  +  ´  =  	  a  Ω  À    X  C  ˆ  Ÿ  P  	  2  <  ö0  O  ]  Ö  5  	  i  %  7  (  {  º  ≤  S  )(  n  	  '  Ω  Œ  n  ]  H  
+  ™  Ÿ  #  N    4  e  @  æ  Ñ  ò  X  Ω  (3  Q  j  	  ‹1  ˙  Ö  8    ï  ä  -  ˝  M  ≠  `  `0  _     ^  {  Æ  _  E  ‚  ã  :$  Â  ﬂ  5  Æ  O  Ÿ  H  ã  Å  N  Ω  ï  >  o  i  ‡  Ö2  N    >  o  3  '  W     ≠  W  O  Œ  >  »  Î  e  Ω  ﬁ  á  W  e  M2  Q  6  ©  í    ]  V  n  j  4  ˆ  }  >  M  †  P    è  ≥  ·  X  Ñ  k  	  Ø   E  >  6  A  á  ’  >  }  õ  +  ]  o  ç  f%  ô  h  a  ±4  ^  ê      ^  n  …  à  m  z  å  W  É  h  N  O  O  Ô  ˛  ’  H  q  ™    ê  x  M  P  `  ë  Ç   K  V   *  O  )  ù  ¶  Œ)  á  X  :  æ2  G  ä  »  A%  ©  ]  z  L  n  Í    X  Ü  N  1  '&  Z  _  —      ]  ÿ      -  z)  ^  T  ∏#  ˚    ª  ñ  ô  ˇ  Æ  a  N  +  Ú  ˆ     O  π  œ  ã  W  ≠(  ?  =  ·"  H  P  ˚  ÷  (  Œ  ^  r  O  ,  Ö  ;  Z  ¥  I  Í  ﬂ  W  â    O  n.  #"  ´  )  I  W  )  ¬  i  û  £  ]  Ã  .  …%  Ø  À  ˛  [  …  T  5  Æ  O  £  T  I  N  	  å  ≥  °(  p  h  Í  C1  4  "  n  ‹  W  h  `  6  j  ˝  	  3  Ç    Ú  "  9  ]  &    â  Í  `    Ì  -'  *  M  !  m  °  Ë  ∑  ‰    N  
+  ¨  ¿  6+  á  X    ü4  O  
+    â"  ©  Z  :  r  ‹  F  ÿ  X  È  f  ”  ´#  π  ?    †  ﬁ  X  o  +  _  ∫(  C  P  —"  ;  è  ;  ∑      M  A  \  +  ]  ª  +  ù  i  ¯  ˇ  È  Æ  m#  Å    	  J  ÷  Ç  ó  X  ›#  Ω  Œ  á  X  å  3  $  ]  	  á  ’,  M  ƒ  y  ”,  æ  O  ˜!  .  W  É  ]  Ó  K  n  o  ^  ®,  _  O  ’  [RUNTIME R4] total_cycles=0 tasks=0
+[RUNTIME R4] end
+[MPU] 

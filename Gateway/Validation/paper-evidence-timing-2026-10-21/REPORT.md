@@ -105,6 +105,204 @@ instruction cache (or place `memcpy` in ITCM RAM), or stop copying 1.5 KB
 messages inside the kernel's critical section (pass ownership of a buffer by
 index instead of copying it through the queue).
 
+## 3. Alternatives with trade-offs: A0 / A1 / A2 (2026-10-22)
+
+The copy-based pipeline stays: copying through queues keeps the strongest
+compartment boundary (no shared buffer, no check-then-use window). The variants
+change only how fast and how placement-independent the copy and the gate run.
+
+| Variant | What changes | Flags (source commit `2782477`) |
+|---|---|---|
+| **A0** baseline | newlib-nano `memcpy`/`memset` (byte loops) in flash, caches off | default |
+| **A1** | word-at-a-time `memcpy`/`memset` (`Gateway/Platform/gateway_memops.c`), still in flash | `GATEWAY_FAST_MEMOPS=1` |
+| **A2** | A1, plus FreeRTOS `queue.c`, the memops, the composed gate and the update-gate wrapper execute from ITCM RAM | `GATEWAY_FAST_MEMOPS=1 GATEWAY_ITCM=1` (linker script and startup from `Gateway/Provenance/itcm/`, swapped in at build time) |
+
+A3 (FreeRTOS message buffers, copy outside the critical section) was dropped:
+it is more complex and, per the analysis, slower than A2.
+
+**A0 identity.** A0 images built from `2782477` have the same loadable bytes as
+the 2026-10-21 images (`crit-control-1000-bucket1` rebuilt as
+`identity-check-crit-control-1000-bucket1`; `objcopy -O binary` SHA-256
+`e3b20d52…` for both). The new flags compile to nothing when 0.
+
+### 3.1 A2 memory layout and MPU
+
+ITCM RAM is 16 KB at `0x0` (zero wait state, CPU-only).
+- `0x0000–0x07FF` is left empty, as a null guard.
+- `0x0800–0x1FFF` holds `queue.c`'s privileged functions (5,848 B). Only
+  privileged code reaches it, through the default map
+  (`portMPU_BACKGROUND_ENABLE`).
+- `0x2000–0x3FFF` holds the memops (438 B), the composed gate, `Partition8`,
+  `UniversalRate` and the PolicyBlob wrapper (4,960 B in total). Every task
+  that runs unprivileged gets this window as one read-only, executable 8 KB
+  MPU region (`GATEWAY_ITCM_SHARED_REGION`, `paper_experiment.h`): APP, GATE,
+  AUTH, NET input, and the platform network task and lwIP `tcpip` thread, which
+  drop privilege at runtime.
+- The startup code copies both images from flash before `.bss` is cleared.
+  Calls back to flash go through linker-generated 8-byte veneers.
+- `RbacPolicyValidatePolicyBlob` (4,216 B) did not fit in the 3,232 B left in
+  the shared window, so it stays in flash.
+
+**ITCM budget.** 10,808 of 16,384 B are used. The 5,576 B left are 2,048 B of
+null guard, 296 B in the privileged window and 3,232 B in the shared window.
+That is less than the "about 8 KB" estimated before the build. ITCM is a shared
+resource: a co-located real-time application competes for it. If only
+`queue.c` and the memops go to ITCM (all the critical-section result needs),
+about 10 KB stay free. The gate in ITCM buys the decision speed-up of §3.2.
+
+**First A2 image faulted** (`a2-timing-dist-opnsense53-fault1/`). The ITCM
+region had been given only to the tasks created unprivileged. After the
+measurement, the platform network task (`gateway_tcb`), which calls
+`vPortSwitchToUserMode()` at runtime, took a MemManage fault: `CFSR=0x1`
+(IACCVIOL) at `pc=0x20fa`, the start of `memset`. Fixed by granting the region
+to both tasks that drop privilege (`gateway_platform.c`, `sys_arch.c`). The
+lesson: on this port the set of unprivileged code is decided at runtime, not
+only at task creation.
+
+### 3.2 Decision cost (`a1-`/`a2-timing-dist-opnsense53`, 10 boots each)
+
+Same method as §1, OPNsense build. Every A1 and A2 boot reproduces the oracle
+equivalence (`[GATE-N32]` 20,256/20,256, 0 mismatches, 0 fail-closed). Each
+A1's maxima are identical to the cycle across its 10 boots, as A0's were. A2's
+vary by at most 2 cycles with interrupts masked and at most 220 cycles with them
+enabled (update applied, 5,593–5,813). The cause of this small boot-to-boot
+variation was not investigated.
+
+Own cost (interrupts masked), cycles min / mean / max:
+
+| Case | A0 | A1 | A2 |
+|---|---|---|---|
+| n = 1, first match | 3,287 / 3,287 / 3,293 | 3,527 / 3,548 / 3,556 | 2,405 / 2,405 / 2,414 |
+| n = 1, constructed worst | 3,956 / 3,972 / 3,978 | 4,190 / 4,232 / 4,240 | 2,786 / 2,791 / 2,800 |
+| n = 53, constructed worst | 170,876 / 170,891 / 170,898 | 171,110 / 171,152 / 171,159 | 104,288 / 104,293 / 104,305 |
+| update applied | 4,200 / 4,200 / 4,220 | 5,375 / 5,375 / 5,441 | 4,967 / 4,967 / 4,974 |
+| update rejected | 5,933 / 5,965 / 5,967 | 7,108 / 7,131 / 7,197 | 6,611 / 6,611 / 6,618 |
+
+Maximum with interrupts enabled: n = 1 worst 7,821 / 8,054 / 3,324;
+n = 53 worst 176,107 / 175,959 / 109,207; update applied 8,023 / 9,205 / 5,813.
+
+- **A2** cuts the decision by 27–39% (n = 1 worst: 29 µs instead of 41 µs;
+  n = 53: 1.09 ms instead of 1.78 ms).
+- **A1 does not help the decision; it makes it 0.2–28% slower.** With caches
+  off, the per-call cost still follows flash placement, and A1 moves the code.
+  The word-wise memops may also cost more for the gate's small copies. These
+  two effects were not separated.
+- **The update gate is slower in A2 than in A0** (4,967 against 4,200 cycles).
+  Its 4.2 KB validator stays in flash, behind a veneer.
+
+### 3.3 Critical sections (attribution images `*crit-control-*`, plus the 18 no-attribution images)
+
+Longest task-level critical section under load (valid / denied / malformed),
+across 1/4/10 kHz × token bucket 0/1:
+
+| Variant | Images | Range (cycles) | Depends on placement? |
+|---|---|---|---|
+| A0 | 12 | 13,100–13,695; 34,642–36,174 in the 2 images whose `memcpy` sits at 10 or 14 mod 32 | yes |
+| A1 | 12 | 6,954–8,094 | yes, ±0.6k |
+| A2 | 12 | 6,697–6,958 (identical per load across all 6 no-attribution images) | no |
+
+The top caller is still `xQueueGenericSend` (now `queue.c` in ITCM for A2). A2's
+section is the copy itself: about 1.5 KB at roughly 4 cycles per word from SRAM.
+
+### 3.4 Deadlines (no-attribution images `a{0,1,2}-norank-control-*`)
+
+Finding first. The caller attribution added to `vPortExitCritical` runs with
+interrupts masked, and it inflates release latency.
+- **Evidence:** idle at 10 kHz (bucket 1), A0 with attribution has 16–25 late
+  releases and a maximum of 12.7k cycles (A2: 27–40, 13.4k), against 0 and 5.8k
+  without (`a0-norank-control-10000-bucket1`). That matches the 2026-09-30
+  images, which had no attribution (0 idle misses, maximum about 6.0–6.7k).
+- **How it was found:** the release-PC diagnostic (`GATEWAY_R4_BLOCKER_PC`,
+  `*-blocker-control-*`) put the late releases at the end of
+  `vPortExitCritical`, in the ETH input thread's 100 ms timeout path (idle) and
+  in `tcpip` (load). The late releases recur every 100 ms.
+
+So the miss counts below come from images built with `GATEWAY_R4_CRIT_RANK=0`.
+Their critical-section maxima agree with the attribution images.
+
+Misses out of 10,000 releases per load (valid / denied / malformed; idle had 0
+everywhere) count **late + lost** releases, as in the 2026-09-30 control matrix.
+A lost (collapsed) release is a timer update that happened while its interrupt
+was masked, so the task never saw it. The capture tool's `misses` field counts
+only late ones. Lost releases come from the `[CTRL R4]` line. The table also
+gives the maximum release-to-run latency in cycles:
+
+| Rate (period) | A0 | A1 | A2 |
+|---|---|---|---|
+| 1 kHz (96,000) | 0, max 16,622 | 0, max 11,441 | 0, max 10,303 |
+| 4 kHz (24,000) | 0, max 16,937 | 0, max 10,896 | 0, max 10,399 |
+| 10 kHz (9,600), bucket 0 | 8+145 / 2+124 / 2+107, max 13,243 | 49+0 / 23+0 / 32+0, max 11,903 | 3+0 / 4+0 / 5+0, max 11,015 |
+| 10 kHz (9,600), bucket 1 | 8+142 / 10+115 / 0+107, max 13,523 | 18+0 / 9+0 / 14+0, max 11,332 | 3+0 / 5+0 / 1+0, max 11,116 |
+
+- **A0 at 10 kHz** misses 107–153. That reproduces the paper's 107–156 from the
+  2026-09-30 images. Most misses are collapsed releases: the 13.6k-cycle copy is
+  longer than the 9,600-cycle period, so a whole release disappears while the
+  interrupt is masked.
+- **A1 and A2 lose no releases**, because their copy is shorter than the
+  period. What remains are late releases: the copy plus the 3–6k-cycle
+  release-to-run base latency (ISR, notification, PendSV and MPU reprogramming,
+  all from flash with caches off) can still exceed the period.
+- **A2 misses 1–5 of 10,000 (30–100× fewer than A0); A1 misses 9–49.** Why A1
+  is worse than A2 by more than its slightly longer section suggests is not
+  explained; the windows hold only 21–28 requests (the 10 kHz control task
+  leaves little CPU).
+- **1 and 4 kHz:** no misses in any of the 18 no-attribution builds. In the 6
+  A0 builds `memcpy` never landed at the slow offsets (all sections
+  13.1–13.7k).
+- **The slow placement misses 4 kHz deadlines when it occurs.** Evidence: the
+  2026-09-30 `final-control-4000-bucket1` image (no attribution, 36.2k section)
+  missed 149 under valid load. Today's two 36k builds also missed (188–261 late
+  releases), but they carry the observer.
+- A2 removes that placement risk.
+
+### 3.5 Code size
+
+`.text` + kernel + ITCM images:
+- A0: 243,864 B.
+- A1: +396 B (`memcpy` 250 B and `memset` 188 B replace newlib's 28 B and 16 B).
+- A2: +6,372 B in total, with the 10,808 B of ITCM load images counted in
+  both totals because that code moved rather than appeared. The extra is the
+  memops, the veneers and section alignment.
+
+RAM: no change outside ITCM.
+
+### 3.6 Trade-off summary
+
+| | A0 | A1 | A2 |
+|---|---|---|---|
+| Security boundary | copy through queues (strongest) | same | same. Adds one read-only/execute MPU region per unprivileged task; queue.c in ITCM stays privileged-only; ITCM is writable by privileged code (trusted, as flash-resident kernel code is not) |
+| Longest copy critical section | 13.1–36.2k, placement-dependent | 7.0–8.1k, mildly placement-dependent | 6.7–7.0k, placement-independent |
+| Misses at 1 / 4 kHz | 0, but 4 kHz misses in unfavourable builds | 0 | 0 |
+| Misses at 10 kHz (of 10,000) | 107–153, mostly collapsed releases | 9–49, none collapsed | 1–5, none collapsed |
+| Decision own cost, n = 1 worst | 3,978 | 4,240 | 2,800 |
+| Cost | none | 396 B flash | 10.8 of 16 KB ITCM (5.4 KB left for other real-time code), MPU slot per unprivileged task, custom linker script |
+
+### 3.7 Regression of A2 (isolation probes, `a2-probes/`)
+
+Probes 1–15 (NET), 20 (GATE), 21 (APP) and 22 (AUTH) were rebuilt as A2 images
+by an A2 copy of `d1_run_final_probes.py`
+(`provenance/a2_run_probes.py`; it writes only into `a2-probes/`). Each probe
+image differs from the A2 image only by `GATEWAY_D1_PROBE`.
+
+- **Same outcomes as the 2026-09-30 baseline**
+  (`paper-evidence-d1-2026-09-30/final-probes-summary.json`): the same fault
+  class and target addresses (MemManage `CFSR=0x82` at the protected object; a
+  BusFault/assert reset for 8, 14 and 15). Every probe rebooted to the
+  restrictive default (operator `/api/status` → 403, self-tests 301/301 after
+  reset where a reset occurred).
+- Probe 14 prints `ESCAPED` here too. That is the documented baseline outcome
+  (a forged slot index caught by the SHIM assertion, then a reset).
+- **New probes for the ITCM boundary** (`2782477`, NET context):
+
+| Probe | Action | Result |
+|---|---|---|
+| 16 | write the shared ITCM code at `0x2000` | MemManage DACCVIOL, `MMFAR=0x00002000`; reset; 403 |
+| 17 | execute privileged ITCM (`queue.c` at `0x800`) | MemManage IACCVIOL at `pc=0x00000800`; reset; 403 |
+| 18 | read the ITCM null guard at `0x0` | MemManage DACCVIOL, `MMFAR=0x00000000`; reset; 403 |
+
+The A2 timing boots (§3.2) passed the 301 self-tests and the 20,256-vector
+equivalence.
+
 ## Not done / notes
 
 - No WCET claim; no MBPTA. The constructed worst case is the structurally
@@ -116,8 +314,11 @@ index instead of copying it through the queue).
   `[GATE-DIST]` lines and the `done` marker are present in every boot.
 - The attribution table lives in ordinary RAM (the privileged region is full in
   control images); it is written only by privileged critical-section code and
-  read after the window closes. Updating it adds a few cycles after the measured
-  interval, before interrupts are re-enabled.
+  read after the window closes. Updating it runs after the measured interval but
+  before interrupts are re-enabled. **Correction (2026-10-22, §3.4):** that cost
+  is not negligible for deadlines. It does not change the critical-section
+  durations above, but the miss counts of the `*crit-control-*` images are
+  inflated; deadline misses come from the `*-norank-control-*` images.
 - `/dev/ttyACM1` no longer exists on this host; the tools use the stable
   `/dev/serial/by-id/...STLink_066FFF555567894967085545-if02` path, which is
   now `ttyACM2`.

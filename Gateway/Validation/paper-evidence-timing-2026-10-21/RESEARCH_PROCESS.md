@@ -250,3 +250,88 @@ Short version of the choices and surprises, for study.
 - **Build dependence:** the same gate code costs about 3.3k or about 4.6k cycles
   per call depending on the build, following where `memset` lands in flash with
   caches off. That's the same family of effect as the critical section in §6.
+
+---
+
+# Addendum (2026-10-22): testing the remedies, and three mistakes the data caught
+
+Results are in `REPORT.md` §3. This note records how the A1/A2 experiment ran
+and what went wrong along the way, because each mistake teaches a check worth
+reusing.
+
+## 1. Design: keep the strongest baseline, add alternatives
+
+Copy semantics through queues (no shared buffer) stays the baseline. The
+alternatives change only speed and placement sensitivity:
+- **A1:** word-at-a-time `memcpy`/`memset`.
+- **A2:** A1 plus the hot code in ITCM RAM.
+
+Each is a build flag that defaults to 0. A rebuilt A0 image had the *same
+loadable bytes* as the old one (`objcopy -O binary` + SHA-256). That check is
+what lets new A1/A2 runs be compared with old A0 runs.
+
+## 2. Mistake 1: the MPU region list was decided at task creation; privilege is decided at runtime
+
+The first A2 image took a MemManage fault after the measurement:
+`CFSR=0x1` (IACCVIOL) at `pc=0x20fa`, `memset` in ITCM.
+- I had given the ITCM region to every task *created* unprivileged.
+- Two tasks are created privileged and call `vPortSwitchToUserMode()` later:
+  the platform network task and lwIP's `tcpip` thread.
+
+How it was diagnosed: read the `[RESET]` record (CFSR bit, faulting PC, TCB
+address), map the TCB address to a symbol with `nm` (`gateway_tcb`), then grep
+for privilege drops.
+
+**Check to reuse:** list unprivileged code by grepping for both
+`xTaskCreateRestricted*` and privilege drops (`vPortSwitchToUserMode`,
+`__set_CONTROL`).
+
+## 3. Mistake 2: the observer changed what it observed
+
+The caller attribution added on 2026-10-21 updates a table *after* the timed
+interval but *before* interrupts are re-enabled. I had judged that "a few
+cycles". The deadline data said otherwise:
+- **Symptom:** idle misses at 10 kHz, which the older images never had.
+- **Tool:** a second diagnostic (`GATEWAY_R4_BLOCKER_PC`). The release ISR saves
+  the interrupted PC from its exception frame; late releases are ranked by PC.
+- **Result:** almost all late releases resumed at the end of
+  `vPortExitCritical`, at the exact moment interrupts were re-enabled. They
+  recurred every 100 ms (the ETH input thread's semaphore timeout).
+- **Controlled test:** the same image with attribution compiled out
+  (`GATEWAY_R4_CRIT_RANK=0`) had 0 idle misses, as the 2026-09-30 images did.
+
+Consequence: the critical-section *durations* are still valid, because they are
+measured before the table update. Deadline misses come only from images without
+the observer. The 2026-10-21 report note was corrected.
+
+**Lesson:** any instrumentation that runs with interrupts masked is part of the
+critical section for deadline purposes, even when it sits outside the timed
+interval. Compare against an uninstrumented build before believing a deadline
+number.
+
+## 4. Mistake 3: comparing two different "miss" metrics
+
+At first, A0 seemed to miss far fewer 10 kHz deadlines (0–10) than the paper
+reported (107–156). The 2026-09-30 matrix counts **late + collapsed** releases;
+the capture tool's `misses` field counts only late ones. Collapsed (lost)
+releases are timer updates that happen while the interrupt is masked, so the
+task never sees them. They appear in the firmware's `[CTRL R4]` line as
+`lost_releases`.
+
+With the same metric, A0 reproduces the paper (107–153). The mechanism also
+becomes clear: A0's 13.6k-cycle copy is longer than the 9,600-cycle period, so
+releases are swallowed whole. A1 and A2 never swallow one.
+
+**Lesson:** before comparing to an earlier number, find the script that
+produced it and confirm the definition, not just the field name.
+
+## 5. What the data says, briefly
+
+- **A2:** the copy is bounded at 6.7–7.0k cycles in every build
+  (placement-independent); 10 kHz misses 1–5; the gate is 27–39% faster.
+- **A1:** shortens the copy but does not stabilise the gate.
+- **Cost of A2:** 10.6 of 16 KB ITCM. ITCM is shared with any co-located
+  real-time code, and 5.4 KB is left. Keeping the gate in flash would leave
+  about 10 KB, at the cost of the gate speed-up.
+- **Still open:** why A2's maxima vary slightly between boots when A0's and
+  A1's do not; why A1 misses more than A2 at 10 kHz; whole-request timing.
