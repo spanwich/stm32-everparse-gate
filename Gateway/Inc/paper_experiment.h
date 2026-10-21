@@ -88,6 +88,17 @@
 #ifndef GATEWAY_R4_CONTROL_HIGH
 #define GATEWAY_R4_CONTROL_HIGH 1
 #endif
+/* Diagnostic (2026-10-22): the TIM7 release ISR records the interrupted PC,
+ * task and exception number; late releases are ranked by PC ([BLOCK] lines).
+ * Labelled images only; requires GATEWAY_R4_CONTROL. */
+/* Caller attribution of critical sections in control images (2026-10-21);
+ * 0 restores the max-only counter of the 2026-09-30 images (diagnostic). */
+#ifndef GATEWAY_R4_CRIT_RANK
+#define GATEWAY_R4_CRIT_RANK 1
+#endif
+#ifndef GATEWAY_R4_BLOCKER_PC
+#define GATEWAY_R4_BLOCKER_PC 0
+#endif
 #ifndef GATEWAY_R4_TIMING_MASK_IRQ
 #define GATEWAY_R4_TIMING_MASK_IRQ 0
 #endif

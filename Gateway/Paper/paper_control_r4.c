@@ -54,7 +54,42 @@ void gateway_runtime_init(void)
 }
 uint32_t gateway_runtime_counter(void) { return DWT->CYCCNT; }
 
+#if GATEWAY_R4_BLOCKER_PC
+/* What was running when each release arrived: the interrupted context's PC
+ * (from its exception frame), task and exception number (0 = thread mode).
+ * Indexed by release number mod 16; the task reads it within a few releases. */
+#define BLOCK_RING 16U
+#define BLOCK_TOP 16U
+#define BLOCK_LATE_CYCLES 6000U
+static volatile uint32_t release_pc[BLOCK_RING], release_task[BLOCK_RING], release_exc[BLOCK_RING];
+static struct { uint32_t pc, task, exc, max_late, count; } block_top[BLOCK_TOP];
+extern TaskHandle_t pxCurrentTCB;
+void gateway_r4_tim7_irq(const uint32_t *frame) __attribute__((used));
+__attribute__((naked)) void TIM7_IRQHandler(void)
+{
+    __asm volatile("tst lr, #4      \n"
+                   "ite eq          \n"
+                   "mrseq r0, msp   \n"
+                   "mrsne r0, psp   \n"
+                   "b gateway_r4_tim7_irq \n");
+}
+static void block_note(uint32_t n, uint32_t late)
+{
+    uint32_t pc=release_pc[n%BLOCK_RING], task=release_task[n%BLOCK_RING], exc=release_exc[n%BLOCK_RING];
+    unsigned slot=BLOCK_TOP;
+    for(unsigned i=0;i<BLOCK_TOP;i++)
+        if(block_top[i].count && block_top[i].pc==pc && block_top[i].exc==exc) { slot=i; break; }
+    if(slot==BLOCK_TOP)
+        for(unsigned i=0;i<BLOCK_TOP;i++) if(!block_top[i].count) { slot=i; break; }
+    if(slot==BLOCK_TOP) return;
+    block_top[slot].pc=pc; block_top[slot].task=task; block_top[slot].exc=exc;
+    if(late>block_top[slot].max_late) block_top[slot].max_late=late;
+    block_top[slot].count++;
+}
+void gateway_r4_tim7_irq(const uint32_t *frame)
+#else
 void TIM7_IRQHandler(void)
+#endif
 {
     uint32_t entered=DWT->CYCCNT;
     if((TIM7->SR & TIM_SR_UIF)==0U) return;
@@ -75,6 +110,11 @@ void TIM7_IRQHandler(void)
         /* The ISR writes the release timestamp into the final sample slot.
          * The task replaces it with latency only after release_count advances. */
         capture.cycles[n]=released;
+#if GATEWAY_R4_BLOCKER_PC
+        release_pc[n%BLOCK_RING]=frame[6];
+        release_exc[n%BLOCK_RING]=frame[7]&0x1FFU;
+        release_task[n%BLOCK_RING]=(uint32_t)pxCurrentTCB;
+#endif
         release_count=n+1U;
         BaseType_t wake=pdFALSE;
         vTaskNotifyGiveFromISR(control_handle,&wake);
@@ -135,6 +175,9 @@ static void control_task(void *unused)
             uint32_t late=now-capture.cycles[processed];
             capture.cycles[processed]=late;
             if(late>=period_cycles) ++misses;
+#if GATEWAY_R4_BLOCKER_PC
+            if(late>=BLOCK_LATE_CYCLES) block_note(processed,late);
+#endif
             if(late>max_cycles) max_cycles=late;
             ++processed;
         }
@@ -164,6 +207,12 @@ static void control_task(void *unused)
                               i,(unsigned long)caller,(unsigned long)task,(unsigned long)cmax,(unsigned long)count,
                               task ? pcTaskGetName((TaskHandle_t)task) : "-");
     }
+#if GATEWAY_R4_BLOCKER_PC
+    for(unsigned i=0;i<BLOCK_TOP;i++)
+        if(block_top[i].count) gateway_log("[BLOCK] pc=0x%08lx exc=%lu task=0x%08lx count=%lu max_late=%lu\n",
+            (unsigned long)block_top[i].pc,(unsigned long)block_top[i].exc,(unsigned long)block_top[i].task,
+            (unsigned long)block_top[i].count,(unsigned long)block_top[i].max_late);
+#endif
     /* This observer suspends scheduling and scans stacks, so run it only after
      * the 10,000-sample deadline window has closed, but before the long UART
      * transfer used to export the exact samples. */

@@ -328,7 +328,7 @@ uint32_t gateway_r4_critical_max(void) { return gateway_critical_max; }
 /* Caller attribution (2026-10-21): the return address of the outermost
  * vPortEnterCritical and the running TCB, and a top-8 table of the longest
  * sections by caller. Only privileged code can enter critical sections here. */
-static void gateway_critical_note(uint32_t spent)
+static __attribute__((unused)) void gateway_critical_note(uint32_t spent)
 {
     unsigned slot=8U, low=0U;
     for(unsigned i=0;i<8U;i++) {
@@ -1103,8 +1103,12 @@ void vPortEnterCritical( void )
             {
                 extern TaskHandle_t pxCurrentTCB;
                 gateway_critical_start = gatewayDWT_CYCCNT;
+                #if GATEWAY_R4_CRIT_RANK
                 gateway_critical_caller = ( uint32_t ) __builtin_return_address( 0 );
                 gateway_critical_task = ( uint32_t ) pxCurrentTCB;
+                #else
+                ( void ) pxCurrentTCB;
+                #endif
             }
         #endif
         uxCriticalNesting++;
@@ -1157,7 +1161,9 @@ void vPortExitCritical( void )
                     else
                     {
                         if( spent > gateway_critical_max ) gateway_critical_max = spent;
+                        #if GATEWAY_R4_CRIT_RANK
                         gateway_critical_note( spent );
+                        #endif
                     }
                 }
             #endif
