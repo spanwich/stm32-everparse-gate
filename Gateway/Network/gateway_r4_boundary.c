@@ -81,6 +81,9 @@ static void validator_probe(void *arg)
 }
 #endif
 
+#if GATEWAY_D1_PROBE >= 16 && !GATEWAY_ITCM
+#error "probes 16-18 test the A2 ITCM regions; build with GATEWAY_ITCM = 1"
+#endif
 #if GATEWAY_D1_PROBE
 /* NET-visible probe plumbing, present only in probe images. */
 volatile QueueHandle_t gateway_d1_probe_leaked_queue;
@@ -92,7 +95,7 @@ extern TickType_t MPU_xTaskGetTickCount(void);
 extern void *gateway_d1_probe_dma_address(void);
 void *gateway_d1_probe_gate_policy(void) { return &live_gate.policy; }
 #endif
-#if GATEWAY_D1_PROBE >= 1 && GATEWAY_D1_PROBE <= 15
+#if GATEWAY_D1_PROBE >= 1 && GATEWAY_D1_PROBE <= 18
 static AppJob probe_forged_job;
 #define PROBE_LOG(...) gateway_log(__VA_ARGS__)
 #define PROBE_ESCAPED(id) do { PROBE_LOG("[PROBE] id=%u ESCAPED control=%lu\n",(unsigned)(id), \
@@ -145,6 +148,15 @@ static void d1_net_probe(void)
              PROBE_LOG("[PROBE] id=15 overlong_tx queued=%lu shim_ok=%lu (0 = rejected)\n",
                        (unsigned long)(gateway_d1_probe_result>>8),(unsigned long)(gateway_d1_probe_result&0xFFU));
              PROBE_SETTLE(); gateway_panic(GATEWAY_FAULT_ASSERT);
+#if GATEWAY_D1_PROBE >= 16
+    /* A2 ITCM boundary (GATEWAY_ITCM images only). */
+    case 16: *(volatile uint16_t *)0x00002000UL=0U; break;                 /* write shared ITCM code */
+    case 17: { extern char __itcm_priv_start__[];                          /* run privileged ITCM (queue.c) */
+               void (*jump)(void)=(void (*)(void))((uintptr_t)__itcm_priv_start__|1U);
+               jump(); break; }
+    case 18: { volatile uint32_t v=*(volatile const uint32_t *)0x00000000UL; /* read ITCM null guard */
+               PROBE_LOG("[PROBE] id=18 read=%lu\n",(unsigned long)v); break; }
+#endif
     default: return;
     }
     PROBE_ESCAPED(id);
@@ -419,7 +431,7 @@ const GatewayR4Reply *gateway_r4_submit(const GatewayHttp *assembled)
 {
     if(!assembled || assembled->used==0U ||
        assembled->used>GATEWAY_REQUEST_CAPACITY) return NULL;
-#if GATEWAY_D1_PROBE >= 1 && GATEWAY_D1_PROBE <= 15
+#if GATEWAY_D1_PROBE >= 1 && GATEWAY_D1_PROBE <= 18
     d1_net_probe();
 #endif
     for(uint32_t offset=0;offset<assembled->used;) {
