@@ -81,7 +81,7 @@ static void validator_probe(void *arg)
 }
 #endif
 
-#if GATEWAY_D1_PROBE >= 16 && !GATEWAY_ITCM
+#if GATEWAY_D1_PROBE >= 16 && GATEWAY_D1_PROBE <= 18 && !GATEWAY_ITCM
 #error "probes 16-18 test the A2 ITCM regions; build with GATEWAY_ITCM = 1"
 #endif
 #if GATEWAY_D1_PROBE
