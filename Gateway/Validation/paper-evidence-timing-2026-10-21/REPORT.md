@@ -303,6 +303,122 @@ image differs from the A2 image only by `GATEWAY_D1_PROBE`.
 The A2 timing boots (§3.2) passed the 301 self-tests and the 20,256-vector
 equivalence.
 
+## 4. Verified copy routines: A1v (new baseline) and A2v (2026-10-22)
+
+The hand-written word-at-a-time routines of §3 (A1/A2) are replaced by
+Low*-verified loops: `paper-experiments/verified-memops` (`5d53ba4`, shim
+`227d47c`). This gives A1v, the new baseline, and A2v, which is A1v plus ITCM.
+
+**What is proved.** Memory safety, frame (only the destination is modified),
+and functional correctness of the byte and word copy/fill loops: afterwards
+the destination equals the source, or holds n copies of the value. The
+`memset` word is proved to replicate the byte. Six planted bugs are each
+rejected by F*.
+
+**What is trusted.**
+- **The shim** (`Gateway/Platform/gateway_memops.c`, about 30 lines):
+  alignment dispatch, reinterpreting byte memory as words, and the lengths
+  passed to the loops.
+- **The toolchain:** F*, Z3, KaRaMeL and GCC.
+
+**Integration** (STM32 `d712980`, `d5acc61`):
+- `Gateway/Generated/Memops/Memops.{c,h}` hold the extraction, verbatim. They
+  are excluded from separate compilation in `.cproject` and included by the
+  shim. The shim compiles them at `-Os`, the level of all other generated code
+  (`Gateway/Generated` is `-Os` in both configurations). It also disables
+  loop-to-`memcpy` rewriting and strict aliasing, and declares every function
+  `aligned(32)`. Every A1v and A2v build has `memcpy` at offset 0 mod 32.
+- `GATEWAY_FAST_MEMOPS` now selects A1v. The hand-written A1/A2 images of §3
+  remain as evidence.
+
+**Caveat when comparing with §3.** The hand-written routines lived in
+`Gateway/Platform/`, which the Debug configuration compiles at `-O0`. Most of
+the gain from A1 to A1v is therefore the optimisation level, not verification.
+The comparison that matters is A0 → A1v.
+
+### 4.1 Decision cost (`a1v-timing-dist-{opnsense53,scalance32}`, `a2v-timing-dist-opnsense53`, 10 boots each)
+
+Every case is identical to the cycle across its 10 boots in all three images.
+Every boot reproduces the oracle equivalence (`[GATE-N32]`: 20,256/20,256 for
+OPNsense, 17,760/17,760 for SCALANCE; 0 mismatches, 0 fail-closed). No boot
+faulted.
+
+Own cost (interrupts masked), cycles min / mean / max:
+
+| Case | A0 OPNsense | A1v OPNsense | A1v SCALANCE | A2v OPNsense |
+|---|---|---|---|---|
+| n = 1, first match | 3,287 / 3,287 / 3,293 | 3,493 / 3,499 / 3,500 | 3,493 / 3,499 / 3,500 | 2,113 / 2,113 / 2,124 |
+| n = 1, constructed worst | 3,956 / 3,972 / 3,978 | 4,115 / 4,146 / 4,147 | 4,115 / 4,146 / 4,147 | 2,499 / 2,499 / 2,510 |
+| n = 53 (32), constructed worst | 170,876 / 170,891 / 170,898 | 168,487 / 168,500 / 168,519 | 102,106 / 102,119 / 102,138 | 103,951 / 103,951 / 103,962 |
+| update applied | 4,200 / 4,200 / 4,220 | 4,564 / 4,564 / 4,573 | 4,564 / 4,564 / 4,573 | 3,965 / 3,965 / 3,970 |
+| update rejected | 5,933 / 5,965 / 5,967 | 6,291 / 6,293 / 6,308 | 6,291 / 6,293 / 6,308 | 5,711 / 5,711 / 5,722 |
+
+Maximum with interrupts enabled, n = 1 constructed worst: A1v 4,656
+(OPNsense) and 7,939 (SCALANCE); A2v 6,467. n = 53: A1v 173,627; A2v 108,898.
+
+- **A1v is build-independent for the n = 1 and update paths.** Both builds give
+  identical cycle counts (4,147 and 4,573 cycles), where the A0 builds of §1
+  differed by up to about 1.4k (3.3k against 4.6–4.9k medians).
+- **The worst case is 43.2 µs at 96 MHz** (A0: 41.4 µs in its fast builds,
+  about 15 µs more in unfavourable ones).
+- **A2v** is 40% faster again: 26.1 µs at n = 1 and 1.08 ms at n = 53.
+
+### 4.2 Critical sections and deadlines (`a{1v,2v}-norank-control-*`, no attribution)
+
+1/4/10 kHz × token bucket 0/1 (6 builds per variant), four loads each. Misses
+are late + collapsed releases, as in §3.4.
+
+| | A0 (§3.4) | A1v | A2v |
+|---|---|---|---|
+| Longest copy critical section, loaded | 13.1–13.7k; 34.6–36.2k in unfavourable builds | 3,910–4,242 (valid 4,199–4,242) | 3,354 / 3,646, identical in all 6 builds |
+| Misses at 1 kHz / 4 kHz | 0 / 0 (4 kHz misses in unfavourable builds) | 0 / 0 | 0 / 0 |
+| Misses at 10 kHz (per load) | 107–153, mostly collapsed | 0–5, none collapsed | 0–2, none collapsed |
+| Max release-to-run, loaded | 16,937 | 11,299 | 11,066 |
+| Idle | 0 misses | 0 misses | 0 misses |
+
+- **A1v's copy is 3.2× shorter than A0's typical copy and 8.6× shorter than its
+  worst.** It now varies only by about 40 cycles between builds: `memcpy` and
+  the loops are pinned, and only `queue.c`'s own code still moves in flash.
+- **A2v** removes even that.
+
+### 4.3 Size
+
+- **A1v:** +376 B of flash over A0, and no ITCM.
+- **A2v:** +6,356 B of flash (veneers, alignment). It uses 10,792 of 16,384 B of
+  ITCM (`queue.c` 5,848; memops, gate and update-gate wrapper 4,944), leaving
+  5,592 B.
+
+### 4.4 Trade-off (replaces §3.6 for the paper)
+
+| | A1v (baseline) | A2v |
+|---|---|---|
+| Boundary | copy through queues, MPU as A0 | same, plus a read-only/execute ITCM region per unprivileged task; `queue.c` privileged-only |
+| Copy routines | Low*-verified loops, ~30-line trusted shim | same loops, in ITCM |
+| Placement dependence | copy pinned (±40 cycles from `queue.c`); n = 1 decision identical in both builds | none observed |
+| Cost | 376 B flash | 10,792 of 16,384 B ITCM (5,592 B left for co-located real-time code) |
+
+### 4.5 Isolation probes (`a1v-probes/`, `a2v-probes/`)
+
+Run by `provenance/v_run_probes.py`, an A1v/A2v copy of `d1_run_final_probes.py`
+that writes only into its own directory.
+- **A1v:** probes 1–15 and 20–22 (16–18 test ITCM and do not apply).
+- **A2v:** all 21.
+- **Result:** every probe has the same outcome as the A2 and 2026-09-30
+  baselines: the same fault class and target address, probe 14's documented
+  `ESCAPED` line, 21/22 without reset lines. Every probe reboots to the
+  restrictive default (operator → 403).
+- **A2v probes 16–18** fault as designed: DACCVIOL at `0x2000`, IACCVIOL at
+  `pc=0x800`, DACCVIOL at `0x0`.
+- **Build-guard fix:** the first A1v run stopped at probe 20, because my
+  ITCM-only `#error` guard also covered probes 20–22. Fixed in `e223750`
+  (preprocessor only); 20–22 were rerun. The summary was rebuilt from the
+  per-probe `probe.json` files.
+
+Functional results of the paper not rerun on A1v: the 12,527-case oracle
+corpus and the 200 attack requests, measured on A0 images. A1v changes only
+`memcpy`/`memset`, and every A1v boot re-checks the 301 self-tests and the
+per-boot oracle vectors.
+
 ## Not done / notes
 
 - No WCET claim; no MBPTA. The constructed worst case is the structurally

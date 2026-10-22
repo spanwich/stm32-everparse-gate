@@ -7,7 +7,7 @@ from pathlib import Path
 SRC = Path('/home/iamfo470/stm32-projects/policy_gate/Gateway/Validation/paper-evidence-timing-2026-10-21')
 DST = Path('/home/iamfo470/phd/papers/drafts/access-control-as-constraints-s-and-p/evidence/f767-timing')
 TMP = Path('/home/iamfo470/.claude/jobs/d4a23072/tmp/pgtim')
-for name in ('build_timing.py', 'run_a12.sh', 'run_norank.sh', 'summarize_variants.py', 'summarize_timing.py',
+for name in ('build_timing.py', 'run_a12.sh', 'run_norank.sh', 'run_v.sh', 'v_run_probes.py', 'summarize_variants.py', 'summarize_timing.py',
              'a2_run_probes.py', 'apply_itcm_probes.py', 'memops_test.c', 'refresh_extract.py'):
     shutil.copy2(TMP / name, SRC / 'provenance' / name)
 

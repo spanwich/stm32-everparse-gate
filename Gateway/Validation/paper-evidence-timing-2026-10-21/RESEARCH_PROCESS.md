@@ -335,3 +335,32 @@ produced it and confirm the definition, not just the field name.
   about 10 KB, at the cost of the gate speed-up.
 - **Still open:** why A2's maxima vary slightly between boots when A0's and
   A1's do not; why A1 misses more than A2 at 10 kHz; whole-request timing.
+
+## 6. Second revision: verifying the copy routines (A1v)
+
+- **Why:** hand-written `memcpy`/`memset` in a paper about verified code invites
+  the question "why is this part unverified?". The routines run in every
+  compartment and inside the kernel's critical sections, and the gate calls
+  `memset` on every decision.
+- **How:**
+  - Write the loops in Low*, with a specification over sequences: only `dst`
+    changes, and afterwards `dst == src` (or n copies of the value). Prove a
+    small arithmetic lemma for the `memset` word.
+  - Plant bugs to make sure the proof is not vacuous. A first-try success is a
+    reason to check, not to celebrate.
+  - Extract with KaRaMeL and keep in C only what Low* cannot express:
+    alignment tests and reinterpreting bytes as words.
+- **Integration trap:** the managed build would compile the extracted file a
+  second time, without the shim's settings. It is excluded in `.cproject` and
+  included by the shim.
+- **Another trap:** `#pragma GCC optimize("align-functions=32")` was silently
+  ignored. Declaring the functions `aligned(32)` before the verbatim
+  definitions works. Always check the result in the object file (`readelf -S`).
+- **Third trap:** the hand-written routines were compiled at `-O0` (Debug,
+  `Platform/`), the generated ones at `-Os`. Comparing variants means
+  comparing compile settings too; the A1→A1v gain is mostly `-Os`.
+- **Result:**
+  - A1v is identical to the cycle across boots *and across the two builds* for
+    the n = 1 decision.
+  - The copy critical section is 3.9–4.2k (A0: 13.1–36.2k).
+  - 10 kHz misses drop from 107–153 to 0–5.

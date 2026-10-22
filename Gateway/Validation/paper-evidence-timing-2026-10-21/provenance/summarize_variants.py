@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
-"""A0/A1/A2 comparison (variants-summary.json): decision timing, control matrix with
-critical-section attribution, and code/ITCM size.
-A0 = newlib-nano byte-loop memcpy/memset from flash (baseline images);
-A1 = GATEWAY_FAST_MEMOPS (word-at-a-time memops, flash);
-A2 = A1 + GATEWAY_ITCM (queue.c, memops, gate and update gate executing from ITCM RAM)."""
+"""Variant comparison (variants-summary.json): decision timing, critical sections and
+deadline misses at 1/4/10 kHz, and code/ITCM size.
+A0  = newlib-nano byte-loop memcpy/memset in flash (the original images);
+A1v = GATEWAY_FAST_MEMOPS: memcpy/memset on Low*-verified loops, 32-byte aligned, flash
+      (the baseline since 2026-10-22);
+A2v = A1v + GATEWAY_ITCM: queue.c, the verified memops, gate and update gate in ITCM RAM;
+A1, A2 = the earlier hand-written word-at-a-time memops (superseded by A1v/A2v; kept as
+      a record)."""
 import glob, json, re, subprocess, sys
 from pathlib import Path
 V = Path(sys.argv[1])
 BIN = Path(sorted(glob.glob('/opt/st/stm32cubeide_2.0.0/plugins/*gnu-tools-for-stm32*/tools/bin'))[0])
-PREFIX = {'A0': '', 'A1': 'a1-', 'A2': 'a2-'}
+# name: (timing prefix, attribution-image prefix or None, no-attribution prefix, second timing build)
+VARIANTS = {
+    'A0': ('', '', 'a0-', 'timing-dist-scalance32'),
+    'A1v': ('a1v-', None, 'a1v-', 'a1v-timing-dist-scalance32'),
+    'A2v': ('a2v-', None, 'a2v-', None),
+    'A1': ('a1-', 'a1-', 'a1-', None),
+    'A2': ('a2-', 'a2-', 'a2-', None),
+}
 TIMING_CASES = ['decide/n1/first', 'decide/n1/worst', 'decide/n53/worst', 'update/n1/valid', 'update/n1/wrong_role']
+LOADS = ('idle', 'valid', 'denied', 'malformed')
 
 
 def nm(elf):
@@ -33,23 +44,29 @@ def where(elf, addr):
     return w.split(' at ')[0] + ' ' + w.split('/')[-1]
 
 
-out = {'claim': 'observed DWT cycle counts on one NUCLEO-F767ZI at 96 MHz, caches off; not WCET. '
-                'control.scenarios: critical-section maxima and callers from attribution images '
-                '(*crit-control-*); control.deadline: misses and release-to-run latency from images '
-                'without attribution (*-norank-control-*, GATEWAY_R4_CRIT_RANK=0), because the '
-                'attribution observer runs with interrupts masked and inflates latency',
-       'variants': {}}
-for var, pre in PREFIX.items():
-    entry = {'timing': {}, 'control': {}, 'size': {}}
-    timing = V / f'{pre}timing-dist-opnsense53'
-    s = json.loads((timing / 'summary.json').read_text())
-    entry['timing']['boots'] = len(s['boots'])
-    for case in TIMING_CASES:
+def timing(directory, cases):
+    s = json.loads((V / directory / 'summary.json').read_text())
+    t = {'boots': len(s['boots'])}
+    for case in cases:
         for irq in ('off', 'on'):
             c = s['cases'][f'{case}/irq-{irq}']
-            entry['timing'][f'{case}/irq-{irq}'] = {k: c[k] for k in
-                                                    ('best_min', 'mean_of_means', 'worst_max', 'max_range', 'answers', 'boots')}
-    elf = timing / 'policy_gate.elf'
+            t[f'{case}/irq-{irq}'] = {k: c[k] for k in ('best_min', 'mean_of_means', 'worst_max', 'max_range',
+                                                       'answers', 'boots')}
+    return t
+
+
+out = {'claim': 'observed DWT cycle counts on one NUCLEO-F767ZI at 96 MHz, caches off; not WCET. '
+                'control.attribution: critical-section maxima and callers from attribution images '
+                '(*crit-control-*); control.deadline: misses (late + collapsed releases), release-to-run '
+                'latency and critical-section maxima from images without attribution '
+                '(*-norank-control-*, GATEWAY_R4_CRIT_RANK=0), because the attribution observer runs '
+                'with interrupts masked and inflates latency',
+       'variants': {}}
+for var, (tpre, apre, npre, second) in VARIANTS.items():
+    entry = {'timing': timing(f'{tpre}timing-dist-opnsense53', TIMING_CASES), 'control': {}}
+    if second:
+        entry['timing_scalance32'] = timing(second, [c.replace('n53', 'n32') for c in TIMING_CASES])
+    elf = V / f'{tpre}timing-dist-opnsense53' / 'policy_gate.elf'
     sec, syms = sections(elf), nm(elf)
     entry['size'] = {'text_flash': sec.get('.text', 0) + sec.get('.privileged_functions', 0) +
                      sec.get('.freertos_system_calls', 0) + sec.get('.itcm_priv', 0) + sec.get('.itcm_shared', 0),
@@ -59,59 +76,50 @@ for var, pre in PREFIX.items():
                      'memset': {'addr': hex(syms['memset'][0]), 'size': syms['memset'][1]}}
     for hz in (1000, 4000, 10000):
         for b in (0, 1):
-            img = V / f'{pre}crit-control-{hz}-bucket{b}'
-            if not img.is_dir():
-                continue
-            ielf = img / 'policy_gate.elf'
-            m = nm(ielf)['memcpy'][0]
-            row = {'memcpy_addr': hex(m), 'memcpy_mod32': m % 32, 'scenarios': {}}
-            for sc in ('idle', 'valid', 'denied', 'malformed'):
-                f = img / sc / 'summary.json'
-                if not f.is_file():
-                    continue
-                r = json.loads(f.read_text())
-                text = (img / sc / 'uart.bin').read_bytes().decode(errors='replace')
-                ranks = [(int(x[2]), int(x[1], 16)) for x in re.finditer(
-                    r'\[CRIT\] rank=\d+ caller=(0x[0-9a-f]+) task=0x[0-9a-f]+ max_cycles=(\d+)', text)]
-                top = max(ranks) if ranks else None
-                row['scenarios'][sc] = {'critical_max_cycles': r.get('critical_max_cycles'),
-                                        'misses': r.get('misses'),
-                                        'release_to_completion_max_cycles': r.get('max_cycles'),
-                                        'p99_cycles': r.get('p99_cycles'),
-                                        'requests': r.get('requests_during_sample_window'),
-                                        'top_caller': where(ielf, top[1]) if top else None}
-            nr = V / f'{var.lower()}-norank-control-{hz}-bucket{b}'
-            row['deadline'] = {}
-            for sc in ('idle', 'valid', 'denied', 'malformed'):
-                f = nr / sc / 'summary.json'
-                if f.is_file():
-                    r = json.loads(f.read_text())
-                    d = {k: r.get(k) for k in ('max_cycles', 'p99_cycles', 'critical_max_cycles',
-                                               'requests_during_sample_window')}
-                    ctrl = re.search(r'\[CTRL R4\] hz=\d+ high=\d+ samples=\d+ misses=(\d+) lost_releases=(\d+)',
-                                     (nr / sc / 'uart.bin').read_bytes().decode(errors='replace'))
-                    assert int(ctrl[1]) == r['misses'], (nr, sc)
-                    # As in the 2026-09-30 control matrix: total = late releases + releases
-                    # collapsed while the timer interrupt was masked.
-                    d.update(late=int(ctrl[1]), lost=int(ctrl[2]), misses=int(ctrl[1]) + int(ctrl[2]))
-                    row['deadline'][sc] = d
+            row = {'attribution': {}, 'deadline': {}}
+            img = V / f'{apre}crit-control-{hz}-bucket{b}' if apre is not None else None
+            if img is not None and img.is_dir():
+                ielf = img / 'policy_gate.elf'
+                m = nm(ielf)['memcpy'][0]
+                row['attribution_memcpy'] = {'addr': hex(m), 'mod32': m % 32}
+                for sc in LOADS:
+                    r = json.loads((img / sc / 'summary.json').read_text())
+                    text = (img / sc / 'uart.bin').read_bytes().decode(errors='replace')
+                    ranks = [(int(x[2]), int(x[1], 16)) for x in re.finditer(
+                        r'\[CRIT\] rank=\d+ caller=(0x[0-9a-f]+) task=0x[0-9a-f]+ max_cycles=(\d+)', text)]
+                    top = max(ranks) if ranks else None
+                    row['attribution'][sc] = {'critical_max_cycles': r.get('critical_max_cycles'),
+                                              'top_caller': where(ielf, top[1]) if top else None}
+            nr = V / f'{npre}norank-control-{hz}-bucket{b}'
+            m = nm(nr / 'policy_gate.elf')['memcpy'][0]
+            row['deadline_memcpy'] = {'addr': hex(m), 'mod32': m % 32}
+            for sc in LOADS:
+                r = json.loads((nr / sc / 'summary.json').read_text())
+                d = {k: r.get(k) for k in ('max_cycles', 'p99_cycles', 'critical_max_cycles',
+                                           'requests_during_sample_window')}
+                ctrl = re.search(r'\[CTRL R4\] hz=\d+ high=\d+ samples=\d+ misses=(\d+) lost_releases=(\d+)',
+                                 (nr / sc / 'uart.bin').read_bytes().decode(errors='replace'))
+                assert int(ctrl[1]) == r['misses'], (nr, sc)
+                # As in the 2026-09-30 control matrix: total = late releases + releases
+                # collapsed while the timer interrupt was masked.
+                d.update(late=int(ctrl[1]), lost=int(ctrl[2]), misses=int(ctrl[1]) + int(ctrl[2]))
+                row['deadline'][sc] = d
             entry['control'][f'{hz}/bucket{b}'] = row
     out['variants'][var] = entry
 (V / 'variants-summary.json').write_text(json.dumps(out, indent=2) + '\n')
 
-print('timing (irq-off min/mean/max | irq-on max)')
+print('timing OPNsense (irq-off max | irq-on max)')
 for case in TIMING_CASES:
-    print(' ', case, ' | '.join(
-        f"{v}: {e['timing'][case + '/irq-off']['best_min']}/{e['timing'][case + '/irq-off']['mean_of_means']:.0f}/"
-        f"{e['timing'][case + '/irq-off']['worst_max']} on-max {e['timing'][case + '/irq-on']['worst_max']}"
-        for v, e in out['variants'].items()))
-print('control: attribution-image crit_max | no-attribution misses/max_latency per scenario')
-for key in out['variants']['A0']['control'] | out['variants']['A2']['control']:
-    for v, e in out['variants'].items():
-        row = e['control'].get(key)
-        if row:
-            cells = ' '.join(f"{sc}={x['critical_max_cycles']}" for sc, x in row['scenarios'].items())
-            cells += ' | ' + ' '.join(f"{sc}={x['late']}+{x['lost']}/{x['max_cycles']}" for sc, x in row['deadline'].items())
-            print(f'  {key:14} {v} memcpy%32={row["memcpy_mod32"]:2} {cells}')
+    print(f'  {case:22}', ' | '.join(f"{v}: {e['timing'][case + '/irq-off']['worst_max']:>7} on {e['timing'][case + '/irq-on']['worst_max']:>7}"
+                                    for v, e in out['variants'].items()))
 for v, e in out['variants'].items():
-    print(v, 'size', e['size'])
+    if 'timing_scalance32' in e:
+        print(f'  SCALANCE {v}:', {k: c['worst_max'] for k, c in e['timing_scalance32'].items() if k.endswith('irq-off')})
+print('control (no attribution): crit max / misses (late+lost) / max latency, loaded scenarios')
+for v, e in out['variants'].items():
+    for key, row in e['control'].items():
+        cells = ' '.join(f"{sc}={x['critical_max_cycles']}/{x['late']}+{x['lost']}/{x['max_cycles']}"
+                         for sc, x in row['deadline'].items())
+        print(f'  {v:4} {key:14} memcpy%32={row["deadline_memcpy"]["mod32"]:2} {cells}')
+for v, e in out['variants'].items():
+    print(v, 'size', {k: e['size'][k] for k in ('text_flash', 'itcm_priv', 'itcm_shared', 'itcm_free_of_16384')})
