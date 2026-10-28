@@ -134,7 +134,7 @@ if a.d1:
     assert data.count(b'[BOOT] policy_gate') == 1, 'board reset during D1 timing capture'
     assert data.find(b'[HTTP] READY') < data.find(b'[CTRL R4] START'), \
         'D1 timer started before the HTTP listener was ready'
-assert b'[CORE SELFTEST] PASS 301/301' in data
+assert b'[CORE SELFTEST] PASS 322/322' in data
 text=data.decode(errors='replace')
 match=re.search(r'\[CTRL R4\] hz=(\d+) high=(\d+) samples=(\d+) misses=(\d+)(?: lost_releases=(\d+) gap_anomalies=(\d+))? max_cycles=(\d+) critical_max_cycles=(\d+)(?: critical_anomalies=(\d+))?(?: isr_max_cycles=(\d+))?(?: eth_isr_max_cycles=(\d+) eth_isr_count=(\d+))? stack_free=(\d+)',text)
 assert match,'control summary missing'

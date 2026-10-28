@@ -20,7 +20,6 @@ a = p.parse_args()
 a.output.mkdir(parents=True, exist_ok=True)
 admin = 'pg-lab-admin'
 operator = 'pg-lab-operator'
-limited = 'pg-lab-limited'
 
 
 def request(method, path, token=None, body=None):
@@ -82,7 +81,6 @@ cases = [
     ('direct-url', 'status without credentials', raw('GET', '/api/status'), None),
     ('direct-url', 'policy without credentials', raw('GET', '/api/policy'), None),
     ('role-escalation', 'operator reads admin policy', raw('GET', '/api/policy', operator), None),
-    ('role-escalation', 'limited account reads status', raw('GET', '/api/status', limited), None),
     ('identity-header', 'X-Role without credentials', raw('GET', '/api/status', extra=b'X-Role: admin\r\n'), None),
     ('identity-header', 'X-Forwarded-User on admin route', raw('GET', '/api/policy', operator, b'X-Forwarded-User: admin\r\n'), None),
     ('identity-header', 'duplicate Authorization', raw('GET', '/api/policy', operator, b'Authorization: Bearer pg-lab-admin\r\n'), None),
@@ -118,7 +116,8 @@ try:
     policy_hash = hashlib.sha256(encode(policy)).hexdigest()
     cases.append(('role-escalation', 'operator policy write',
                   raw('PUT', '/api/policy', operator, body=encode(original)), None))
-    cases.append(('rate-limit', 'limited account after limit', raw('GET', '/api/status', limited), None))
+    # The rate-limit class is not a network case (the network path cannot exceed 49
+    # requests per 49 ms window); it runs on the board via the gateway_test_rate self-test.
     cases.append(('fragmentation', 'fragmented protected request', raw('GET', '/api/policy', operator), 1))
     for number, (class_name, name, wire, fragment) in enumerate(cases, 1):
         status, headers = exchange(wire, fragment)

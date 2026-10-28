@@ -104,7 +104,7 @@ try:
             assert b'Download verified successfully' in output
         raw = raw_path.read_bytes()
         assert b'[BOOT] SYSCLK=' + str(a.clock_hz).encode() in raw, 'clock variant differs from boot report'
-        assert b'[CORE SELFTEST] PASS 301/301' in raw
+        assert b'[CORE SELFTEST] PASS 322/322' in raw
         assert b'[PAPER CORPUS] comparisons=12527 failures=0' in raw
         assert b'interrupts=' + a.interrupts.encode() in raw, 'interrupt setting differs from capture label'
         csv_path = out / f'boot-{boot}.cycles.csv'

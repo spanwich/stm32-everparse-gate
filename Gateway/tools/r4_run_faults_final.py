@@ -46,7 +46,7 @@ try:
         elf=directory/'policy_gate.elf'
         board=run('python3','Gateway/tools/board_test.py','--elf',str(elf),
                   '--flash','--output',str(directory/'board'),'--seconds','15',
-                  '--expected-selftests','301',check=False)
+                  '--expected-selftests','322',check=False)
         (directory/'board-command.log').write_bytes(board.stdout)
         if fault==2:
             trigger=run('python3','Gateway/tools/paper_capture_command.py',

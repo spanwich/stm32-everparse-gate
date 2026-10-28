@@ -71,7 +71,10 @@ static void setup(unsigned which)
     }
     const char *target=which==2?"/unknown":which==4?"/api/policy":"/api/status";
     const char *verb=which==3?"POST":"GET";
-    const char *token=which==6?"pg-lab-limited":"pg-lab-operator";
+    /* which==6 (over-limit) sets the count directly in security[0]=rate above, which
+     * is what the verified-function stages time; the token is only for the HTTP-path
+     * stages, so a normal operator token is used (the former pg-lab-limited is gone). */
+    const char *token="pg-lab-operator";
     int n=snprintf(http_request,sizeof(http_request),
         "%s %s HTTP/1.1\r\nHost: board\r\nAuthorization: Bearer %s\r\nContent-Length: 0\r\n\r\n",
         verb,target,token);

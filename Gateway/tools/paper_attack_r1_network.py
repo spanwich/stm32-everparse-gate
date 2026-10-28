@@ -11,6 +11,7 @@ import hashlib
 import http.client
 import json
 import os
+import re
 from pathlib import Path
 import select
 import socket
@@ -62,8 +63,7 @@ def close_serial():
 
 
 atexit.register(close_serial)
-tokens = {'operator': 'pg-lab-operator', 'admin': 'pg-lab-admin',
-          'limited': 'pg-lab-limited', 'none': None}
+tokens = {'operator': 'pg-lab-operator', 'admin': 'pg-lab-admin', 'none': None}
 
 
 def wire(method, path, role='none', extra=b'', body=b'', declared=None):
@@ -125,7 +125,9 @@ for i, suffix in enumerate(suffixes):
     add('direct-url', f'unauthenticated-{i}', wire('GET', ('/api/status' if i % 2 else '/api/policy') + suffix), 401)
     add('role-escalation', f'operator-policy-{i}', wire('GET', '/api/policy' + suffix, 'operator'), 403)
     add('identity-header', f'forged-role-{i}', wire('GET', '/api/status', extra=f'X-Role: admin{i}\r\nX-Forwarded-User: admin\r\n'.encode()), 401)
-    add('rate-limit', f'limited-{i}', wire('GET', '/api/status' + suffix, 'limited'), 429)
+    # The rate-limit class is NOT a network class: the F767 network path is ~60 req/s,
+    # so no client can exceed 49 requests per 49 ms window. It runs on the board through
+    # the full path via gateway_test_rate (synthetic clock) and is reported below.
     add('fragmentation', f'split-{i+1}', wire('GET', '/api/policy', 'operator'), 403, i + 1)
     add('oversize', f'length-{1362+i}', wire('POST', '/api/logout', 'operator', declared=1362 + i), 413)
     add('framing', f'duplicate-length-{i}', wire('GET', '/api/status', 'operator',
@@ -151,7 +153,7 @@ spellings = ['/api/status/', '/API/status', '//api/status', '/./api/status',
 for i, path in enumerate(spellings):
     add('path-spelling', f'{path}-{i}', wire('GET', path, 'operator'), 400)
 
-assert len(cases) == 200
+assert len(cases) == 180   # nine network classes x 20; the rate-limit class is on-board
 original = get_policy()
 policy = [{'id': 0x33333333, 'method': 1, 'min_role': 1, 'scope': 1},
           {'id': 0x22222222, 'method': 2, 'min_role': 1, 'scope': 0},
@@ -185,6 +187,17 @@ finally:
     assert exchange(wire('PUT', '/api/policy', 'admin', body=encode(original)))[0] == 200
     assert get_policy() == original
 
+# The rate-limit class (20 over-limit cases) ran on the board through the full path
+# via gateway_test_rate (synthetic clock): the 50th..69th request inside one window
+# refused, plus an over-limit policy update refused. Confirm it from the self-test
+# aggregate in the captured UART -- that 322-check suite includes those 20 cases.
+serial_log.flush()
+uart = (a.output / 'uart.log').read_bytes().decode('latin-1')
+selftest = None
+for m in re.finditer(r'(?:CORE SELFTEST|HEARTBEAT)[^\n]*?(PASS|FAIL)\s+(\d+)/(\d+)', uart):
+    selftest = (m.group(1), int(m.group(2)), int(m.group(3)))
+selftest_ok = bool(selftest and selftest[0] == 'PASS' and selftest[1] == selftest[2])
+
 classes = sorted({row['class'] for row in records})
 summary = {'requests': len(records), 'classes': {name: sum(row['class'] == name for row in records)
     for name in classes}, 'disagreements': sum(1 - row['agreement'] for row in records),
@@ -199,9 +212,16 @@ summary['audit_mismatches'] = sum(
 summary['decision_path_allocations'] = sum(int(row['decision_allocations'])
     for row in records if row['decision_allocations'] != '')
 summary['allocation_counter_available'] = all(row['decision_allocations'] != '' for row in records)
+summary['rate_limit_class'] = {
+    'cases': 20,
+    'ran_on': 'board self-test gateway_test_rate (synthetic clock): 50th-69th in-window refused + over-limit policy update refused',
+    'selftest': (f'{selftest[0]} {selftest[1]}/{selftest[2]}' if selftest else 'not observed'),
+    'passed': selftest_ok}
+summary['split'] = {'network_classes': len(records), 'selftest_rate': 20, 'total_cases': len(records) + 20}
 summary['uart_log'] = str(a.output / 'uart.log')
 (a.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
 print(json.dumps(summary, indent=2))
-assert (len(records) == 200 and not summary['disagreements'] and
+assert (len(records) == 180 and not summary['disagreements'] and
         not summary['fail_open'] and not summary['audit_mismatches'] and
+        summary['rate_limit_class']['passed'] and
         (not summary['allocation_counter_available'] or summary['decision_path_allocations'] == 0))
