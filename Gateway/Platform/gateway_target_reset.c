@@ -15,7 +15,7 @@
 
 extern UART_HandleTypeDef huart3;
 
-static StackType_t treset_stack[256] __attribute__((section(".gateway_privileged")));
+static StackType_t treset_stack[512] __attribute__((section(".gateway_privileged")));
 static StaticTask_t treset_tcb __attribute__((section(".gateway_privileged")));
 static StaticQueue_t rx_queue_cb __attribute__((section(".gateway_privileged")));
 static uint8_t rx_queue_storage[32] __attribute__((section(".gateway_privileged")));
