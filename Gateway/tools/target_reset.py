@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Send a target-reset command over the ST-LINK VCP and wait for the [TRESET] reply.
 
-RESET pulses PA0 (TGT_NRST, open-drain) low for 100 ms; STATUS reports the line.
+RESET pulses PA3 (TGT_NRST, the Nucleo "A0" header pin, open-drain) low for 100 ms; STATUS reports the line.
 Use only one serial reader: stop capture_uart.py or any terminal first.
 """
 import argparse,os,select,sys,termios,time
