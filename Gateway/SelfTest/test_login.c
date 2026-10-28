@@ -1,5 +1,6 @@
 #include "gateway_http.h"
 #include "gateway_login.h"
+#include "gateway_glue.h"
 #include "gateway_tests.h"
 #include "credential_store.h"
 #include <stdio.h>
@@ -13,6 +14,7 @@ static int call(const char *method,const char *path,const char *token,const char
 {
     GatewayContext *c=&gateway_test_context; GatewayHttp *h=&gateway_http_fixture;
     gateway_init(c); gateway_http_init(h);
+    gateway_policy_store_load(&c->policy);   /* decision reads the live store; start from the default */
     int n=snprintf(request,sizeof(request),"%s %s HTTP/1.1\r\nHost: board\r\n%s%s%sContent-Length: %lu\r\n\r\n%s",
         method,path,token?"Authorization: Bearer ":"",token?token:"",token?"\r\n":"",
         (unsigned long)strlen(body),body);

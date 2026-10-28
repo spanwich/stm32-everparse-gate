@@ -2,6 +2,7 @@
 #include "gateway_core.h"
 #include "HTTP_Extract_Complete.h"
 #include "IPC_Extract.h"
+#include "gateway_glue.h"
 #include <string.h>
 
 GatewayResult gateway_extract(GatewayContext *c)
@@ -36,14 +37,14 @@ GatewayResult gateway_set_identity(GatewayContext *c, const GatewayIdentity *id,
         c->security_len < SECPARAMS_HEADER_SIZE || c->security_len > sizeof(c->security) ||
         !id || !id->valid || id->role > ROLE_ADMIN || id->subject_len > SUBJECT_ID_MAX)
         return c->result;
-    c->auth[0] = 1;
-    c->auth[1] = id->role;
-    c->auth[2] = (uint8_t)id->scope;
-    c->auth[3] = (uint8_t)(id->scope >> 8);
-    c->auth[4] = id->subject_len;
-    memcpy(c->auth + 5, id->subject, id->subject_len);
-    populate_auth_fields(c->security, c->auth);
-    populate_rate_field(c->security, rate);
+    /* Place role/scope/subject (bytes 6-41) and rate (byte 0) through the
+     * verified front code. The role<=ROLE_ADMIN and subject_len<=32 checks above
+     * are kept (finding c: the old populate_auth_fields clamped an out-of-range
+     * role to admin; here such a role is already rejected). id->subject is a
+     * 32-byte zero-padded buffer; GlueFrontSetIdentity copies subject_len of it
+     * and zero-fills the rest. */
+    gateway_glue_set_identity(c->security, rate, id->role, id->scope,
+                              id->subject_len, (uint8_t *)id->subject);
     c->result = GATEWAY_IDENTIFIED;
     return c->result;
 }

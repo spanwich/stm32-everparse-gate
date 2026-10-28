@@ -1,6 +1,9 @@
-/* Research integration: only the generated wrapper calls the effect bridge.
- * Single gateway-task ownership and immutable snapshots are caller obligations.
- * See Verification/README.md for the exact proof and trusted C boundary. */
+/* Research integration. Public and login requests go through the generated
+ * Mediation wrapper (which calls the effect bridge, Mediation_Extern_check/
+ * invoke); access and policy-update requests go through the verified glue
+ * (gateway_mediate_decide / GlueLowMediate), which fires the audit accept/effect
+ * hooks directly. Single gateway-task ownership and immutable snapshots are
+ * caller obligations. See Verification/README.md for the proof and trusted C. */
 #include "gateway_mediation.h"
 #include "gateway_login.h"
 #include "gateway_clear.h"
@@ -18,6 +21,7 @@
 #endif
 #include "../Generated/Mediation/Mediation_Wrapper.h"
 #include "../Generated/Mediation/Mediation_Extern.h"
+#include "gateway_glue.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -49,10 +53,6 @@ bool Mediation_Extern_check(uint8_t kind, uint32_t length, uint8_t *request,
     return accepted;
 }
 
-uint8_t gateway_policy_update(uint8_t role, uint8_t count, uint8_t *body,
-                              uint32_t paths[8], uint8_t masks[8],
-                              uint8_t min_roles[8], uint16_t scopes[8],
-                              uint8_t *num_rules);
 static void pack_policy(uint8_t out[65], const Policy *in)
 {
     memset(out,0,65); out[0]=in->num_rules;
@@ -72,6 +72,54 @@ static int message(GatewayContext *c, unsigned status, const char *text)
     memcpy(out->body,text,out->body_len);
     c->gate_len=GATE_RESPONSE_HEADER_SIZE+out->body_len;
     return status==GATE_STATUS_OK?200:403;
+}
+
+/* Access/update decision through the verified glue (via the separate adapter,
+ * gateway_glue_adapter.c, which owns the live store). The frame (c->security) is
+ * classified and decided by GlueLowMediate against the live store (n=1, j=1);
+ * c->app is built by the verified BuildApp on forward, the store is committed by
+ * the verified update gate on an accepted update. The audit accept/effect hooks
+ * fire exactly on acceptance/forwarding, with the same snapshot the wrapper path
+ * records (request bytes, the policy view, no login). */
+/* noinline so it stays a distinct symbol: it is the trusted gate the post-link
+ * admission check anchors on (it calls the verified GlueLowMediate and dispatches
+ * only on its verified "forward"/"updated" result). */
+__attribute__((noinline))
+static int gateway_mediate_decide(GatewayContext *c, unsigned kind)
+{
+    uint8_t request[1536], policy[65], login[106]={0};
+    memcpy(request,c->security,sizeof(request)); pack_policy(policy,&c->policy);
+    uint32_t length=kind==GATEWAY_UPDATE?70:75;
+    uint8_t nr=0; uint32_t app_len=0;
+    uint8_t r=gateway_glue_mediate(c->security,c->security_len,&nr,c->app,&app_len);
+    int rc;
+    if(r==1) {                       /* forward */
+        gateway_audit_accept(kind,length,request,policy,login);
+        gateway_audit_effect(kind,length,request,policy,login,c);
+        c->app_len=app_len; c->result=GATEWAY_FORWARD;
+#ifdef STM32F767xx
+        rc=gateway_r4_app_dispatch(c)?200:500;
+#else
+        rc=gateway_dispatch(c)?200:500;
+#endif
+    } else if(r==4) {                /* policy updated: refresh the display view */
+        gateway_audit_accept(kind,length,request,policy,login);
+        gateway_audit_effect(kind,length,request,policy,login,c);
+        gateway_glue_store_to_policy(&c->policy,nr);
+        c->result=GATEWAY_POLICY_UPDATED;
+        rc=message(c,GATE_STATUS_OK,"{\"status\":\"ok\",\"message\":\"policy updated\"}");
+    } else if(r==3) {                /* rate limited */
+        c->result=GATEWAY_DENIED;
+        message(c,GATE_STATUS_RATE_LIMITED,"{\"status\":\"rate_limited\"}");
+        rc=429;
+    } else if(r==0) {                /* malformed (unreachable after the preamble) */
+        c->result=GATEWAY_DENIED; rc=400;
+    } else {                         /* 2 deny, 5 update rejected, 6 fail closed */
+        c->result=GATEWAY_DENIED;
+        rc=message(c,GATE_STATUS_DENIED,"{\"status\":\"denied\"}");
+    }
+    gateway_clear(request,sizeof(request));
+    return rc;
 }
 
 /* Trusted leaf semantics: this function acts on the exact snapshots supplied
@@ -99,36 +147,11 @@ uint32_t Mediation_Extern_invoke(uint8_t kind, uint32_t length, uint8_t *request
         c->dispatch_count++; c->result=GATEWAY_DISPATCHED;
         return (uint32_t)status;
     }
-    if(kind==GATEWAY_UPDATE) {
-        /* Commit through the verified update gate: the rules are exactly those
-         * the validated bytes encode. A disagreement with the check above
-         * fails closed and leaves the live policy unchanged. */
-        uint32_t paths[MAX_RULES]; uint8_t masks[MAX_RULES], roles[MAX_RULES], nr=0;
-        uint16_t scopes[MAX_RULES];
-        if(gateway_policy_update(p->role,p->rate_count,(uint8_t *)p->body,
-                                 paths,masks,roles,scopes,&nr)!=1) {
-            c->result=GATEWAY_DENIED;
-            return (uint32_t)message(c,GATE_STATUS_DENIED,"{\"status\":\"denied\"}");
-        }
-        memset(&c->policy,0,sizeof(c->policy)); c->policy.num_rules=nr;
-        for(unsigned i=0;i<MAX_RULES;++i)
-            c->policy.rules[i]=(PolicyRule){paths[i],masks[i],roles[i],scopes[i]};
-        c->result=GATEWAY_POLICY_UPDATED;
-        return (uint32_t)message(c,GATE_STATUS_OK,"{\"status\":\"ok\",\"message\":\"policy updated\"}");
-    }
-    /* Single-owner execution preserves the policy snapshot during this call.
-     * Access never writes policy; only the update branch commits a candidate. */
-    AppRequest *app=(AppRequest *)c->app;
-    app->conn_id=0; app->path_hash=p->path_hash; app->method=p->method;
-    app->role=p->role; app->scope=p->scope; app->subject_id_len=p->subject_id_len;
-    memcpy(app->subject_id,p->subject_id,SUBJECT_ID_MAX_APP);
-    app->body_len=p->body_len; memcpy(app->body,p->body,p->body_len);
-    c->app_len=APP_REQUEST_HEADER_SIZE+p->body_len; c->result=GATEWAY_FORWARD;
-#ifdef STM32F767xx
-    return gateway_r4_app_dispatch(c)?200:500;
-#else
-    return gateway_dispatch(c)?200:500;
-#endif
+    /* Access and policy update no longer reach this leaf: gateway_mediate routes
+     * them to the verified glue (gateway_mediate_decide / GlueLowMediate, which
+     * builds the AppRequest and commits the update), so the Mediation wrapper is
+     * entered only for public and login. */
+    return 500;
 }
 
 int gateway_mediate(GatewayContext *c, unsigned kind)
@@ -150,11 +173,16 @@ int gateway_mediate(GatewayContext *c, unsigned kind)
     if(kind==GATEWAY_UPDATE && p->body_len!=65) return 403;
     if((kind==GATEWAY_ACCESS || kind==GATEWAY_UPDATE) && c->result!=GATEWAY_IDENTIFIED) return 500;
     if((kind==GATEWAY_PUBLIC || kind==GATEWAY_LOGIN) && c->result!=GATEWAY_EXTRACTED) return 500;
+    /* Access and policy update: the verified glue decides against the live store
+     * and builds the app request / commits the update. Public and login keep the
+     * Mediation wrapper below. */
+    if(kind==GATEWAY_ACCESS || kind==GATEWAY_UPDATE)
+        return gateway_mediate_decide(c,kind);
     /* No pointers in these snapshots. Their lifetime spans the synchronous call.
      * Scratch storage is explicit in the Low* contract and disjoint from ctx. */
     uint8_t request[1536], policy[65], login[106]={0}, envelope[106]={0};
     memcpy(request,c->security,sizeof(request)); pack_policy(policy,&c->policy);
-    uint32_t length=kind==GATEWAY_UPDATE?70:75;
+    uint32_t length=75;   /* public; login overrides via gateway_login_prepare (update/access use the glue) */
     if(kind==GATEWAY_LOGIN && !gateway_login_prepare(p->body,p->body_len,login,&length)) {
         gateway_clear(request,sizeof(request)); gateway_clear(login,sizeof(login));
         return 400;

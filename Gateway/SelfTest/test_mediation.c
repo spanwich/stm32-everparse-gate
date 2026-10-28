@@ -1,4 +1,5 @@
 #include "gateway_mediation.h"
+#include "gateway_glue.h"
 #include "gateway_tests.h"
 #include "gateway_routes.h"
 #include <string.h>
@@ -26,6 +27,9 @@ void gateway_test_mediation(GatewayTestStats *s)
     prepare(PATH_STATUS,METHOD_GET,ROLE_OPERATOR);
     c->policy.num_rules=1;c->policy.rules[0]=(PolicyRule){PATH_LOGOUT,METHOD_POST,ROLE_OPERATOR,0};
     c->policy.rules[1]=(PolicyRule){PATH_STATUS,METHOD_GET,ROLE_OPERATOR,0};
+    /* The gate decides on the live store, not c->policy; load the slot it must
+     * match. The access decision then leaves c->policy (the view) unchanged. */
+    gateway_policy_store_load(&c->policy);
     Policy old=c->policy;
     CHECK("Mediation stored slot matches despite count one",gateway_mediate(c,GATEWAY_ACCESS)==200 && c->dispatch_count==1 && !memcmp(&old,&c->policy,sizeof(old)));
     CHECK("Mediation decision cannot dispatch twice",!gateway_dispatch(c));

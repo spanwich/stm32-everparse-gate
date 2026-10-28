@@ -1,0 +1,31 @@
+Verified interface code of the gate (Low*), imported verbatim.
+
+Source: /home/iamfo470/phd/paper-experiments/verified-glue
+  src/Glue.Spec.fst, src/Glue.Front.fst, src/Glue.Low.fsti/.fst
+  extracted by one KaRaMeL run (make extract) into extracted/.
+
+Files here (copied verbatim from .../verified-glue/extracted/), sha256:
+  GlueFront.c  9498fe76d5a0f8edf6defb61d2ec8d939274df47190b62160947f38880e0f3d7
+  GlueFront.h  d529be300ba7cb98d3a0c6738db1e99b6835e079585ee7fc48bba17c39c35818
+  Glue.c       18f560affd064b15cb3ec91ad30c9d7b4a6b91f246c567354e6e7320f4ee789e
+  Glue.h       a2589f97bc4e6670fd4c70fe4958d3e3b61461656b7d9150f864d54ce8d17c2b
+
+GlueFront.c/.h: front-of-frame checks with no Gate/Blob dependency
+  (GlueFrontWireCheck, GlueFrontClassify, GlueFrontCredential,
+  GlueFrontSetIdentity, GlueFrontReadU16/U32).
+Glue.c/.h: GlueLowMediate; Glue.c includes GlueFront.h, Gate.h, Blob.h and
+  calls the already-linked GateLowGateDecide (Gateway/Generated/Gate) and
+  BlobLowUpdateDecide (Gateway/Generated/Policy). It links against the deployed
+  Gate.c/Blob.c (extracted Gate.c is byte-identical to the deployed copy; the
+  extracted Blob.c differs only by one `#include "internal/EverParse.h"` line,
+  which the deployed Blob.c does not need).
+
+Evidence (run in the source tree; not re-run here):
+  make verify    : F* + Z3 4.13.3 (EverParse v2025.10.06), zero admit/assume.
+  make test      : extracted Glue.c linked with the DEPLOYED Gate.c/Blob.c vs an
+                   independent Python oracle: 12,000 vectors, 0 disagreements
+                   (3000 classify, 1500 credential, 1500 identity, 6000 mediate).
+                   Re-run on 2026-10-29 with the split files: 12,000/0.
+  make mutations : 10/10 seeded bugs rejected by verification.
+
+Do not edit these files; regenerate them in the source tree and re-copy.

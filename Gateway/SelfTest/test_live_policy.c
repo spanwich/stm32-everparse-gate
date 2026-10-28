@@ -1,4 +1,5 @@
 #include "gateway_http.h"
+#include "gateway_glue.h"
 #include "gateway_routes.h"
 #include "gateway_tests.h"
 #include <stdio.h>
@@ -31,6 +32,9 @@ void gateway_test_live_policy(GatewayTestStats *s)
 {
 #define CHECK(n,x) gateway_test_check(s,n,(x))
     GatewayContext *c=&gateway_test_context;gateway_init(c);
+    /* Load the live store from the default policy once; live-policy edits below
+     * persist in the store across begin_request (the decision reads the store). */
+    gateway_policy_store_load(&c->policy);
     CHECK("Public JavaScript with fragmented headers",request("GET","/dashboard.js",NULL,NULL,0)==200 && gateway_http_fixture.script);
     CHECK("Demo GET requires authentication",request("GET","/demo",NULL,NULL,0)==401);
     CHECK("Demo rejects non-GET",request("POST","/demo",NULL,NULL,0)==400);

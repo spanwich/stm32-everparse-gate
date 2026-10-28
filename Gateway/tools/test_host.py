@@ -10,8 +10,8 @@ args = parser.parse_args()
 gateway = Path(__file__).resolve().parents[1]
 out = args.output or Path(tempfile.mkdtemp(prefix='policy-gate-host-'))
 out.mkdir(parents=True, exist_ok=True)
-includes = [gateway / n for n in ['Inc', 'Shared', 'Core', 'Auth', 'Generated/Auth', 'Generated/Extractor', 'Generated/Extractor/krml_include']]
-sources = sorted(p for p in (gateway / 'Auth').glob('*.c') if p.name != 'd1_auth_oracle.c') + sorted((gateway / 'Generated/Auth').glob('*.c')) + sorted((gateway / 'Generated/Extractor').glob('*.c')) + sorted((gateway / 'Generated/Policy').glob('*.c')) + sorted((gateway / 'Generated/Mediation').glob('*.c')) + sorted((gateway / 'Generated/Gate').glob('*.c')) + sorted((gateway / 'Core').glob('*.c')) + sorted((gateway / 'SelfTest').glob('*.c')) + [gateway / 'tools/host_main.c']
+includes = [gateway / n for n in ['Inc', 'Shared', 'Core', 'Auth', 'Generated/Auth', 'Generated/Extractor', 'Generated/Extractor/krml_include', 'Generated/Gate', 'Generated/Policy', 'Generated/Glue']]
+sources = sorted(p for p in (gateway / 'Auth').glob('*.c') if p.name != 'd1_auth_oracle.c') + sorted((gateway / 'Generated/Auth').glob('*.c')) + sorted((gateway / 'Generated/Extractor').glob('*.c')) + sorted((gateway / 'Generated/Policy').glob('*.c')) + sorted((gateway / 'Generated/Mediation').glob('*.c')) + sorted((gateway / 'Generated/Gate').glob('*.c')) + sorted((gateway / 'Generated/Glue').glob('*.c')) + sorted((gateway / 'Core').glob('*.c')) + sorted((gateway / 'SelfTest').glob('*.c')) + [gateway / 'tools/host_main.c']
 cmd = [os.environ.get('CC', 'gcc'), '-std=gnu11', '-Os', '-g', '-Wall', '-Wextra', '-Werror']
 cmd += ['-DGATEWAY_PAPER_TIMING=0', '-DGATEWAY_PAPER_CONTROL=0', '-DGATEWAY_PAPER_ALLOC=0']
 if args.lab_auth_off: cmd += ['-DGATEWAY_LAB_AUTH=0']

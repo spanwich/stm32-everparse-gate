@@ -1,4 +1,5 @@
 #include "gateway_http.h"
+#include "gateway_glue.h"
 #include "gateway_tests.h"
 #include <string.h>
 #include <stdio.h>
@@ -9,6 +10,9 @@ static int execute(const void *p,size_t n,size_t split)
 {
     GatewayContext *c=&gateway_test_context; GatewayHttp *h=&gateway_http_fixture;
     gateway_init(c); gateway_http_init(h);
+    /* The access/update decision reads the live store; load it from this
+     * request's default policy so each request starts from the default. */
+    gateway_policy_store_load(&c->policy);
     int r=gateway_http_feed(h,c,p,split);
     if(!r) r=gateway_http_feed(h,c,(const uint8_t *)p+split,n-split);
     return r==1?gateway_http_process(h,c):r;

@@ -7,6 +7,7 @@
 #include "gateway_d1_cleanup.h"
 #include "gateway_log.h"
 #include "gateway_mediation.h"
+#include "gateway_glue.h"
 #include "paper_experiment.h"
 #include "paper_runtime53.h"
 #include "main.h"
@@ -223,6 +224,7 @@ static void gate_task(void *arg)
     (void)arg;
     gateway_init(&live_gate);
     policy_init_restrictive(&live_gate.policy);
+    gateway_policy_store_init();   /* authoritative live store = restrictive default */
     for (;;) {
         uint32_t expected=0U;
         bool complete=true;

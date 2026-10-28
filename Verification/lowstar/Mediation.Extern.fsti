@@ -17,7 +17,8 @@ let input_valid (r:S.seq U8.t{S.length r=1536})
  let byte i = U8.v (S.index r i) in
  let body_length = byte 171 + 256 * byte 172 + 65536 * byte 173 + 16777216 * byte 174 in
  body_length <= 1361 /\ byte 9 <= 32 /\ byte 42 <= 128 /\
- byte 6 <= 2 /\ 1 <= byte 5 /\ byte 5 <= 3 /\
+ byte 6 <= 2 /\
+ (byte 5 = 1 \/ byte 5 = 2 \/ byte 5 = 4 \/ byte 5 = 8 \/ byte 5 = 16 \/ byte 5 = 32) /\
  1 <= U8.v (S.index p 0) /\ U8.v (S.index p 0) <= 8
 
 (* Explicit trusted boundary, not a proved implementation. authorized means the

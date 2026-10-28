@@ -20,6 +20,7 @@ symbols = run('nm', '--defined-only', elf)
 required = ['extract_security_params', 'populate_auth_fields', 'populate_rate_field',
             'RbacPolicyValidateAccessRequest', 'RbacPolicyValidatePolicyBlob',
             'RbacPolicyValidateLoginRequest', 'Mediation_Wrapper_run', 'Mediation_Extern_invoke', 'gateway_mediate',
+            'GlueLowMediate', 'GlueFrontSetIdentity', 'gateway_mediate_decide',
             'gateway_platform_start', 'run_core', 'run_diagnostics',
             'vApplicationMallocFailedHook', 'gateway_assert_failed']
 # V11 MPU ports keep task context in the TCB and rely on MPU faults for
@@ -98,16 +99,24 @@ for line in disassembly.splitlines():
         indirect.add(fn)
 # Call-graph admission evidence, conditional on no hidden indirect handler
 # references. This is not a machine-code control-flow or memory-isolation proof.
-def reachable_without(start, barrier):
+def reachable_without(start, barriers):
+    barriers=barriers if isinstance(barriers,(set,frozenset)) else {barriers}
     reached=set(); pending=[start]
     while pending:
         name=pending.pop()
-        if name in reached or name==barrier: continue
+        if name in reached or name in barriers: continue
         reached.add(name); pending.extend(edges.get(name,()))
     return reached
 protected_effects={'Mediation_Extern_invoke','gateway_dispatch','gateway_login','gateway_evaluate','pipeline_process'}
-require(not (reachable_without('gateway_http_process','Mediation_Wrapper_run') & protected_effects),
-        'HTTP handler call path bypasses verified wrapper')
+# Two verified mediation decision points gate the HTTP path: the Mediation
+# wrapper (public/login) and gateway_mediate_decide (access/policy update), the
+# trusted gate that calls the verified GlueLowMediate and dispatches only on its
+# verified result. No protected effect may reach the HTTP handler except through
+# one of them.
+require(not (reachable_without('gateway_http_process',{'Mediation_Wrapper_run','gateway_mediate_decide'}) & protected_effects),
+        'HTTP handler call path bypasses verified mediation (wrapper or glue gate)')
+require('GlueLowMediate' in reachable_without('gateway_mediate_decide',''),
+        'glue gate does not reach the verified GlueLowMediate decision')
 require(not (reachable_without('Mediation_Extern_check','') & protected_effects),
         'validator bridge reaches a handler')
 seen = set(); active = set()
