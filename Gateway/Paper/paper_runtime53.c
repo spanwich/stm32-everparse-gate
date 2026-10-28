@@ -8,11 +8,17 @@
  * store, exactly as the GATE_N32 variant does, but reading the runtime store.
  *
  * Nothing here changes the 3D spec, the F* and Low* proofs or the generated C.
- * only verified-security-relevant handwritten code is the update adapter
- * (gateway_runtime53_update): it bounds-checks the partition index j (< 53)
- * BEFORE the update-gate call, and then calls the unchanged BlobLowUpdateDecide
- * with pol = &partition[j]. The admin-only, rate and 1<=count<=8 checks are the
- * unchanged verified validator (RbacPolicy.3d _auth_ok/_rate_ok/_rules_ok).
+ * Updates and decisions are routed through the Low*-verified GlueLowMediate
+ * (Gateway/Generated/Glue) with n=53 and the 1-based partition index j: the
+ * mediate itself checks 1 <= j <= n (so the former handwritten j bounds check is
+ * gone) and, on a valid admin blob, decodes the eight rules into partition j with
+ * the unchanged BlobLowUpdateDecide; decisions run the unchanged GateLowGateDecide
+ * over all 53 partitions after the count<50 rate check. The partition index is
+ * still PARSED by hand (qnum of ?p=); only its bounds check moved into the proof.
+ * The admin-only, rate and 1<=count<=8 checks remain the verified validator
+ * (RbacPolicy.3d _auth_ok/_rate_ok/_rules_ok). The equivalence sweep and DWT
+ * timing below still call GateLowGateDecide / BlobLowUpdateDecide directly, as
+ * controlled measurement harnesses over the same live store.
  *
  * A labelled diagnostic endpoint (/gate53) drives: update a partition, decide a
  * single request, the 20,256-vector equivalence sweep (chunked to fit the
@@ -32,6 +38,7 @@
 #include "main.h"
 #include "../Generated/Gate/Gate.h"
 #include "../Generated/Policy/Blob.h"
+#include "../Generated/Glue/Glue.h"       /* GlueLowMediate (verified n/j mediation) */
 #include "../Shared/gate_response_wire.h"
 #include "paper_gate_n32_data.h"
 #include "FreeRTOS.h"
@@ -47,6 +54,8 @@
 #define RT_RULES (RT_SLOTS * RT_PARTS)        /* 424 */
 #define RT_SENTINEL 0xDEADDEADu
 #define RT_BLOB_BODY 65u                      /* num_rules(1) + 8 x rule(8) */
+#define RT_POLICY_PATH 0x44444444u            /* GlueLowMediate update selector (path) */
+#define RT_METHOD_PUT 4u                      /* GlueLowMediate update selector (method) */
 
 /* The decode destination of BlobLowUpdateDecide (BLOB_SPEC_RULE) and the gate's
  * rule (GATE_SPEC_RULE) are the same 8-byte layout {u32 path, u8 mask/method,
@@ -90,26 +99,53 @@ void gateway_runtime53_init(void)
     DWT->CYCCNT = 0; DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
-/* Minimal update adapter (the only verified-security-relevant handwritten code).
- * Bounds-checks j before any gate call, then the UNCHANGED verified update gate
- * validates the 70-byte blob (admin-only, rate, 1<=count<=8, field ranges) and,
- * on acceptance, decodes the eight rules in place into partition j; on rejection
- * it writes nothing. Returns 1 accept, 0 deny, 2 fail-closed, 3 out-of-range. */
-static uint8_t gateway_runtime53_update(uint8_t role, uint8_t count, uint8_t *body, uint32_t j)
+/* Build a SecurityParamsWire for GlueLowMediate from flat fields (subject and
+ * token empty). cap must be >= 175 + body_len. Returns the wire length. */
+static uint32_t rt_wire(uint8_t *w, uint32_t cap, uint32_t path, uint8_t meth,
+                        uint8_t role, uint16_t scope, uint8_t count,
+                        const uint8_t *body, uint32_t body_len)
 {
-    if (j >= RT_PARTS) return 3u;
-    BLOB_SPEC_SESSION s = { role, count };
-    uint8_t nr = 0u, ctxt = 0u;
-    return BlobLowUpdateDecide(s, body, (BLOB_SPEC_RULE *)&live_store[RT_SLOTS * j], &nr, &ctxt);
+    memset(w, 0, cap);
+    w[0] = count;
+    w[1] = (uint8_t)path; w[2] = (uint8_t)(path >> 8);
+    w[3] = (uint8_t)(path >> 16); w[4] = (uint8_t)(path >> 24);
+    w[5] = meth; w[6] = role;
+    w[7] = (uint8_t)scope; w[8] = (uint8_t)(scope >> 8);
+    w[171] = (uint8_t)body_len; w[172] = (uint8_t)(body_len >> 8);
+    w[173] = (uint8_t)(body_len >> 16); w[174] = (uint8_t)(body_len >> 24);
+    if (body_len) memcpy(w + 175, body, body_len);
+    return 175u + body_len;
 }
 
-/* Decision over the 53 runtime-loaded partitions (unchanged composed gate). */
+/* Update adapter: build the 240-byte policy-update wire and route it through the
+ * verified GlueLowMediate with n=53 and the 1-based partition index. GlueLowMediate
+ * itself checks 1 <= J <= N -- so the handwritten j bounds check is gone -- and on a
+ * valid admin blob decodes the eight rules into partition J, writing nothing on
+ * rejection. j is still PARSED by hand at the endpoint (qnum of ?p=); only its
+ * bounds check moved into the proof. Returns 1 accept, 0 deny/rejected (incl. an
+ * out-of-range J), 2 fail-closed. */
+static uint8_t gateway_runtime53_update(uint8_t role, uint8_t count, uint8_t *body, uint32_t j)
+{
+    uint8_t w[175u + RT_BLOB_BODY];
+    uint8_t app[64]; uint32_t app_len = 0u; uint8_t nr = 0u, ctxt = 0u;
+    uint32_t len = rt_wire(w, sizeof(w), RT_POLICY_PATH, RT_METHOD_PUT, role, 0u, count, body, RT_BLOB_BODY);
+    uint8_t r = GlueLowMediate(RT_PARTS, live_store, j + 1u, w, len, &nr, app, &app_len, &ctxt);
+    return r == 4u ? 1u : r == 6u ? 2u : 0u;   /* 4 updated, 5 rejected, 6 fail-closed, 0 malformed */
+}
+
+/* Decision over the 53 runtime-loaded partitions, routed through the verified
+ * GlueLowMediate. The wire's path is not the update selector, so it takes the
+ * decision branch: the count<50 rate check then GateLowGateDecide over all N
+ * partitions. Maps the glue result to this diagnostic's convention: 1 accept,
+ * 0 deny (incl. rate limited), 2 fail-closed or malformed wire (role>2 / non-bit
+ * method). */
 static uint8_t gateway_runtime53_decide(uint32_t path, uint8_t meth, uint8_t role, uint16_t scope, uint8_t count)
 {
-    GATE_SPEC_REQUEST q = { .rpath = path, .meth = meth };
-    GATE_SPEC_SESSION s = { .role = role, .sscope = scope, .count = count };
-    uint8_t ctxt = 0u;
-    return GateLowGateDecide(RT_PARTS, live_store, q, s, &ctxt);   /* 1 accept, 0 deny, 2 fail-closed */
+    uint8_t w[175];
+    uint8_t app[64]; uint32_t app_len = 0u; uint8_t nr = 0u, ctxt = 0u;
+    uint32_t len = rt_wire(w, sizeof(w), path, meth, role, scope, count, NULL, 0u);
+    uint8_t r = GlueLowMediate(RT_PARTS, live_store, 1u, w, len, &nr, app, &app_len, &ctxt);
+    return r == 1u ? 1u : (r == 2u || r == 3u) ? 0u : 2u;
 }
 
 static uint32_t rt_digest(void)
@@ -322,13 +358,16 @@ int gateway_runtime53_endpoint(const GatewayHttp *h, GatewayContext *c, int *han
     if (qis(q, qn, "op", "update")) {
         if (!is_put) return rt_reply(c, GATE_STATUS_DENIED, "{\"error\":\"method\"}");
         if (blen != RT_BLOB_BODY) return rt_reply(c, GATE_STATUS_DENIED, "{\"status\":\"denied\",\"reason\":\"bad_body\"}");
-        const uint8_t *tok; uint32_t tlen; GatewayIdentity id; uint8_t rate;
-        if (!rt_bearer(raw, le + 2u, hdr, &tok, &tlen) || !gateway_bearer_check(tok, tlen, &id, &rate))
+        const uint8_t *tok; uint32_t tlen; GatewayIdentity id;
+        if (!rt_bearer(raw, le + 2u, hdr, &tok, &tlen) || !gateway_bearer_check(tok, tlen, &id))
             return rt_reply(c, GATE_STATUS_NO_AUTH, "{\"status\":\"unauthorized\"}");
         uint32_t jp = qnum(q, qn, "p", RT_PARTS);
         uint8_t body_copy[RT_BLOB_BODY]; memcpy(body_copy, body, RT_BLOB_BODY);
-        uint8_t r = gateway_runtime53_update(id.role, rate, body_copy, jp);
-        const char *s = r == 1u ? "ok" : r == 3u ? "out_of_range" : "denied";
+        /* count 0: an authenticated admin partition load is not rate-limited; this
+         * diagnostic supplies the count explicitly, not the live interface counter.
+         * An out-of-range partition is now rejected inside GlueLowMediate (1<=J<=N). */
+        uint8_t r = gateway_runtime53_update(id.role, 0u, body_copy, jp);
+        const char *s = r == 1u ? "ok" : r == 2u ? "fail_closed" : "denied";
         j = (Jb){ json, 0, sizeof json };
         js(&j, "{\"status\":\""); js(&j, s); js(&j, "\",\"code\":"); ju(&j, r);
         js(&j, ",\"partition\":"); ju(&j, jp); js(&j, ",\"active\":"); ju(&j, rt_active());
