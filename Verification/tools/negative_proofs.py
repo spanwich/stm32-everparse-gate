@@ -13,7 +13,18 @@ mutations={
  'alter_request':('Mediation.Wrapper.fst','let status=E.invoke','let _ = B.upd r 1ul 0uy in\n   let status=E.invoke',False),
  'alter_candidate':('Mediation.Wrapper.fst','let status=E.invoke','let _ = B.upd r 175ul 0uy in\n   let status=E.invoke',False),
  'bad_copy':('Mediation.Format.fst','B.upd e i v;','B.upd e i 0uy;',False),
- 'repeat_invoke':('Mediation.Wrapper.fst','let status=E.invoke','let _ = E.invoke k n r p l ctx in\n   let status=E.invoke',True),
+ # A second invocation is provable with framing hints after the first invoke:
+ # invoke's post gives only (B.live ctx /\ B.modifies ctx), so Z3 does not find
+ # the framing of the second invoke's precondition on its own, but the facts DO
+ # hold (asserting them discharges), so the contract states no invocation count.
+ 'repeat_invoke':('Mediation.Wrapper.fst','let status=E.invoke',
+   'let _ = E.invoke k n r p l ctx in\n'
+   '   (* a second invocation is provable with framing hints: the contract states no invocation count *)\n'
+   '   let h1 = get () in\n'
+   '   assert (B.live h1 r /\\ B.live h1 p /\\ B.live h1 l /\\ B.live h1 ctx);\n'
+   '   assert (E.context_object ctx /\\ E.input_valid (B.as_seq h1 r) (B.as_seq h1 p));\n'
+   '   assert (E.authorized k n (B.as_seq h1 r) (B.as_seq h1 p) (B.as_seq h1 l));\n'
+   '   let status=E.invoke',True),
 }
 for name,(file,old,new,expected_pass) in mutations.items():
  with tempfile.TemporaryDirectory(prefix='mediation-negative-') as tmp:
@@ -21,7 +32,7 @@ for name,(file,old,new,expected_pass) in mutations.items():
     for p in (root/'lowstar').glob('*fst*'): shutil.copyfile(p,tmp/p.name)
     path=tmp/file; text=path.read_text(); assert text.count(old)==1
     path.write_text(text.replace(old,new))
-    cmd=[fstar,'--smt',z3,'--include',str(tmp),'--split_queries','always',
+    cmd=[fstar,'--smt',z3,'--include',str(tmp),'--split_queries','always','--z3rlimit','1000',
          '--z3smtopt','(set-option :smt.arith.solver 2)',str(tmp/file)]
     r=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
     (root/'evidence'/('negative-'+name+'.log')).write_text(r.stdout)

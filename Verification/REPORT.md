@@ -91,7 +91,10 @@ same immutable JSON body with the same trusted decoder. These are our own
 unverified modules, listed separately from trusted platform code.
 
 The post-link direct-call graph check rejects an HTTP-to-handler path that avoids
-`Mediation_Wrapper_run`, and a validator-bridge path reaching a handler. It includes
+both verified mediation decision points — `Mediation_Wrapper_run` (public/login)
+and `gateway_mediate_decide` (access/update, the trusted gate that calls the
+verified `GlueLowMediate`; kept non-inlined and required to reach it) — and a
+validator-bridge path reaching a handler. It includes
 inter-function tail branches. It is integration evidence, not a machine-code
 control-flow theorem or protection against arbitrary C writes. Legacy core APIs
 remain for startup/self-tests; their direct calls are outside network ingress.

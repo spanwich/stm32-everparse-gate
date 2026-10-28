@@ -85,8 +85,18 @@ and all inputs. One gateway task owns them throughout the synchronous call.
 access kind 2. The active wrapper uses this field serializer for access kind 2
 and retains `Mediation.Format.build` for the other kinds. `Mediation.Extern.check`
 bridges to the real validator. `Mediation.Extern.invoke` is the trusted leaf-effect
-boundary. The public C API does not hand an authorization Boolean back to HTTP
-code for later dispatch.
+boundary.
+
+Update (2026-10-29): on the STM32F767 the Mediation wrapper path is now entered
+only for public and login requests. Access (kind 2) and policy update (kind 3)
+are decided by the separately Low*-verified glue (`GlueLowMediate`,
+`Gateway/Generated/Glue`, from `paper-experiments/verified-glue`), called from the
+trusted gate `gateway_mediate_decide`, which forwards/commits only on the glue's
+verified result. `Mediation.Field.build_access` and the access/update branches of
+`Mediation.Extern.invoke` are retained for the proof and the generated-C
+provenance but are off the live access/update path. Unlike the wrapper, the glue
+returns a verified decision code that this one trusted gate acts on; that gate and
+the audit-hook placement are the trusted remainder for access/update.
 
 All three Low* files and the external contracts are under `lowstar/`; maintained
 extracted C is under `Gateway/Generated/Mediation`. Do not edit generated bodies.
