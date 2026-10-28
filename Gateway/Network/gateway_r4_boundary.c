@@ -8,6 +8,7 @@
 #include "gateway_log.h"
 #include "gateway_mediation.h"
 #include "paper_experiment.h"
+#include "paper_runtime53.h"
 #include "main.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -275,6 +276,10 @@ static void gate_task(void *arg)
 
 void gateway_r4_boundary_start(void)
 {
+#if GATEWAY_PAPER_RUNTIME53
+    /* Privileged: deny-all live store + DWT enable, before GATE serves requests. */
+    gateway_runtime53_init();
+#endif
     ingress_queue=xQueueCreateStatic(1,sizeof(IngressChunk),ingress_storage,&ingress_cb);
     reply_queue=xQueueCreateStatic(1,sizeof(GatewayR4Reply),reply_storage,&reply_cb);
     app_queue=xQueueCreateStatic(1,sizeof(AppJob),app_storage,&app_cb);
@@ -338,6 +343,10 @@ void gateway_r4_boundary_start(void)
     vGrantAccessToQueue(app, app_queue);
     vGrantAccessToQueue(app, app_reply_queue);
     gateway_d1_auth_grant_gate(gate);
+#if GATEWAY_PAPER_RUNTIME53
+    /* Privileged DWT-timing worker + its queues; grants the GATE task access. */
+    gateway_runtime53_start(gate);
+#endif
     gateway_d1_cleanup_grant(gateway_platform_network_task_handle());
     gateway_platform_grant_log_access(xTaskGetCurrentTaskHandle());
     gateway_platform_grant_log_access(app);

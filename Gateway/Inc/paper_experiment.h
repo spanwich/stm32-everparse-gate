@@ -31,6 +31,18 @@
 #ifndef GATEWAY_PAPER_GATE_N32
 #define GATEWAY_PAPER_GATE_N32 0
 #endif
+
+/* Runtime-53 labelled variant (2026-10-28): the full OPNsense policy (420 rules,
+ * n = 53) is loaded at run time over HTTP through the unchanged verified
+ * PolicyBlob update gate, one 8-slot partition per request, into a live store in
+ * the GATE compartment's RAM. Decisions use the unchanged composed gate
+ * (GateLowGateDecide) over that store. A labelled diagnostic endpoint (/gate53)
+ * drives update, decision, the 20,256-vector equivalence sweep and DWT timing.
+ * Base image is A1v (needs GATEWAY_FAST_MEMOPS and GATEWAY_VERIFIED_GATE = 1);
+ * off in the primary image. */
+#ifndef GATEWAY_PAPER_RUNTIME53
+#define GATEWAY_PAPER_RUNTIME53 0
+#endif
 /* Timing-distribution extension of the GATE_N32 variant (2026-10-21): 10,000
  * samples per case, min/mean/p50/p99/max, constructed worst-case path,
  * interrupts enabled and masked, update-gate commit. Requires GATE_N32 = 1. */

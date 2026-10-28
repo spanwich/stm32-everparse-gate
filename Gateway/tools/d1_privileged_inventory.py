@@ -20,6 +20,7 @@ TASKS = {  # entry: (source site, privilege note)
     'run_core': ('Gateway/Platform/gateway_platform.c:319', 'privileged; drops privilege before serving HTTP (NET)'),
     'run_diagnostics': ('Gateway/Platform/gateway_platform.c:339', 'privileged'),
     'run_target_reset': ('Gateway/Platform/gateway_target_reset.c:97', 'privileged USART3 RX / TGT_NRST'),
+    'rt_timing_task': ('Gateway/Paper/paper_runtime53.c:275', 'privileged DWT-timing worker (RUNTIME53 variant only)'),
     'cleanup_task': ('Gateway/Network/d1_kernel_cleanup.c:93', 'privileged kernel-object worker'),
     'tcpip_thread': ('Gateway/Network/sys_arch.c:553', 'privileged; drops privilege after network setup (NET)'),
     'input_thread': ('Gateway/Network/ethernetif.c:401', 'privileged SHIM RX'),
@@ -105,7 +106,8 @@ report = {'elf': str(elf), 'sections': sections,
           'kernel_privileged_functions': {'bytes': (hi - lo) if lo is not None else None,
                                            'functions': [{'name': n, 'bytes': b} for n, b in kernel_priv]}}
 for entry, (site, note) in TASKS.items():
-    assert entry in edges, f'missing task entry {entry}'
+    if entry not in edges:
+        continue  # variant-only tasks are absent from other images
     report['privileged_tasks'][entry] = {'source': site, 'note': note, **summarise(entry)}
     all_priv |= closure(entry)
 for isr in isr_roots:
@@ -120,5 +122,5 @@ report['limits'] = ('Direct-branch closures only; register-indirect targets (cal
 a.output.parent.mkdir(parents=True, exist_ok=True)
 a.output.write_text(json.dumps(report, indent=2) + '\n')
 u = report['privileged_union']
-print(f"privileged roots: {len(TASKS)} tasks, {len(report['isr_roots'])} ISRs; union {u['functions']} functions, "
+print(f"privileged roots: {len(report['privileged_tasks'])} tasks, {len(report['isr_roots'])} ISRs; union {u['functions']} functions, "
       f"{u['code_bytes']} B, {u['indirect_call_sites']} indirect sites; kernel privileged section {report['kernel_privileged_functions']['bytes']} B")

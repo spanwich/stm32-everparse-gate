@@ -7,6 +7,7 @@
 #include "gateway_clear.h"
 #include "gateway_routes.h"
 #include "gateway_mediation.h"
+#include "paper_runtime53.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -176,6 +177,12 @@ int gateway_http_process(GatewayHttp *h,GatewayContext *c)
         c->security_len=SECPARAMS_HEADER_SIZE; c->result=GATEWAY_EXTRACTED;
         return gateway_mediate(c,GATEWAY_PUBLIC);
     }
+#if GATEWAY_PAPER_RUNTIME53
+    /* Labelled variant: the /gate53 diagnostic endpoint is handled before the
+     * verified extractor (it carries raw rule paths the extractor does not know). */
+    { int handled=0; int st=gateway_runtime53_endpoint(h,c,&handled);
+      if(handled){ gateway_clear(h->raw,sizeof(h->raw)); return st; } }
+#endif
     if(gateway_extract(c)!=GATEWAY_EXTRACTED) return 400;
     SecurityParamsWire *p=(SecurityParamsWire *)c->security;
     if(h->demo) p->path_hash=GATEWAY_PATH_DEMO;
