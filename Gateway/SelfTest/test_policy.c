@@ -12,7 +12,12 @@ static void put32(uint8_t *p, uint32_t n)
 static void identify(uint8_t role, uint16_t scope, uint8_t rate)
 {
     GatewayIdentity id = {.valid = true, .role = role, .scope = scope, .subject_len = 1, .subject = {'t'}};
-    (void)gateway_set_identity(&ctx, &id, rate);
+    (void)gateway_set_identity(&ctx, &id, 0);
+    /* This is a unit test of the legacy reference engine (gateway_evaluate), which
+     * reads the rate-count byte; inject the test's value directly. The live path's
+     * count instead comes from the verified windowed counter, which gateway_set_identity
+     * now steps and which gateway_test_rate exercises end to end. */
+    ctx.security[0] = rate;
 }
 static void start(const char *method, const char *path, uint8_t role, uint16_t scope, uint8_t rate)
 {

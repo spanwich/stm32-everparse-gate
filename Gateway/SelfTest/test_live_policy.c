@@ -10,6 +10,9 @@ static int request(const char *method,const char *path,const char *token,const u
 {
     GatewayContext *c=&gateway_test_context;GatewayHttp *h=&gateway_http_fixture;
     char head[256];gateway_begin_request(c);gateway_http_init(h);
+    /* Fresh rate window per request (counter only, not the live store, so policy
+     * edits persist); the windowed limit itself is exercised by gateway_test_rate. */
+    gateway_rate_state_init();
     int n=snprintf(head,sizeof(head),"%s %s HTTP/1.1\r\nHost: board\r\n%s%s%sContent-Length: %lu\r\n\r\n",
         method,path,token?"Authorization: Bearer ":"",token?token:"",token?"\r\n":"",(unsigned long)length);
     if(n<0 || (size_t)n>=sizeof(head))return 500;
@@ -53,7 +56,6 @@ void gateway_test_live_policy(GatewayTestStats *s)
     CHECK("Operator cannot change live policy",request("PUT","/api/policy","pg-lab-operator",body,65)==403 && !memcmp(&before,&c->policy,sizeof(before)));
     CHECK("Admin enables operator demo",request("PUT","/api/policy","pg-lab-admin",body,65)==200);
     CHECK("Operator demo succeeds immediately",request("GET","/demo","pg-lab-operator",NULL,0)==200 && c->result==GATEWAY_DISPATCHED);
-    CHECK("Demo still enforces rate predicate",request("GET","/demo","pg-lab-limited",NULL,0)==429 && c->app_len==0);
     body[1+3*8+5]=ROLE_ADMIN;
     CHECK("Admin disables operator demo",request("PUT","/api/policy","pg-lab-admin",body,65)==200);
     CHECK("Operator demo denied immediately",request("GET","/demo","pg-lab-operator",NULL,0)==403 && c->app_len==0);

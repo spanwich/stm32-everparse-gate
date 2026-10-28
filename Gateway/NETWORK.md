@@ -15,14 +15,18 @@ TLS remains deferred. The earlier static Bearer fixtures below still work.
 ```sh
 curl --noproxy '*' -H 'Authorization: Bearer pg-lab-operator' http://192.168.40.128/api/status
 curl --noproxy '*' -H 'Authorization: Bearer pg-lab-admin' http://192.168.40.128/api/policy
-curl --noproxy '*' -H 'Authorization: Bearer pg-lab-limited' http://192.168.40.128/api/status
 ```
 
-| Token | Subject | Role | Scope | Rate value |
-| --- | --- | --- | --- | --- |
-| `pg-lab-operator` | `lab-operator` | Operator | `0x0001` | 0 |
-| `pg-lab-admin` | `lab-admin` | Admin | `0x0007` | 0 |
-| `pg-lab-limited` | `lab-limited` | Operator | `0x0001` | 50 |
+| Token | Subject | Role | Scope |
+| --- | --- | --- | --- |
+| `pg-lab-operator` | `lab-operator` | Operator | `0x0001` |
+| `pg-lab-admin` | `lab-admin` | Admin | `0x0007` |
+
+The request rate is no longer a per-token fixture: it is a verified windowed
+counter (`Gateway/Generated/Glue/GlueRate`, one state for the whole interface, a
+49 ms window, limit `N_max = 50` enforced by the gate as `count < 50`), stepped
+once per authenticated API request in `gateway_set_identity`. The former
+`pg-lab-limited` fixture (a constant rate 50) has been removed.
 
 These are public hard-coded lab fixtures, checked by exact token length and bytes.
 The header field and Bearer scheme are case-insensitive; token values are

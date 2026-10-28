@@ -49,7 +49,7 @@ def constant(name):return int(re.search(r'#define\s+'+name+r'\s+(0x[0-9A-Fa-f]+)
 PATH_STATUS=constant('PATH_STATUS'); PATH_LOGOUT=constant('PATH_LOGOUT'); PATH_POLICY=constant('PATH_POLICY')
 default=policy([(PATH_STATUS,1,1,1),(PATH_LOGOUT,2,1,0),(PATH_POLICY,1,2,4),(0x55555555,1,2,1)])
 check('operator status and JSON',exchange(request())[0::2]==(200,b'{"status":"ok","role":"OPERATOR"}'))
-for token,code in [(None,401),('bad',401),('pg-lab-operatorX',401),('PG-LAB-OPERATOR',401),('pg-lab-admin',200),('pg-lab-limited',429)]:
+for token,code in [(None,401),('bad',401),('pg-lab-operatorX',401),('PG-LAB-OPERATOR',401),('pg-lab-admin',200)]:
  r=exchange(request(token=token));check('identity '+str(token),r[0]==code and (code!=401 or b'www-authenticate' in r[1]))
 check('operator denied policy read',exchange(request('/api/policy'))[0]==403)
 check('admin policy read',exchange(request('/api/policy','pg-lab-admin'))[0]==200)
@@ -110,7 +110,7 @@ for phase in ('receive','response'):
  check('recover within 3s from reset during '+phase,recovered)
 start=time.monotonic()
 for i in range(a.count):
- token,code=[('pg-lab-operator',200),('bad',401),('pg-lab-limited',429)][i%3]
+ token,code=[('pg-lab-operator',200),('bad',401),('pg-lab-admin',200)][i%3]
  r=exchange(request(token=token))
  if r[0]!=code:check('sequential request '+str(i),False)
  if (i+1)%100==0:print('Progress',i+1,flush=True)

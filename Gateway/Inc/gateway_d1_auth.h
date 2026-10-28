@@ -6,7 +6,7 @@
 void gateway_d1_auth_start(void);
 void gateway_d1_auth_grant_gate(void *task);
 bool gateway_d1_auth_identify(const uint8_t *token, size_t length,
-                              GatewayIdentity *identity, uint8_t *rate);
+                              GatewayIdentity *identity);
 int gateway_d1_auth_login(const uint8_t *body, size_t length,
                           char *token, uint8_t *token_length);
 

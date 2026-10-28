@@ -17,7 +17,7 @@ int gateway_http_feed(GatewayHttp *h, GatewayContext *c, const void *data, size_
 /* Consumes a complete request, authenticates, evaluates and dispatches once. */
 int gateway_http_process(GatewayHttp *h, GatewayContext *c);
 /* Token bytes are compared exactly; no strings or prefix matching. */
-bool gateway_bearer_check(const uint8_t *token, size_t length, GatewayIdentity *identity, uint8_t *rate);
+bool gateway_bearer_check(const uint8_t *token, size_t length, GatewayIdentity *identity);
 int gateway_http_typed_header(char *out, size_t capacity, int status, size_t body_length, const char *content_type);
 int gateway_http_html_header(char *out, size_t capacity, size_t body_length);
 int gateway_http_response_header(char *out, size_t capacity, int status, size_t body_length);

@@ -140,24 +140,25 @@ int gateway_http_feed(GatewayHttp *h, GatewayContext *c, const void *data, size_
     if(!append(c,h->raw+h->header_end,h->body_len)) return h->status=413;
     return h->status=1;
 }
-bool gateway_bearer_check(const uint8_t *token,size_t n,GatewayIdentity *id,uint8_t *rate)
+bool gateway_bearer_check(const uint8_t *token,size_t n,GatewayIdentity *id)
 {
-    memset(id,0,sizeof(*id)); *rate=0;
+    memset(id,0,sizeof(*id));
 #ifdef STM32F767xx
-    return gateway_d1_auth_identify(token,n,id,rate);
+    return gateway_d1_auth_identify(token,n,id);
 #else
 #if GATEWAY_LAB_AUTH
-    static const struct { const char *token,*subject; uint8_t role, rate; uint16_t scope; } rows[]={
-        {"pg-lab-operator","lab-operator",ROLE_OPERATOR,0,1},
-        {"pg-lab-admin","lab-admin",ROLE_ADMIN,0,7},
-        {"pg-lab-limited","lab-limited",ROLE_OPERATOR,50,1}};
+    /* Lab fixtures carry no rate: the request rate is the verified windowed
+     * counter (byte 0), set downstream in gateway_set_identity. */
+    static const struct { const char *token,*subject; uint8_t role; uint16_t scope; } rows[]={
+        {"pg-lab-operator","lab-operator",ROLE_OPERATOR,1},
+        {"pg-lab-admin","lab-admin",ROLE_ADMIN,7}};
     for(unsigned i=0;i<sizeof(rows)/sizeof(rows[0]);++i) {
         if(n!=strlen(rows[i].token)) continue;
         unsigned diff=0; for(size_t j=0;j<n;++j) diff|=token[j]^(uint8_t)rows[i].token[j];
         if(diff) continue;
         id->valid=true; id->role=rows[i].role; id->scope=rows[i].scope;
         id->subject_len=(uint8_t)strlen(rows[i].subject); memcpy(id->subject,rows[i].subject,id->subject_len);
-        *rate=rows[i].rate; return true;
+        return true;
     }
 #else
     (void)token; (void)n;
@@ -193,10 +194,10 @@ int gateway_http_process(GatewayHttp *h,GatewayContext *c)
         gateway_clear(h->raw,sizeof(h->raw));
         return status;
     }
-    GatewayIdentity identity; uint8_t rate;
-    if(!gateway_bearer_check(p->token,p->token_len,&identity,&rate)) return 401;
+    GatewayIdentity identity;
+    if(!gateway_bearer_check(p->token,p->token_len,&identity)) return 401;
     if(p->path_hash==PATH_POLICY && p->method==METHOD_GET && identity.role!=ROLE_ADMIN) return 403;
-    if(gateway_set_identity(c,&identity,rate)!=GATEWAY_IDENTIFIED) return 500;
+    if(gateway_set_identity(c,&identity,gateway_tick_ms())!=GATEWAY_IDENTIFIED) return 500;
     return gateway_mediate(c,p->path_hash==PATH_POLICY && p->method==METHOD_PUT?
                            GATEWAY_UPDATE:GATEWAY_ACCESS);
 }

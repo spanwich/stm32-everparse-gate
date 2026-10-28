@@ -9,6 +9,8 @@ Files here (copied verbatim from .../verified-glue/extracted/), sha256:
   GlueFront.h  d529be300ba7cb98d3a0c6738db1e99b6835e079585ee7fc48bba17c39c35818
   Glue.c       18f560affd064b15cb3ec91ad30c9d7b4a6b91f246c567354e6e7320f4ee789e
   Glue.h       a2589f97bc4e6670fd4c70fe4958d3e3b61461656b7d9150f864d54ce8d17c2b
+  GlueRate.c   517f284240315ce774b2046c7196af59252479a5057b53c41e295d367386ee4f
+  GlueRate.h   4ba4a91c5efcae04a74a89f8c5dc29242bc6d10aa73e55bc00bb1adf10201fbe
 
 GlueFront.c/.h: front-of-frame checks with no Gate/Blob dependency
   (GlueFrontWireCheck, GlueFrontClassify, GlueFrontCredential,
@@ -19,6 +21,18 @@ Glue.c/.h: GlueLowMediate; Glue.c includes GlueFront.h, Gate.h, Blob.h and
   Gate.c/Blob.c (extracted Gate.c is byte-identical to the deployed copy; the
   extracted Blob.c differs only by one `#include "internal/EverParse.h"` line,
   which the deployed Blob.c does not need).
+GlueRate.c/.h (added 2026-10-29): verified windowed rate counter. One
+  GLUE_RATESPEC_RSTATE {count, start}; GlueRateRateInit; GlueRateRateStep(&st,
+  now, w) restarts the window when now < start (backwards clock / 49-day tick
+  wrap) or now - start >= w, else increments the count (capped 255); and
+  GlueRateCountAndIdentify(&st, now, w, frame, role, scope, sl, subj) = step +
+  GlueFrontSetIdentity with that count, in one verified call. GlueRate.c includes
+  only GlueFront.h. On glue/verified it replaces the authenticator fixture rate
+  as the source of the gate's count byte (one static state for the whole
+  interface, 10,000 ms window, in the gate task's .gateway_gate memory).
+  Verified lemma: at most 49 requests pass c < 50 in any window. Evidence in the
+  source tree: spec-oracle differential 15,000 vectors / 0 fails, 14/14 seeded
+  bugs rejected.
 
 Evidence (run in the source tree; not re-run here):
   make verify    : F* + Z3 4.13.3 (EverParse v2025.10.06), zero admit/assume.

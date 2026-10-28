@@ -103,6 +103,8 @@ int gateway_auth_issue_token(const uint8_t *body, size_t length,
     if(verify_credentials(user,ulen,pass,plen,&id.role,&id.scope,id.subject,&id.subject_len) &&
        generate_token((const char *)id.subject,id.subject_len,id.role,id.scope,
                       token,token_length)) status=200;
+#else
+    (void)token;   /* token is written only by the lab token issuer */
 #endif
  done:;
     gateway_clear(user,sizeof(user)); gateway_clear(pass,sizeof(pass));
@@ -142,8 +144,7 @@ bool gateway_login_validate(const uint8_t *token, size_t length, GatewayIdentity
 {
     memset(identity,0,sizeof(*identity));
 #ifdef STM32F767xx
-    uint8_t rate=0;
-    return gateway_d1_auth_identify(token,length,identity,&rate);
+    return gateway_d1_auth_identify(token,length,identity);
 #else
 #if GATEWAY_LAB_AUTH
     if(length>127 || !length) return false;

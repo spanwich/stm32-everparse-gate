@@ -21,30 +21,29 @@
 
 typedef struct {
     char token[16];
-    uint8_t token_len, role, rate;
+    uint8_t token_len, role;
     uint16_t scope;
     char subject[16];
     uint8_t subject_len;
 } Fixture;
 static const struct {
     uint8_t key[32];
-    Fixture fixture[3];
+    Fixture fixture[2];
 } boot_secrets BOOT_SECRET = {
     {0xDE,0xAD,0xBE,0xEF,0xCA,0xFE,0xBA,0xBE,
      0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,
      0xF0,0xE1,0xD2,0xC3,0xB4,0xA5,0x96,0x87,
      0x78,0x69,0x5A,0x4B,0x3C,0x2D,0x1E,0x0F},
     {
-        {"pg-lab-operator",15,ROLE_OPERATOR,0,1,"lab-operator",12},
-        {"pg-lab-admin",12,ROLE_ADMIN,0,7,"lab-admin",9},
-        {"pg-lab-limited",14,ROLE_OPERATOR,50,1,"lab-limited",11},
+        {"pg-lab-operator",15,ROLE_OPERATOR,1,"lab-operator",12},
+        {"pg-lab-admin",12,ROLE_ADMIN,7,"lab-admin",9},
     }
 };
 static uint8_t auth_key[32] AUTH_PRIVATE;
 #if GATEWAY_D1_PROBE == 22
 static volatile uint32_t probe_skip_auth AUTH_PRIVATE;   /* compartment-local copy */
 #endif
-static Fixture auth_fixture[3] AUTH_PRIVATE;
+static Fixture auth_fixture[2] AUTH_PRIVATE;
 static StackType_t auth_stack[AUTH_STACK_WORDS] AUTH_PRIVATE
     __attribute__((aligned(4096)));
 static StaticTask_t auth_tcb KERNEL_PRIVATE;
@@ -60,7 +59,7 @@ typedef struct {
     uint32_t sequence;
     int32_t status;
     GatewayIdentity identity;
-    uint8_t rate, token_length;
+    uint8_t token_length;
     char token[128];
 } AuthReply;
 
@@ -81,10 +80,10 @@ void gateway_d1_auth_secrets_init(void)
 }
 
 static bool identify_local(const uint8_t *token, size_t length,
-                           GatewayIdentity *identity, uint8_t *rate)
+                           GatewayIdentity *identity)
 {
-    memset(identity,0,sizeof(*identity)); *rate=0;
-    for(size_t i=0;i<3;++i) {
+    memset(identity,0,sizeof(*identity));
+    for(size_t i=0;i<2;++i) {
         const Fixture *f=&auth_fixture[i];
         if(length!=f->token_len) continue;
         unsigned diff=0;
@@ -93,7 +92,6 @@ static bool identify_local(const uint8_t *token, size_t length,
         identity->valid=true; identity->role=f->role; identity->scope=f->scope;
         identity->subject_len=f->subject_len;
         memcpy(identity->subject,f->subject,f->subject_len);
-        *rate=f->rate;
         return true;
     }
     if(length==0 || length>127) return false;
@@ -119,7 +117,7 @@ static void auth_task(void *arg)
 #endif
         if(request.kind==AUTH_IDENTIFY && request.length<=127U) {
             reply.status=identify_local(request.bytes,request.length,
-                                        &reply.identity,&reply.rate)?200:401;
+                                        &reply.identity)?200:401;
         } else if(request.kind==AUTH_LOGIN && request.length<=AUTH_LOGIN_MAX) {
             reply.status=gateway_auth_issue_token(request.bytes,request.length,
                                                    reply.token,&reply.token_length);
@@ -173,15 +171,15 @@ static bool exchange(AuthRequest *request, AuthReply *reply)
 }
 
 bool gateway_d1_auth_identify(const uint8_t *token, size_t length,
-                              GatewayIdentity *identity, uint8_t *rate)
+                              GatewayIdentity *identity)
 {
-    memset(identity,0,sizeof(*identity)); *rate=0;
+    memset(identity,0,sizeof(*identity));
     if(!token || length==0 || length>127) return false;
     AuthRequest request={.length=(uint16_t)length,.kind=AUTH_IDENTIFY};
     AuthReply reply={0};
     memcpy(request.bytes,token,length);
     bool ok=exchange(&request,&reply) && reply.status==200 && reply.identity.valid;
-    if(ok) { *identity=reply.identity; *rate=reply.rate; }
+    if(ok) *identity=reply.identity;
     gateway_clear(&request,sizeof(request)); gateway_clear(&reply,sizeof(reply));
     return ok;
 }

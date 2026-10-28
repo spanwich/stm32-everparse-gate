@@ -23,7 +23,7 @@ GatewayResult gateway_extract(GatewayContext *c)
     return c->result;
 }
 
-GatewayResult gateway_set_identity(GatewayContext *c, const GatewayIdentity *id, uint8_t rate)
+GatewayResult gateway_set_identity(GatewayContext *c, const GatewayIdentity *id, uint64_t now)
 {
     if (!c) return GATEWAY_REJECTED;
     GatewayResult previous = c->result;
@@ -37,13 +37,13 @@ GatewayResult gateway_set_identity(GatewayContext *c, const GatewayIdentity *id,
         c->security_len < SECPARAMS_HEADER_SIZE || c->security_len > sizeof(c->security) ||
         !id || !id->valid || id->role > ROLE_ADMIN || id->subject_len > SUBJECT_ID_MAX)
         return c->result;
-    /* Place role/scope/subject (bytes 6-41) and rate (byte 0) through the
-     * verified front code. The role<=ROLE_ADMIN and subject_len<=32 checks above
-     * are kept (finding c: the old populate_auth_fields clamped an out-of-range
-     * role to admin; here such a role is already rejected). id->subject is a
-     * 32-byte zero-padded buffer; GlueFrontSetIdentity copies subject_len of it
-     * and zero-fills the rest. */
-    gateway_glue_set_identity(c->security, rate, id->role, id->scope,
+    /* Place role/scope/subject (bytes 6-41) and the windowed request count (byte 0)
+     * through the verified front/rate code. The role<=ROLE_ADMIN and subject_len<=32
+     * checks above are kept (finding c: the old populate_auth_fields clamped an
+     * out-of-range role to admin; here such a role is already rejected). id->subject
+     * is a 32-byte zero-padded buffer; subject_len of it is copied, the rest
+     * zero-filled. `now` steps the one interface rate counter that sets the count. */
+    gateway_glue_set_identity(c->security, now, id->role, id->scope,
                               id->subject_len, (uint8_t *)id->subject);
     c->result = GATEWAY_IDENTIFIED;
     return c->result;

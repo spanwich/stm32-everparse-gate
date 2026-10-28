@@ -1,4 +1,5 @@
 #include "gateway_platform.h"
+#include "gateway_core.h"
 #include "gateway_d1_auth.h"
 #include "gateway_d1_cleanup.h"
 #include "gateway_network.h"
@@ -13,6 +14,9 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
+
+/* Real interface tick for the windowed rate counter (CMSIS-RTOS ms tick). */
+uint64_t gateway_platform_tick_ms(void) { return (uint64_t)osKernelGetTickCount(); }
 #include <string.h>
 #include <errno.h>
 

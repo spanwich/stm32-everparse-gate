@@ -11,11 +11,15 @@
  * that use the extractor runtime (gateway_mediation.c, extractor_adapter.c)
  * never include the glue headers directly. */
 
-/* Place rate(byte 0) and role/scope/subject(bytes 6-41) into the frame via the
- * verified GlueFrontSetIdentity. subject is a 32-byte buffer; subject_len of it
- * is copied and the rest zero-filled. */
-void gateway_glue_set_identity(uint8_t *frame, uint8_t count, uint8_t role,
+/* Step the one interface rate counter at `now` (ms) and place its resulting count
+ * (byte 0) plus role/scope/subject (bytes 6-41) into the frame, via the verified
+ * GlueRateCountAndIdentify. The gate then reads the real per-window request count.
+ * subject is a 32-byte buffer; subject_len of it is copied and the rest zero-filled. */
+void gateway_glue_set_identity(uint8_t *frame, uint64_t now, uint8_t role,
                                uint16_t scope, uint8_t subject_len, uint8_t *subject);
+/* Initialise the one interface-wide windowed rate counter (empty window). Called
+ * once at gate start, alongside gateway_policy_store_init. */
+void gateway_rate_state_init(void);
 
 /* Decide one access/update request (GlueLowMediate over the live store, n=1,
  * j=1). Returns 0 malformed, 1 forward (app holds the AppRequest, *app_len set),

@@ -122,8 +122,8 @@ static void d1_net_probe(void)
               PROBE_LOG("[PROBE] id=4 read=%u\n",(unsigned)k); break; }
     case 5: app_job.app[0]=0U; break;                                      /* write APP input */
     case 6: (void)gateway_mediate(&live_gate,GATEWAY_ACCESS); break;       /* call GATE function */
-    case 7: { GatewayIdentity who; uint8_t rate;                           /* call AUTH function */
-              bool ok=gateway_d1_auth_identify((const uint8_t *)"pg-lab-admin",12U,&who,&rate);
+    case 7: { GatewayIdentity who;                                         /* call AUTH function */
+              bool ok=gateway_d1_auth_identify((const uint8_t *)"pg-lab-admin",12U,&who);
               PROBE_LOG("[PROBE] id=7 identify=%u role=%u\n",(unsigned)ok,(unsigned)who.role); break; }
     case 8: { /* forged job on the leaked GATE->APP queue handle */
               memset(&probe_forged_job,0,sizeof(probe_forged_job)); probe_forged_job.length=16U;
@@ -225,6 +225,7 @@ static void gate_task(void *arg)
     gateway_init(&live_gate);
     policy_init_restrictive(&live_gate.policy);
     gateway_policy_store_init();   /* authoritative live store = restrictive default */
+    gateway_rate_state_init();     /* one interface-wide windowed rate counter */
     for (;;) {
         uint32_t expected=0U;
         bool complete=true;

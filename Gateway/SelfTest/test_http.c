@@ -13,6 +13,9 @@ static int execute(const void *p,size_t n,size_t split)
     /* The access/update decision reads the live store; load it from this
      * request's default policy so each request starts from the default. */
     gateway_policy_store_load(&c->policy);
+    /* Each request starts a fresh rate window so this suite's many requests are
+     * each admitted; the windowed limit itself is exercised by gateway_test_rate. */
+    gateway_rate_state_init();
     int r=gateway_http_feed(h,c,p,split);
     if(!r) r=gateway_http_feed(h,c,(const uint8_t *)p+split,n-split);
     return r==1?gateway_http_process(h,c):r;
@@ -22,8 +25,8 @@ void gateway_test_http(GatewayTestStats *s)
 #define CHECK(n,x) gateway_test_check(s,n,(x))
     const char *get="GET /api/status HTTP/1.1\r\nHost: board\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n";
 #if !GATEWAY_LAB_AUTH
-    GatewayIdentity disabled_identity; uint8_t disabled_rate;
-    CHECK("Lab authentication disabled rejects known token",!gateway_bearer_check((const uint8_t *)"pg-lab-admin",12,&disabled_identity,&disabled_rate) && !disabled_identity.valid);
+    GatewayIdentity disabled_identity;
+    CHECK("Lab authentication disabled rejects known token",!gateway_bearer_check((const uint8_t *)"pg-lab-admin",12,&disabled_identity) && !disabled_identity.valid);
     CHECK("Lab authentication disabled returns HTTP 401",execute(get,strlen(get),0)==401);
     return;
 #endif
@@ -42,7 +45,6 @@ void gateway_test_http(GatewayTestStats *s)
       {"GET /api/status HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer invalid\r\n\r\n",401},
       {"GET /api/status HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-operatorX\r\n\r\n",401},
       {"GET /api/status HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer PG-LAB-OPERATOR\r\n\r\n",401},
-      {"GET /api/status HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-limited\r\n\r\n",429},
       {"GET /api/policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",403},
       {"GET /api/policy HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-admin\r\n\r\n",200},
       {"GET /api/status HTTP/1.1\r\nHost: b\r\nAuthorization: Bearer pg-lab-admin\r\nAuthorization: Bearer pg-lab-operator\r\n\r\n",400},
@@ -84,8 +86,8 @@ void gateway_test_http(GatewayTestStats *s)
     for(unsigned i=0;i<4;++i) request[z+1+i]=(uint8_t)(path>>(8*i));
     request[z+5]=METHOD_GET; request[z+6]=ROLE_OPERATOR; request[z+7]=1;
     CHECK("HTTP binary admin policy update",execute(request,(size_t)z+65,(size_t)z+3)==200 && gateway_test_context.policy.num_rules==1);
-    GatewayIdentity id; uint8_t rate;
-    CHECK("Bearer failed lookup clears identity",!gateway_bearer_check((const uint8_t *)"bad",3,&id,&rate) && !id.valid && id.role==0 && rate==0);
+    GatewayIdentity id;
+    CHECK("Bearer failed lookup clears identity",!gateway_bearer_check((const uint8_t *)"bad",3,&id) && !id.valid && id.role==0);
     char response[256]; int len=gateway_http_response_header(response,sizeof(response),401,2);
     CHECK("HTTP response framing and challenge",len>0 && strstr(response,"Content-Length: 2\r\n") && strstr(response,"WWW-Authenticate: Bearer"));
     CHECK("HTTP response small buffer fails",gateway_http_response_header(response,8,200,2)==-1);

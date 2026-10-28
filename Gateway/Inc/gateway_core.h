@@ -55,8 +55,19 @@ void gateway_begin_request(GatewayContext *ctx);
 /* Caller fills request[0..request_len) before calling. Rejects lengths >4096. */
 GatewayResult gateway_extract(GatewayContext *ctx);
 /* On failure clears previously populated identity and pending outputs. */
+/* `now` is the interface time in ms (gateway_tick_ms); it drives the verified
+ * windowed rate counter, which supplies the gate's count byte. */
 GatewayResult gateway_set_identity(GatewayContext *ctx,
-                                  const GatewayIdentity *identity, uint8_t rate);
+                                  const GatewayIdentity *identity, uint64_t now);
+/* Interface time source (ms) for the windowed rate counter. gateway_platform_tick_ms
+ * is the real tick (osKernelGetTickCount on target, a fixed value on the host);
+ * gateway_tick_ms returns it unless a self-test set a synthetic value. The
+ * synthetic hooks let the rate self-test drive the window deterministically on
+ * both the host and the real build; gateway_clock_real restores the live tick. */
+uint64_t gateway_platform_tick_ms(void);
+uint64_t gateway_tick_ms(void);
+void gateway_clock_synthetic(uint64_t now_ms);
+void gateway_clock_real(void);
 GatewayResult gateway_evaluate(GatewayContext *ctx);
 /* Consumes a forwarding result once; never dispatches denied/updated requests. */
 bool gateway_dispatch(GatewayContext *ctx);
