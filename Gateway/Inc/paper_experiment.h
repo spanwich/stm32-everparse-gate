@@ -34,10 +34,11 @@
 /* Timing-distribution extension of the GATE_N32 variant (2026-10-21): 10,000
  * samples per case, min/mean/p50/p99/max, constructed worst-case path,
  * interrupts enabled and masked, update-gate commit. Requires GATE_N32 = 1. */
-/* A1 (2026-10-22): word-at-a-time memcpy/memset replacing newlib-nano's byte
- * loops (Gateway/Platform/gateway_memops.c). */
+/* A1v (2026-10-22): memcpy/memset on Low*-verified loops, 32-byte aligned,
+ * replacing newlib-nano's byte loops (Gateway/Platform/gateway_memops.c).
+ * Default since 2026-10-28 (A1v is the paper baseline); 0 gives A0. */
 #ifndef GATEWAY_FAST_MEMOPS
-#define GATEWAY_FAST_MEMOPS 0
+#define GATEWAY_FAST_MEMOPS 1
 #endif
 /* A2 (2026-10-22): FreeRTOS queue.c, the memops, the gate path and the update
  * gate execute from ITCM RAM (linker script and startup swapped in at build
