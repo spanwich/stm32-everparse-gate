@@ -1,0 +1,30 @@
+Development notes (2026-10-28), for reproducibility.
+
+Two GATE-compartment constraints were found on hardware and shaped the final
+design (the primary A1v image is unaffected; all are within the labelled
+variant):
+
+1. The unprivileged GATE task cannot call printf-family functions. newlib's
+   _impure_ptr is at 0x20024028, outside the GATE task's single MPU region
+   (.gateway_gate, 0x20050000). An early build used snprintf/gateway_log in the
+   GATE endpoint and took a MemManage fault (CFSR 0x82, MMFAR 0x20024028) on the
+   first /gate53 request. Fixed: all responses are built by hand (memcpy +
+   integer formatting), as the primary GATE code already does in
+   gateway_mediation.c message(); the GATE task emits no UART log lines.
+
+2. DWT->CYCCNT is privileged on this part. An unprivileged read bus-faults
+   (CFSR 0x8200, BFAR 0xE0001004); the MPU does not govern the PPB, so this
+   cannot be granted. Fixed: the DWT-instrumented timing runs in a small
+   privileged worker task (rt_timing_task) that times the same verified routines
+   over the same runtime-loaded live_store, reached from the GATE task through
+   two queues (the existing GATE->APP dispatch pattern).
+
+Two host-harness bugs (not firmware) were also fixed:
+- runtime53_load.py sent the update-timing request as GET with a body, which the
+  adapter rejects (GET + body -> 400); changed to PUT.
+- provenance/run.sh redirected the inventory stdout into e-map/ before creating
+  it; added mkdir -p.
+
+The flashed firmware ELF (155719f9...) is byte-identical before and after the
+non-firmware fixes (driver/tool/run.sh are not compiled in), so the on-board
+evidence here is valid for commit 6ad5bd2.
