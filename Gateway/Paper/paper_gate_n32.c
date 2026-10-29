@@ -14,6 +14,7 @@
 #if GATEWAY_PAPER_GATE_N32
 #include "gateway_log.h"
 #include "main.h"
+#include "paper_dwt.h"
 #include "../Generated/Gate/Gate.h"
 #include "../Generated/Policy/RbacPolicyWrapper.h"
 #include "paper_gate_n32_data.h"
@@ -243,8 +244,7 @@ static void timing_dist_run(unsigned last)
 
 void gateway_paper_gate_n32_run(void)
 {
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT = 0; DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    if (!paper_dwt_enable("gate-dist")) return;
 
     /* Load the policy as data. */
     for (unsigned i = 0; i < 8u * GATE_N32_PARTITIONS; i++)

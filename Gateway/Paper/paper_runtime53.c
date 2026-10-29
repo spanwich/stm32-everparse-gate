@@ -36,6 +36,7 @@
 #include "gateway_platform.h"
 #include "cmsis_os2.h"
 #include "main.h"
+#include "paper_dwt.h"
 #include "../Generated/Gate/Gate.h"
 #include "../Generated/Policy/Blob.h"
 #include "../Generated/Glue/Glue.h"       /* GlueLowMediate (verified n/j mediation) */
@@ -95,8 +96,7 @@ void gateway_runtime53_init(void)
 {
     for (unsigned i = 0; i < RT_RULES; i++)
         live_store[i] = (GATE_SPEC_RULE){ .path = RT_SENTINEL, .mask = 0u, .min_role = 0u, .rscope = 0u };
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT = 0; DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    (void)paper_dwt_enable("runtime53");
 }
 
 /* Build a SecurityParamsWire for GlueLowMediate from flat fields (subject and

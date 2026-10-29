@@ -10,6 +10,7 @@
 #include "../Generated/Mediation/Mediation_Format.h"
 #include "../Generated/Mediation/Mediation_Field.h"
 #include "main.h"
+#include "paper_dwt.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -111,8 +112,7 @@ static uint32_t run_one(unsigned stage)
 
 void gateway_paper_timing_run(void)
 {
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT=0;DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    if(!paper_dwt_enable("paper-timing")) return;
     gateway_log("[PAPER TIMING] begin samples=%u stages=%u cases=%u interrupts=%s\n",
                 SAMPLES,STAGES,CASES,GATEWAY_R4_TIMING_MASK_IRQ?"masked":"enabled");
     for(unsigned stage=0;stage<STAGES;++stage) {
