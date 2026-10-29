@@ -36,7 +36,7 @@ for probe in args.probes:
     board = subprocess.run(['python3', 'Gateway/tools/board_test.py',
                             '--elf', str(directory / 'policy_gate.elf'), '--flash',
                             '--output', str(directory / 'board'), '--seconds', '5',
-                            '--expected-selftests', '322'], cwd=root,
+                            '--expected-selftests', '353'], cwd=root,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     (directory / 'board-command.log').write_bytes(board.stdout)
     if probe == 2:
