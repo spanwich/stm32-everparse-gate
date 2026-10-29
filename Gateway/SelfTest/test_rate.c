@@ -1,6 +1,6 @@
 /* Windowed rate-limit self-test. Drives the full gateway_http_process path with a
  * synthetic interface clock (gateway_clock_synthetic), so the verified windowed
- * counter (GlueRate, N_max = 50, 49 ms window) is exercised deterministically on
+ * counter (GlueRate, N_max = 50, GATEWAY_RATE_WINDOW_MS window) is exercised deterministically on
  * both the host and the real build. It carries the attack suite's rate-limit class
  * (20 distinct over-limit cases: the 50th..69th request inside one window) plus an
  * over-limit policy update that must be refused with the policy unchanged, so the
@@ -69,7 +69,7 @@ void gateway_test_rate(GatewayTestStats *s)
     }
     /* A policy update while over the limit is refused and leaves the policy. */
     CHECK("Rate: over-limit policy update refused, policy unchanged", rate_update_refused());
-    gateway_clock_synthetic(100000U+49U); /* exactly one 49 ms window later */
+    gateway_clock_synthetic(100000U+GATEWAY_RATE_WINDOW_MS); /* exactly one window later */
     CHECK("Rate: first request in the next window admitted",rate_request()==200);
     gateway_clock_real();               /* restore the live tick for real serving */
 #endif

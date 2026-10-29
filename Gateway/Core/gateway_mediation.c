@@ -76,7 +76,8 @@ static int message(GatewayContext *c, unsigned status, const char *text)
 
 /* Access/update decision through the verified glue (via the separate adapter,
  * gateway_glue_adapter.c, which owns the live store). The frame (c->security) is
- * classified and decided by GlueLowMediate against the live store (n=1, j=1);
+ * classified and decided by GlueLowMediate against the live store (n=64; j=gateway_glue_part(),
+ * the ?part=J selector of /api/policy, default 1);
  * c->app is built by the verified BuildApp on forward, the store is committed by
  * the verified update gate on an accepted update. The audit accept/effect hooks
  * fire exactly on acceptance/forwarding, with the same snapshot the wrapper path
@@ -91,9 +92,15 @@ static int gateway_mediate_decide(GatewayContext *c, unsigned kind)
     memcpy(request,c->security,sizeof(request)); pack_policy(policy,&c->policy);
     uint32_t length=kind==GATEWAY_UPDATE?70:75;
     uint8_t nr=0; uint32_t app_len=0;
-    uint8_t r=gateway_glue_mediate(c->security,c->security_len,&nr,c->app,&app_len);
+    uint8_t r=gateway_glue_mediate(c->security,c->security_len,&nr,c->app,&app_len,gateway_glue_part());
     int rc;
-    if(r==1) {                       /* forward */
+    const SecurityParamsWire *sp=(const SecurityParamsWire *)c->security;
+    bool policy_read=sp->path_hash==PATH_POLICY && sp->method==METHOD_GET;
+    if(r==1 && policy_read && !gateway_glue_store_to_policy(&c->policy,gateway_glue_part(),0)) {
+        /* Display view = the requested partition; an out-of-range selector is denied. */
+        c->result=GATEWAY_DENIED;
+        rc=message(c,GATE_STATUS_DENIED,"{\"status\":\"denied\"}");
+    } else if(r==1) {                /* forward */
         gateway_audit_accept(kind,length,request,policy,login);
         gateway_audit_effect(kind,length,request,policy,login,c);
         c->app_len=app_len; c->result=GATEWAY_FORWARD;
@@ -105,7 +112,7 @@ static int gateway_mediate_decide(GatewayContext *c, unsigned kind)
     } else if(r==4) {                /* policy updated: refresh the display view */
         gateway_audit_accept(kind,length,request,policy,login);
         gateway_audit_effect(kind,length,request,policy,login,c);
-        gateway_glue_store_to_policy(&c->policy,nr);
+        (void)gateway_glue_store_to_policy(&c->policy,gateway_glue_part(),nr);
         c->result=GATEWAY_POLICY_UPDATED;
         rc=message(c,GATE_STATUS_OK,"{\"status\":\"ok\",\"message\":\"policy updated\"}");
     } else if(r==3) {                /* rate limited */

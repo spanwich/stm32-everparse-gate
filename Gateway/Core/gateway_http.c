@@ -6,6 +6,7 @@
 #endif
 #include "gateway_clear.h"
 #include "gateway_routes.h"
+#include "gateway_glue.h"
 #include "gateway_mediation.h"
 #include "paper_runtime53.h"
 #include <string.h>
@@ -166,6 +167,35 @@ bool gateway_bearer_check(const uint8_t *token,size_t n,GatewayIdentity *id)
     return gateway_login_validate(token,n,id);
 #endif
 }
+/* /api/policy partition selector: "?part=J" in the request-line query (J decimal,
+ * 1-based). Returns 0 and sets *part (default 1 when absent), or -1 for a malformed
+ * or duplicated selector. Other query parameters are ignored (same resource). The
+ * range 1 <= J <= N is NOT checked here: the verified GlueLowMediate update branch
+ * rejects an out-of-range J, and the readback range-checks in the adapter. */
+static int gateway_parse_part(const GatewayContext *c, uint32_t *part)
+{
+    const uint8_t *r=c->request; uint32_t n=c->request_len, i=0;
+    *part=1U;
+    while(i<n && r[i]!=' ') ++i;                       /* method */
+    ++i;
+    while(i<n && r[i]!=' ' && r[i]!='?' && r[i]!='\r') ++i;   /* path */
+    if(i>=n || r[i]!='?') return 0;
+    ++i;
+    unsigned seen=0;
+    while(i<n && r[i]!=' ' && r[i]!='\r') {
+        uint32_t s=i;
+        while(i<n && r[i]!='&' && r[i]!=' ' && r[i]!='\r') ++i;
+        if(i-s>=5U && memcmp(r+s,"part=",5)==0) {
+            if(++seen>1U) return -1;
+            uint32_t d=s+5U, v=0;
+            if(d==i || i-d>9U) return -1;              /* empty or too long (>9 digits) */
+            for(;d<i;++d) { if(r[d]<'0' || r[d]>'9') return -1; v=v*10U+(uint32_t)(r[d]-'0'); }
+            *part=v;
+        } else if(i-s==4U && memcmp(r+s,"part",4)==0) return -1;   /* "part" with no value */
+        if(i<n && r[i]=='&') ++i;
+    }
+    return 0;
+}
 int gateway_http_process(GatewayHttp *h,GatewayContext *c)
 {
     if(h->status!=1) return h->status?h->status:400;
@@ -194,9 +224,11 @@ int gateway_http_process(GatewayHttp *h,GatewayContext *c)
         gateway_clear(h->raw,sizeof(h->raw));
         return status;
     }
-    GatewayIdentity identity;
+    GatewayIdentity identity; uint32_t part=1U;
     if(!gateway_bearer_check(p->token,p->token_len,&identity)) return 401;
     if(p->path_hash==PATH_POLICY && p->method==METHOD_GET && identity.role!=ROLE_ADMIN) return 403;
+    if(p->path_hash==PATH_POLICY && gateway_parse_part(c,&part)!=0) return 400;
+    gateway_glue_set_part(part);
     if(gateway_set_identity(c,&identity,gateway_tick_ms())!=GATEWAY_IDENTIFIED) return 500;
     return gateway_mediate(c,p->path_hash==PATH_POLICY && p->method==METHOD_PUT?
                            GATEWAY_UPDATE:GATEWAY_ACCESS);
