@@ -144,23 +144,25 @@ static void dreport(const char *what, unsigned n, const char *label, int irq, ui
     vTaskDelay(pdMS_TO_TICKS(20));
 }
 
-static void dist_gate(unsigned n, const char *label, GATE_SPEC_REQUEST q, GATE_SPEC_SESSION s, int irq)
+static void dist_gate_on(GATE_SPEC_RULE *tbl, unsigned n, const char *label, GATE_SPEC_REQUEST q, GATE_SPEC_SESSION s, int irq)
 {
     uint8_t ctxt = 0, r = 0;
     dcount = n == 1u ? DSAMPLES : DSAMPLES_BIG; dwide = n != 1u;
-    for (unsigned i = 0; i < 100; i++) sink += GateLowGateDecide(n, table, q, s, &ctxt); /* warm-up */
+    for (unsigned i = 0; i < 100; i++) sink += GateLowGateDecide(n, tbl, q, s, &ctxt); /* warm-up */
     for (unsigned i = 0; i < dcount; i++) {
         dyield(i);
         uint32_t pm = __get_PRIMASK();
         if (!irq) __disable_irq();
         uint32_t t0 = DWT->CYCCNT;
-        r = GateLowGateDecide(n, table, q, s, &ctxt);
+        r = GateLowGateDecide(n, tbl, q, s, &ctxt);
         uint32_t t1 = DWT->CYCCNT;
         __set_PRIMASK(pm);
         dput(i, t1 - t0); sink += r;
     }
     dreport("decide", n, label, irq, r);
 }
+
+#define dist_gate(n, label, q, s, irq) dist_gate_on(table, (n), (label), (q), (s), (irq))
 
 static void dist_empty(int irq)
 {
@@ -217,6 +219,35 @@ static void timing_dist_run(unsigned last)
         dist_gate(1, "first", req_for(0), top, irq);
         dist_gate(1, "last", req_for(7), top, irq);
         dist_gate(1, "absent", absent, top, irq);
+    }
+    /* n = 64 (the primary live store geometry): partition 1 = the gateway's restrictive
+     * default, partitions 2..54 = the 420 OPNsense rules, 55..64 inactive. "absent" is
+     * the realistic installed-policy full-scan deny; "worst" (below) fills all 512 slots. */
+    {
+        static GATE_SPEC_RULE t64[8u * 64u];
+        for (unsigned i = 0; i < 8u * 64u; i++)
+            t64[i] = (GATE_SPEC_RULE){ .path = 0xDEADDEADu, .mask = 0u, .min_role = 0u, .rscope = 0u };
+        t64[0] = (GATE_SPEC_RULE){ .path = 0x22222222u, .mask = 2u, .min_role = 1u, .rscope = 0u };
+        t64[1] = (GATE_SPEC_RULE){ .path = 0x44444444u, .mask = 1u, .min_role = 2u, .rscope = 4u };
+        t64[2] = (GATE_SPEC_RULE){ .path = 0x44444444u, .mask = 4u, .min_role = 2u, .rscope = 4u };
+        for (unsigned i = 0; i < 8u * GATE_N32_PARTITIONS; i++)
+            t64[8u + i] = (GATE_SPEC_RULE){ .path = gate_n32_rules[i].path, .mask = gate_n32_rules[i].mask,
+                                           .min_role = gate_n32_rules[i].min_role, .rscope = gate_n32_rules[i].scope };
+        unsigned last64 = 0;
+        for (unsigned i = 0; i < 8u * 64u; i++) if (t64[i].path != 0xDEADDEADu) last64 = i;
+        GATE_SPEC_REQUEST f64 = { .rpath = t64[8].path, .meth = (uint8_t)(t64[8].mask & (uint8_t)-t64[8].mask) };
+        GATE_SPEC_REQUEST l64 = { .rpath = t64[last64].path, .meth = (uint8_t)(t64[last64].mask & (uint8_t)-t64[last64].mask) };
+        for (int irq = 1; irq >= 0; irq--) {
+            dist_gate_on(t64, 64, "first", f64, top, irq);
+            dist_gate_on(t64, 64, "last", l64, top, irq);
+            dist_gate_on(t64, 64, "absent", absent, top, irq);
+        }
+        /* constructed worst case at n = 64: all 64 partitions full, every slot fails its last check */
+        for (unsigned i = 0; i < 8u * 64u; i++)
+            t64[i] = (GATE_SPEC_RULE){ .path = 0x12345678u, .mask = 0x3Fu, .min_role = 0u, .rscope = 0x8000u };
+        GATE_SPEC_SESSION w64s = { .role = 0xFF, .sscope = 0x7FFF, .count = 0 };
+        GATE_SPEC_REQUEST w64q = { .rpath = 0x12345678u, .meth = 1 };
+        for (int irq = 1; irq >= 0; irq--) dist_gate_on(t64, 64, "worst", w64q, w64s, irq);
     }
     /* update gate: a valid 8-rule body built from the policy's first rules */
     uint8_t body[65] = { 8 };
