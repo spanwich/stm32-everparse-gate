@@ -203,9 +203,14 @@ with output.open('w', newline='') as file:
                         row['transport_error'] = type(error).__name__ + ': ' + str(error)
                         totals['transport_errors'] += 1
                     writer.writerow(row)
-                    if row['matching'] != 1:
+                    # Abort only on a genuine DECISION mismatch (a completed response
+                    # that disagrees). A transport error (no response, e.g. a transient
+                    # lwIP TIME_WAIT/PCB timeout under sustained load) is tallied in
+                    # totals['transport_errors'] and the run continues: it is not a
+                    # decision disagreement, and the audit's claim is decision pairing.
+                    if row['transport_error'] == '' and row['matching'] != 1:
                         file.flush()
-                        raise SystemExit(f'M4 mismatch at request {number}; evidence retained in {output}')
+                        raise SystemExit(f'M4 decision mismatch at request {number}; evidence retained in {output}')
                 index += len(work)
                 if index % 1000 == 0:
                     file.flush()
