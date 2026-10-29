@@ -200,6 +200,7 @@ int gateway_http_process(GatewayHttp *h,GatewayContext *c)
 {
     if(h->status!=1) return h->status?h->status:400;
     h->status=400; /* Consume transport authorization exactly once. */
+    gateway_glue_set_part(1U);   /* request-scoped; reset here (GATE context), not in begin_request (NET) */
     if(h->dashboard || h->script) {
         SecurityParamsWire *public_request=(SecurityParamsWire *)c->security;
         memset(c->security,0,sizeof(c->security));

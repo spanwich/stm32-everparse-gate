@@ -42,6 +42,7 @@
 #include "../Generated/Glue/Glue.h"       /* GlueLowMediate (verified n/j mediation) */
 #include "../Shared/gate_response_wire.h"
 #include "paper_gate_n32_data.h"
+#include "gateway_glue.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
@@ -50,9 +51,13 @@
 
 #define GATE_PRIVATE __attribute__((section(".gateway_gate")))
 #define KERNEL_PRIVATE __attribute__((section(".gateway_privileged")))
-#define RT_PARTS GATE_N32_PARTITIONS          /* 53 */
+#define RT_OPN_PARTS GATE_N32_PARTITIONS      /* 53 OPNsense partitions (flash data) */
+#define RT_PARTS GATEWAY_LIVE_PARTS           /* 64: the primary live store */
+#define RT_BASE 1u                            /* OPNsense partition k is store partition RT_BASE+k+1 (1-based); */
+                                              /* store partition 1 is the gateway's own routes / default */
 #define RT_SLOTS 8u
-#define RT_RULES (RT_SLOTS * RT_PARTS)        /* 424 */
+#define RT_RULES (RT_SLOTS * RT_PARTS)        /* 512 */
+#define RT_OPN_RULES (RT_SLOTS * RT_OPN_PARTS) /* 424 (420 active) */
 #define RT_SENTINEL 0xDEADDEADu
 #define RT_BLOB_BODY 65u                      /* num_rules(1) + 8 x rule(8) */
 #define RT_POLICY_PATH 0x44444444u            /* GlueLowMediate update selector (path) */
@@ -65,7 +70,10 @@
 _Static_assert(sizeof(GATE_SPEC_RULE) == 8 && sizeof(BLOB_SPEC_RULE) == 8,
                "rule layout must be 8 bytes for the shared live store");
 
-static GATE_SPEC_RULE live_store[RT_RULES] GATE_PRIVATE;
+/* The labelled endpoint now works on the PRIMARY live store (Core/gateway_glue_adapter.c),
+ * the same 8*64-slot array the live /api path decides over. */
+GATE_SPEC_RULE *gateway_glue_live_store(void);
+#define live_store (gateway_glue_live_store())
 static uint32_t eq_from_next GATE_PRIVATE;    /* next expected sweep index */
 static uint32_t eq_accepts GATE_PRIVATE, eq_mismatch GATE_PRIVATE, eq_failclosed GATE_PRIVATE;
 static uint32_t rt_samples[2000] GATE_PRIVATE;
@@ -94,8 +102,7 @@ const GateN32Rule *gateway_runtime53_flash_rules(void) { return gate_n32_rules; 
 
 void gateway_runtime53_init(void)
 {
-    for (unsigned i = 0; i < RT_RULES; i++)
-        live_store[i] = (GATE_SPEC_RULE){ .path = RT_SENTINEL, .mask = 0u, .min_role = 0u, .rscope = 0u };
+    /* The live store keeps its restrictive default (gateway_policy_store_init). */
     (void)paper_dwt_enable("runtime53");
 }
 
@@ -129,7 +136,7 @@ static uint8_t gateway_runtime53_update(uint8_t role, uint8_t count, uint8_t *bo
     uint8_t w[175u + RT_BLOB_BODY];
     uint8_t app[64]; uint32_t app_len = 0u; uint8_t nr = 0u, ctxt = 0u;
     uint32_t len = rt_wire(w, sizeof(w), RT_POLICY_PATH, RT_METHOD_PUT, role, 0u, count, body, RT_BLOB_BODY);
-    uint8_t r = GlueLowMediate(RT_PARTS, live_store, j + 1u, w, len, &nr, app, &app_len, &ctxt);
+    uint8_t r = GlueLowMediate(RT_PARTS, live_store, RT_BASE + j + 1u, w, len, &nr, app, &app_len, &ctxt);
     return r == 4u ? 1u : r == 6u ? 2u : 0u;   /* 4 updated, 5 rejected, 6 fail-closed, 0 malformed */
 }
 
@@ -152,7 +159,7 @@ static uint32_t rt_digest(void)
 {
     const uint8_t *b = (const uint8_t *)live_store;
     uint32_t h = 2166136261u;
-    for (unsigned i = 0; i < sizeof(live_store); i++) { h ^= b[i]; h *= 16777619u; }
+    for (unsigned i = 0; i < RT_RULES * sizeof(GATE_SPEC_RULE); i++) { h ^= b[i]; h *= 16777619u; }
     return h;
 }
 
@@ -415,15 +422,15 @@ int gateway_runtime53_endpoint(const GatewayHttp *h, GatewayContext *c, int *han
          * it at 2) while the flash sentinel uses 255; both read as inactive, so
          * min_role is compared only for active slots. */
         uint32_t diff = 0;
-        for (unsigned i = 0; i < RT_RULES; i++) {
-            const GateN32Rule *f = &gate_n32_rules[i]; const GATE_SPEC_RULE *l = &live_store[i];
+        for (unsigned i = 0; i < RT_OPN_RULES; i++) {
+            const GateN32Rule *f = &gate_n32_rules[i]; const GATE_SPEC_RULE *l = &live_store[RT_BASE * RT_SLOTS + i];
             bool f_in = f->path == RT_SENTINEL, l_in = l->path == RT_SENTINEL;
             if (f_in != l_in) { diff++; continue; }
             if (f_in) continue;
             if (l->path != f->path || l->mask != f->mask || l->min_role != f->min_role || l->rscope != f->scope) diff++;
         }
         j = (Jb){ json, 0, sizeof json };
-        js(&j, "{\"rules\":"); ju(&j, RT_RULES); js(&j, ",\"active\":"); ju(&j, rt_active());
+        js(&j, "{\"rules\":"); ju(&j, RT_OPN_RULES); js(&j, ",\"active\":"); ju(&j, rt_active());
         js(&j, ",\"mismatch\":"); ju(&j, diff); js(&j, ",\"digest\":"); ju(&j, rt_digest()); js(&j, "}"); jend(&j);
         return rt_reply(c, diff == 0u ? GATE_STATUS_OK : GATE_STATUS_DENIED, json);
     }
@@ -431,8 +438,8 @@ int gateway_runtime53_endpoint(const GatewayHttp *h, GatewayContext *c, int *han
         RtTimeReq rq; memset(&rq, 0, sizeof rq);
         if (qis(q, qn, "which", "update")) {
             if (blen != RT_BLOB_BODY) return rt_reply(c, GATE_STATUS_DENIED, "{\"error\":\"bad_body\"}");
-            rq.which = RT_W_UPDATE; rq.j = qnum(q, qn, "p", RT_PARTS);
-            if (rq.j >= RT_PARTS) return rt_reply(c, GATE_STATUS_DENIED, "{\"error\":\"range\"}");
+            rq.which = RT_W_UPDATE; rq.j = qnum(q, qn, "p", RT_OPN_PARTS);
+            if (rq.j >= RT_OPN_PARTS) return rt_reply(c, GATE_STATUS_DENIED, "{\"error\":\"range\"}");
             memcpy(rq.body, body, RT_BLOB_BODY);
         } else if (qis(q, qn, "which", "worst")) {
             rq.which = RT_W_WORST;

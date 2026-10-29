@@ -30,6 +30,9 @@ AP.add_argument('--operator', default='pg-lab-operator')
 AP.add_argument('--equiv-chunk', type=int, default=1000)
 AP.add_argument('--e2e', type=int, default=200)
 AP.add_argument('--timeout', type=float, default=10.0)
+AP.add_argument('--load-via', choices=('primary', 'gate53'), default='primary',
+                help='primary: PUT /api/policy?part=J (the live API); gate53: labelled endpoint')
+BASE = 1   # OPNsense partition k is store partition BASE+k+1 (1-based); partition 1 = gateway routes
 A = AP.parse_args()
 A.output.mkdir(parents=True, exist_ok=True)
 SENT = 0xDEADDEAD
@@ -94,8 +97,12 @@ fail = []
 t0 = time.time()
 applied = 0
 for j in range(n):
-    s, jr = req('PUT', f'/gate53?op=update&p={j}', body=blobs[j], token=A.admin)
-    ok = s == 200 and jr and jr.get('status') == 'ok'
+    if A.load_via == 'primary':
+        s, jr = req('PUT', f'/api/policy?part={BASE + j + 1}', body=blobs[j], token=A.admin)
+        ok = s == 200 and jr and jr.get('status') == 'ok'
+    else:
+        s, jr = req('PUT', f'/gate53?op=update&p={j}', body=blobs[j], token=A.admin)
+        ok = s == 200 and jr and jr.get('status') == 'ok'
     if not ok:
         fail.append(f'load partition {j}: status={s} {jr}')
     else:
@@ -123,15 +130,20 @@ def negative(name, method, path, body, token):
     if not (rejected and unchanged):
         fail.append(f'negative {name}: status={s} rejected={rejected} unchanged={unchanged} {jr}')
 
-negative('operator_update', 'PUT', '/gate53?op=update&p=0', blobs[0], A.operator)
-negative('out_of_range', 'PUT', f'/gate53?op=update&p={n}', blobs[0], A.admin)
-negative('oversized_blob', 'PUT', '/gate53?op=update&p=0', bytes(100), A.admin)
+def upd(part):
+    return f'/api/policy?part={part}' if A.load_via == 'primary' else f'/gate53?op=update&p={part - BASE - 1}'
+PART = BASE + 1          # a valid OPNsense target partition (store partition 2)
+negative('operator_update', 'PUT', upd(PART), blobs[0], A.operator)
+negative('out_of_range', 'PUT', upd(65) if A.load_via == 'primary' else '/gate53?op=update&p=63', blobs[0], A.admin)
+if A.load_via == 'primary':
+    negative('part_zero', 'PUT', upd(0), blobs[0], A.admin)
+negative('oversized_blob', 'PUT', upd(PART), bytes(100), A.admin)
 mal = bytearray(blobs[0]); mal[1 + 5] = 9  # slot0 min_role = 9 (> 2): validator rejects
-negative('malformed_blob', 'PUT', '/gate53?op=update&p=0', bytes(mal), A.admin)
+negative('malformed_blob', 'PUT', upd(PART), bytes(mal), A.admin)
 c0 = bytearray(blobs[0]); c0[0] = 0
-negative('rule_count_0', 'PUT', '/gate53?op=update&p=0', bytes(c0), A.admin)
+negative('rule_count_0', 'PUT', upd(PART), bytes(c0), A.admin)
 c9 = bytearray(blobs[0]); c9[0] = 9
-negative('rule_count_9', 'PUT', '/gate53?op=update&p=0', bytes(c9), A.admin)
+negative('rule_count_9', 'PUT', upd(PART), bytes(c9), A.admin)
 results['negatives'] = neg
 
 # 4. Equivalence sweep over all 20,256 oracle vectors (chunked).

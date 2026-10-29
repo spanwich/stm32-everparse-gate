@@ -36,7 +36,8 @@ bool gateway_glue_store_to_policy(Policy *out, uint32_t part, uint8_t num_rules)
 
 /* The /api/policy partition selector of the request being processed (1-based,
  * default 1). Request-scoped: set by the HTTP adapter after parsing ?part=J, reset
- * by gateway_begin_request. Kept out of GatewayContext so its ABI contract is
+ * at the top of gateway_http_process (GATE context; gateway_begin_request also runs in
+ * the NET task, which must not write the GATE-private selector). Kept out of GatewayContext so its ABI contract is
  * unchanged. Not range-checked here; see gateway_glue_mediate / store_to_policy. */
 void gateway_glue_set_part(uint32_t part);
 uint32_t gateway_glue_part(void);

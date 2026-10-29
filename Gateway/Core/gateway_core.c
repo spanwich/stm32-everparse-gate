@@ -1,6 +1,5 @@
 #include "gateway_core.h"
 #include "gateway_routes.h"
-#include "gateway_glue.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -25,7 +24,6 @@ void gateway_begin_request(GatewayContext *c)
     memset(c->gate, 0, sizeof(c->gate));
     c->request_len = c->security_len = c->app_len = c->gate_len = 0;
     c->extraction_code = EXTRACT_INCOMPLETE;
-    gateway_glue_set_part(1U);
     c->result = GATEWAY_IDLE;
 }
 
