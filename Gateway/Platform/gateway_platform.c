@@ -57,6 +57,8 @@ void gateway_platform_grant_log_access(void *task)
 }
 static volatile uint32_t log_drops;
 static volatile uint32_t tests_complete;
+/* Measurement variants (paper_flood.c) wait for the boot self-tests to finish. */
+uint32_t gateway_platform_tests_complete(void) { return tests_complete; }
 static GatewayTestStats completed_stats;
 volatile GatewayFaultRecord gateway_fault_record;
 typedef struct {
@@ -354,5 +356,9 @@ void gateway_platform_start(void)
 #if GATEWAY_R4_CONTROL
     extern void gateway_r4_control_start(void);
     gateway_r4_control_start();
+#endif
+#if GATEWAY_PAPER_FLOOD
+    extern void gateway_paper_flood_start(void);
+    gateway_paper_flood_start();
 #endif
 }

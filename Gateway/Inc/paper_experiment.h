@@ -40,6 +40,11 @@
  * drives update, decision, the 20,256-vector equivalence sweep and DWT timing.
  * Base image is A1v (needs GATEWAY_FAST_MEMOPS and GATEWAY_VERIFIED_GATE = 1);
  * off in the primary image. */
+/* On-board flood (2026-10-30): a labelled low-priority task drives the live decision path with
+ * worst-case-deny requests as fast as possible to measure the rate counter's CPU bound. Off in the primary. */
+#ifndef GATEWAY_PAPER_FLOOD
+#define GATEWAY_PAPER_FLOOD 0
+#endif
 #ifndef GATEWAY_PAPER_RUNTIME53
 #define GATEWAY_PAPER_RUNTIME53 0
 #endif

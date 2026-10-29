@@ -26,6 +26,7 @@ void gateway_glue_set_part(uint32_t part) { gateway_req_part = part; }
 uint32_t gateway_glue_part(void) { return gateway_req_part; }
 
 GATE_SPEC_RULE *gateway_glue_live_store(void) { return gateway_live_pi; }
+void *gateway_glue_live_store_raw(void) { return gateway_live_pi; }
 
 /* The one interface-wide rate state. Trusted writers: gateway_rate_state_init and
  * the verified GlueRateCountAndIdentify (via gateway_glue_set_identity). */

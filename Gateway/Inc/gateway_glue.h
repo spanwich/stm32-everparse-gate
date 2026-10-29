@@ -53,6 +53,10 @@ uint32_t gateway_glue_part(void);
  * policy: partition 1 = the gateway's own routes / restrictive default). */
 #define GATEWAY_LIVE_PARTS 64U
 #define GATEWAY_LIVE_SLOTS (8U * GATEWAY_LIVE_PARTS)
+/* Raw view of the live store for labelled measurement variants (8-byte rules {u32 path,
+ * u8 mask, u8 min_role, u16 scope}); never used by the primary decision path. */
+void *gateway_glue_live_store_raw(void);
+
 /* gateway_glue_live_store() (GATE_SPEC_RULE *) is declared by the one labelled
  * variant that includes Glue.h (paper_runtime53.c). */
 
