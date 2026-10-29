@@ -190,7 +190,7 @@ finally:
 # The rate-limit class (20 over-limit cases) ran on the board through the full path
 # via gateway_test_rate (synthetic clock): the 50th..69th request inside one window
 # refused, plus an over-limit policy update refused. Confirm it from the self-test
-# aggregate in the captured UART -- that 353-check suite includes those 20 cases.
+# aggregate in the captured UART -- that 354-check suite includes those 20 cases.
 serial_log.flush()
 uart = (a.output / 'uart.log').read_bytes().decode('latin-1')
 selftest = None

@@ -76,7 +76,7 @@ for probe in a.probes:
     out.mkdir(parents=True, exist_ok=True)
     manifest = build(probe, out)
     board = subprocess.run(['python3', 'Gateway/tools/board_test.py', '--flash', '--elf', str(out / 'policy_gate.elf'),
-                            '--output', str(out / 'board'), '--seconds', '20', '--expected-selftests', '353'],
+                            '--output', str(out / 'board'), '--seconds', '20', '--expected-selftests', '354'],
                            cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     (out / 'board-command.log').write_bytes(board.stdout)
     # A fault record left by the previous image survives reflashing in no-init
@@ -109,7 +109,7 @@ for probe in a.probes:
         'probe_lines': [l for l in uart.splitlines() if '[PROBE]' in l],
         'reset_lines': [l.strip() for l in uart.splitlines() if '[RESET]' in l],
         'escaped': 'ESCAPED' in uart,
-        'rebooted_selftests': '[CORE SELFTEST] PASS 353/353' in uart.split('[RESET]', 1)[-1] if '[RESET]' in uart else False,
+        'rebooted_selftests': '[CORE SELFTEST] PASS 354/354' in uart.split('[RESET]', 1)[-1] if '[RESET]' in uart else False,
         'operator_status_after_reset': after,
     }
     if 'wrapper_target' in manifest:

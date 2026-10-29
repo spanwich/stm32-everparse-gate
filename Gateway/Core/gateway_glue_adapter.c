@@ -81,7 +81,9 @@ bool gateway_glue_store_to_policy(Policy *out, uint32_t part, uint8_t num_rules)
     memset(out, 0, sizeof(*out));
     for (unsigned i = 0; i < MAX_RULES; ++i) {
         out->rules[i] = (PolicyRule){ slot[i].path, slot[i].mask, slot[i].min_role, slot[i].rscope };
-        if (slot[i].path != DEAD_HASH) shown = i + 1U;
+        /* inactive = the 0xDEADDEAD sentinel or an all-zero slot (never matches) */
+        if (slot[i].path != DEAD_HASH &&
+            (slot[i].path || slot[i].mask || slot[i].min_role || slot[i].rscope)) shown = i + 1U;
     }
     out->num_rules = num_rules ? num_rules : (uint8_t)shown;
     return true;

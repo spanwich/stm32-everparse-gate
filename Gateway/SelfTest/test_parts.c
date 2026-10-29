@@ -52,6 +52,15 @@ void gateway_test_parts(GatewayTestStats *s)
     uint8_t body[65];Policy before1,before64,empty;
     CHECK("Geometry: 64 partitions of 8 slots",GATEWAY_LIVE_PARTS==64U && GATEWAY_LIVE_SLOTS==512U);
     CHECK("Default part=1 readback has the gateway routes",part_request("GET","/api/policy","pg-lab-admin",NULL,0)==200 && strstr(body_of,"1431655765"));
+    {   /* A zero-filled tail (as the target boot path leaves it) must not inflate the readback. */
+        Policy orig=c->policy, z=c->policy;
+        for(unsigned i=3;i<MAX_RULES;++i) z.rules[i]=(PolicyRule){0,0,0,0};
+        z.num_rules=3; gateway_policy_store_load(&z);
+        int ids=0; bool ok=part_request("GET","/api/policy","pg-lab-admin",NULL,0)==200;
+        for(const char *q=body_of;(q=strstr(q,"\"id\":"));q+=5) ++ids;
+        CHECK("Zero-filled slots are not listed (3 rules)",ok && ids==3);
+        c->policy=orig; gateway_policy_store_load(&orig);
+    }
     CHECK("Explicit part=1 equals default",part_request("GET","/api/policy?part=1","pg-lab-admin",NULL,0)==200 && strstr(body_of,"1431655765"));
     CHECK("Partition 2..64 start inactive",part_request("GET","/api/policy?part=64","pg-lab-admin",NULL,0)==200 && strstr(body_of,"3735936685"));
     (void)gateway_glue_store_to_policy(&before1,1,0);(void)gateway_glue_store_to_policy(&before64,64,0);
