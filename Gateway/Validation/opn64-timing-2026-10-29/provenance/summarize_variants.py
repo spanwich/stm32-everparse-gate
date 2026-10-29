@@ -66,7 +66,7 @@ for var, (tpre, apre, npre, second) in VARIANTS.items():
     if not (V / f'{tpre}timing-dist-opnsense53' / 'summary.json').exists():
         print('skip', var, '(not measured in this campaign)'); continue
     entry = {'timing': timing(f'{tpre}timing-dist-opnsense53', TIMING_CASES), 'control': {}}
-    if second:
+    if second and (V / second / 'summary.json').exists():
         entry['timing_scalance32'] = timing(second, [c.replace('n53', 'n32') for c in TIMING_CASES])
     elf = V / f'{tpre}timing-dist-opnsense53' / 'policy_gate.elf'
     sec, syms = sections(elf), nm(elf)

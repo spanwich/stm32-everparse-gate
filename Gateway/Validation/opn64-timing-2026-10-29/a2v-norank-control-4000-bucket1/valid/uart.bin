@@ -1,0 +1,6226 @@
+0
+[HEARTBEAT] PASS 354/354 stack_free_bytes=2176/812 margin=OK heap_free=65048 heap_min=64960 log_drops=0
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[HEARTBEAT] PASS 354/354 stack_free_bytes=2176/812 margin=OK heap_free=65048 heap_min=64960 log_drops=0
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+
+[BOOT] policy_gate core validation; STM32F767ZI
+[BOOT] SYSCLK=96000000 HCLK=96000000 UART3=115200 FreeRTOS=V11.3.1
+[BOOT] lab Bearer HTTP transport; no TLS
+=== find_header_end test suite ===
+
+  PASS: standard GET request (result=33)
+  PASS: incomplete headers (result=35)
+  PASS: empty buffer (result=0)
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=6964/1832 margin=OK heap_free=65528 heap_min=65512 log_drops=0
+  PASS: 1 byte (result=1)
+  PASS: 2 bytes (result=2)
+  PASS: 3 bytes (result=3)
+  PASS: pattern at offset 0 (result=0)
+  PASS: pattern at offset 1 (result=1)
+  PASS: pattern at last position (result=6)
+  PASS: single CRLFs only (result=28)
+  PASS: first of multiple occurrences (result=4)
+  PASS: binary data (result=2)
+  PASS: realistic POST (header_end=96, body starts at 100)
+
+=== Results: 13/13 passed ===
+=== parse_method test suite ===
+
+  PASS: GET request (code=1 end=4)
+  PASS: POST request (code=2 end=5)
+  PASS: PUT request (code=4 end=4)
+  PASS: GET minimal (code=1 end=4)
+  PASS: PUT minimal (code=4 end=4)
+  PASS: POST minimal (code=2 end=5)
+  PASS: DELETE (code=8 end=7)
+  PASS: HEAD (code=32 end=5)
+  PASS: PATCH (code=16 end=6)
+  PASS: OPTIONS (code=0 end=0)
+  PASS: empty (code=0 end=0)
+  PASS: 1 byte (code=0 end=0)
+  PASS: 2 bytes (code=0 end=0)
+  PASS: 3 bytes (code=0 end=0)
+  PASS: POST no space (4 bytes) (code=0 end=0)
+  PASS: get lowercase (code=0 end=0)
+  PASS: Get mixed (code=0 end=0)
+
+=== Results: 17/17 passed ===
+=== extract_path_id test suite ===
+
+  PASS: GET /api/login (id=0x11111111 root=0)
+  PASS: POST /api/login (id=0x11111111 root=0)
+  PASS: GET /api/logout (id=0x22222222 root=0)
+  PASS: GET /api/status (id=0x33333333 root=0)
+  PASS: GET /api/policy (id=0x44444444 root=0)
+  PASS: PUT /api/policy (id=0x44444444 root=0)
+  PASS: GET / (root) (id=0x00000000 root=1)
+  PASS: /api/login?foo=bar (id=0x11111111 root=0)
+  PASS: /api/status?v=1 (id=0x33333333 root=0)
+  PASS: unknown /api/foo (id=0x00000000 root=0)
+  PASS: unknown /favicon.ico (id=0x00000000 root=0)
+  PASS: unknown /api/loginx (too long) (id=0x00000000 root=0)
+  PASS: unknown /api/logi (too short) (id=0x00000000 root=0)
+  PASS: path traversal /../etc/passwd (id=0x00000000 root=0)
+  PASS: path traversal /api/..hidden (id=0x00000000 root=0)
+  PASS: path traversal /api/../login (id=0x00000000 root=0)
+  PASS: null byte in path (id=0x00000000 root=0)
+  PASS: empty path (method_end == header_end) (id=0x00000000 root=0)
+  PASS: root with CR delimiter (id=0x00000000 root=1)
+  PASS: root with query (id=0x00000000 root=1)
+
+--- find_path_end tests ---
+  PASS: find_path_end space
+  PASS: find_path_end query
+  PASS: find_path_end CR
+  PASS: find_path_end no delimiter
+
+--- check_no_traversal tests ---
+  PASS: no traversal clean
+  PASS: traversal detected
+  PASS: traversal at start
+  PASS: single char safe
+
+--- check_no_null tests ---
+  PASS: no null clean
+  PASS: null detected
+
+=== Results: 30/30 passed ===
+=== parse_content_length test suite ===
+
+  PASS: Content-Length: 42 (val=42)
+  PASS: Content-Length: 0 (val=0)
+  PASS: Content-Length: 100 (val=100)
+  PASS: Content-Length: 1361 (max) (val=1361)
+  PASS: content-length: 42 (val=42)
+  PASS: content-length: 200 (val=200)
+  PASS: Content-Length: 1362 (over max) (val=1362)
+  PASS: Content-Length: 9999 (way over) (val=1362)
+  PASS: no CL header (val=0)
+  PASS: empty headers (val=0)
+  PASS: CL with extra spaces (val=50)
+  PASS: CL no space after colon (val=50)
+  PASS: CL among other headers (val=77)
+  PASS: CL at very start (after request line CRLF) (val=10)
+  PASS: partial header name (Content-Lengt) (val=0)
+  PASS: Content-Length: 5 (val=5)
+
+--- parse_digits tests ---
+  PASS: parse_digits 123
+  PASS: parse_digits 0
+  PASS: parse_digits 1362 clamped
+  PASS: parse_digits stops at non-digit
+
+--- skip_spaces tests ---
+  PASS: skip 3 spaces
+  PASS: skip no spaces
+
+=== Results: 22/22 passed ===
+=== extract_security_params test suite ===
+
+--- Known endpoints ---
+  PASS: GET /api/status (hash=0x33333333 method=1 body=0 olen=175)
+  PASS: GET /api/policy (hash=0x44444444 method=1 body=0 olen=175)
+  PASS: POST /api/login with body (hash=0x11111111 method=2 body=11 olen=186)
+  PASS: POST /api/logout (hash=0x22222222 method=2 body=0 olen=175)
+  PASS: PUT /api/policy with body (hash=0x44444444 method=4 body=5 olen=180)
+
+--- Dashboard ---
+  PASS: GET / (dashboard) (hash=0x00000000 method=1 body=0 olen=175)
+
+--- Error codes ---
+  PASS: no headers (incomplete) -> INCOMPLETE
+  PASS: DELETE method code (hash=0x33333333 method=8 body=0 olen=175)
+  PASS: HEAD method code (hash=0x33333333 method=32 body=0 olen=175)
+  PASS: path traversal -> PATH_TRAVERSAL
+  PASS: path traversal in api -> PATH_TRAVERSAL
+  PASS: unknown endpoint -> PATH_UNKNOWN
+  PASS: unknown short path -> PATH_UNKNOWN
+  PASS: body too large -> BODY_TOO_LARGE
+  PASS: body incomplete -> INCOMPLETE
+
+--- Wire format details ---
+  PASS: body bytes + zeroed region
+
+--- Edge cases ---
+  PASS: empty input -> INCOMPLETE
+  PASS: just CRLF -> METHOD_UNKNOWN
+  PASS: CL 0 no body (hash=0x33333333 method=1 body=0 olen=175)
+  PASS: path with query (hash=0x11111111 method=1 body=0 olen=175)
+
+--- Bearer token extraction ---
+  PASS: bearer token present (tlen=11)
+  PASS: no bearer token (tlen=0, region zeroed)
+  PASS: token truncated to 128 (tlen=128)
+  PASS: bearer + body (tlen=7 body=5)
+
+=== Results: 24/24 passed ===
+=== IPC.Extract test suite ===
+
+--- populate_auth_fields ---
+  PASS: auth basic: role=ADMIN(2)
+  PASS: auth basic: scope=0x0003
+  PASS: auth basic: subject_id_len=5
+  PASS: auth basic: subject_id='admin'
+  PASS: role clamp: raw=99 -> clamped=2
+  PASS: role boundary: raw=2 -> unchanged=2
+  PASS: subject_id_len clamp: raw=50 -> clamped=32
+  PASS: subject_id_len zero: len=0
+  PASS: subject_id zero: region untouched
+  PASS: scope endianness: lo=0x00, hi=0x3F
+
+--- populate_rate_field ---
+  PASS: rate basic: val=42
+  PASS: rate zero: val=0
+  PASS: rate max: val=255
+
+=== Results: 13/13 passed ===
+[Legacy vectors] 119/119
+=== Adapter and buffer boundaries ===
+  PASS: initial guards
+  PASS: empty input incomplete
+  PASS: no policy call before extraction
+  PASS: no dispatch before authorization
+  PASS: 4096-byte unterminated header
+  PASS: unterminated input unchanged
+  PASS: unterminated buffers intact
+  PASS: 4097 bytes rejected before extractor
+  PASS: oversized buffers intact
+  PASS: 4096-byte complete request
+  PASS: maximum request unchanged
+  PASS: 1361-byte body fills output
+  PASS: maximum body copied
+  PASS: maximum body input stable
+  PASS: 1362-byte body rejected
+  PASS: huge body length rejected
+  PASS: every fragmented prefix incomplete
+  PASS: complete fragmented request accepted
+  PASS: malformed request classification
+  PASS: malformed request cannot dispatch
+  PASS: malformed request classification
+  PASS: malformed request cannot dispatch
+  PASS: malformed request classification
+  PASS: malformed request cannot dispatch
+  PASS: 32-byte trusted identity
+  PASS: identity fields and separate auth storage
+  PASS: invalid identity revokes prior identity
+  PASS: invalid identity cannot evaluate
+  PASS: adapter rejects invalid role
+  PASS: adapter rejects oversized subject
+  PASS: adapter rejects missing identity
+  PASS: short security header rejected
+  PASS: corrupt body length rejected before copy
+  PASS: guard corruption stops processing
+=== Policy and dispatch boundaries ===
+[PolicyGate] path=0x33333333 method=1 role=OPERATOR scope=0x0001
+  PASS: operator sensor read allowed at 49
+  PASS: authorized dispatch occurs once
+  PASS: status response matches reference
+  PASS: forward result cannot be replayed
+[PolicyGate] path=0x33333333 method=1 role=OPERATOR scope=0x0001
+  PASS: rate 50 denied
+  PASS: rate denial cannot dispatch
+[PolicyGate] path=0x33333333 method=1 role=NONE scope=0x0001
+  PASS: insufficient role denied
+[PolicyGate] path=0x33333333 method=1 role=ADMIN scope=0x0000
+  PASS: admin still requires scope
+[PolicyGate] path=0x33333333 method=2 role=ADMIN scope=0xffff
+  PASS: wrong method denied
+[PolicyGate] path=0x11111111 method=1 role=ADMIN scope=0xffff
+  PASS: unmatched path denied by policy
+[PolicyGate] path=0x44444444 method=1 role=OPERATOR scope=0x0004
+  PASS: policy read requires admin
+[PolicyGate] path=0x44444444 method=1 role=ADMIN scope=0x0004
+  PASS: admin policy read allowed
+  PASS: policy read response
+[PolicyGate] path=0x22222222 method=2 role=OPERATOR scope=0x0000
+  PASS: zero-scope rule allowed
+[PolicyGate] path=0x33333333 method=1 role=ADMIN scope=0xffff
+  PASS: all requested scope bits allowed
+[PolicyGate] path=0x33333333 method=1 role=ADMIN scope=0x0001
+  PASS: partial scope mask denied
+[PolicyGate] path=0x44444444 method=4 role=OPERATOR scope=0xffff
+  PASS: non-admin policy update denied
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: rate-limited policy update unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: zero rules rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: nine rules rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: invalid rule method rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: invalid rule role rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: short policy body rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: trailing policy bytes rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: valid policy update commits
+  PASS: policy update does not dispatch
+  PASS: stored policy slot preserved
+[PolicyGate] path=0x33333333 method=1 role=OPERATOR scope=0x0001
+  PASS: updated active rule works
+[PolicyGate] path=0x44444444 method=1 role=ADMIN scope=0xffff
+  PASS: stored slot matches despite count one
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=6180/884 margin=OK heap_free=65528 heap_min=65512 log_drops=0
+  PASS: policy tests retain buffer guards
+  PASS: EverParse access allow directly
+  PASS: EverParse rejects every truncated access length
+  PASS: EverParse rate predicate independently denies
+  PASS: EverParse scope predicate independently denies
+  PASS: EverParse policy allow directly
+  PASS: EverParse rejects every truncated policy length
+  PASS: EverParse policy admin predicate
+  PASS: EverParse policy rate predicate
+  PASS: HTTP every two-fragment split
+  PASS: HTTP byte fragments
+  PASS: HTTP processing cannot replay
+  PASS: HTTP framing/auth case 1
+  PASS: HTTP framing/auth case 2
+  PASS: HTTP framing/auth case 3
+  PASS: HTTP framing/auth case 4
+  PASS: HTTP framing/auth case 5
+  PASS: HTTP framing/auth case 6
+  PASS: HTTP framing/auth case 7
+  PASS: HTTP framing/auth case 8
+  PASS: HTTP framing/auth case 9
+  PASS: HTTP framing/auth case 10
+  PASS: HTTP framing/auth case 11
+  PASS: HTTP framing/auth case 12
+  PASS: HTTP framing/auth case 13
+  PASS: HTTP framing/auth case 14
+  PASS: HTTP framing/auth case 15
+  PASS: HTTP framing/auth case 16
+  PASS: HTTP framing/auth case 17
+  PASS: HTTP framing/auth case 18
+  PASS: HTTP framing/auth case 19
+  PASS: HTTP framing/auth case 20
+  PASS: HTTP framing/auth case 21
+  PASS: HTTP framing/auth case 22
+  PASS: HTTP framing/auth case 23
+  PASS: HTTP framing/auth case 24
+  PASS: HTTP framing/auth case 25
+  PASS: HTTP framing/auth case 26
+  PASS: HTTP maximum binary body
+  PASS: HTTP incomplete body waits
+  PASS: HTTP 4096 unterminated header
+  PASS: HTTP overlong bearer rejected
+  PASS: HTTP binary admin policy update
+  PASS: Bearer failed lookup clears identity
+  PASS: HTTP response framing and challenge
+  PASS: HTTP response small buffer fails
+  PASS: Dashboard served without authentication
+  PASS: Dashboard cannot bypass incomplete framing
+  PASS: Dashboard POST is not a public route
+  PASS: Dashboard rejects body
+  PASS: Dashboard rejects lookalike route
+  PASS: HTML header
+  PASS: HTML header bounds
+  PASS: Admin login with byte fragmentation
+  PASS: Issued token matches independent HMAC vector
+  PASS: Issued token Bearer encoding
+  PASS: Issued admin token status
+  PASS: Issued admin token policy
+  PASS: Issued admin token logout
+  PASS: Original stateless logout retains token validity
+  PASS: Every token nibble authenticated
+  PASS: Operator login accepts whitespace/order/ASCII escape
+  PASS: Issued operator status
+  PASS: Issued operator denied policy
+  PASS: Login JSON/credential rejection 0
+  PASS: Login JSON/credential rejection 1
+  PASS: Login JSON/credential rejection 2
+  PASS: Login JSON/credential rejection 3
+  PASS: Login JSON/credential rejection 4
+  PASS: Login JSON/credential rejection 5
+  PASS: Login JSON/credential rejection 6
+  PASS: Login JSON/credential rejection 7
+  PASS: Login JSON/credential rejection 8
+  PASS: Login JSON/credential rejection 9
+  PASS: Login JSON/credential rejection 10
+  PASS: Login JSON/credential rejection 11
+  PASS: Login JSON/credential rejection 12
+  PASS: Login JSON/credential rejection 13
+  PASS: Password length boundary
+  PASS: Password length boundary
+  PASS: Password length boundary
+  PASS: Credential helper enforces its own bound
+  PASS: Every truncated login body rejected
+  PASS: Login output bounds
+  PASS: Login leaves guards intact
+  PASS: Public JavaScript with fragmented headers
+  PASS: Demo GET requires authentication
+  PASS: Demo rejects non-GET
+  PASS: Demo query retains alias
+  PASS: Operator demo denied by default
+  PASS: Admin demo allowed
+  PASS: Demo has distinct integration route ID
+  PASS: Status remains allowed independently
+  PASS: Operator cannot inspect policy
+  PASS: Admin reads actual rules
+  PASS: Operator cannot change live policy
+  PASS: Admin enables operator demo
+  PASS: Operator demo succeeds immediately
+  PASS: Admin disables operator demo
+  PASS: Operator demo denied immediately
+  PASS: Admin retains demo access
+  PASS: Admin disables operator status
+  PASS: Operator status denied
+  PASS: Admin status remains allowed
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65528 heap_min=65512 log_drops=0
+  PASS: Policy readback reflects edited role
+  PASS: Live policy integration guards
+  PASS: Mediation public handler explicitly admitted
+  PASS: Mediation public invocation consumed
+  PASS: Mediation public class cannot select API
+  PASS: Mediation public method restricted
+  PASS: Mediation stored slot matches despite count one
+  PASS: Mediation decision cannot dispatch twice
+  PASS: Mediation operator cannot commit candidate
+  PASS: Mediation commits exact active candidate
+  PASS: Mediation policy transaction consumed
+  PASS: Mediation malformed login has no effect
+  PASS: Rate: 49 requests in one window admitted
+  PASS: Rate: over-limit request 50 refused (429)
+  PASS: Rate: over-limit request 51 refused (429)
+  PASS: Rate: over-limit request 52 refused (429)
+  PASS: Rate: over-limit request 53 refused (429)
+  PASS: Rate: over-limit request 54 refused (429)
+  PASS: Rate: over-limit request 55 refused (429)
+  PASS: Rate: over-limit request 56 refused (429)
+  PASS: Rate: over-limit request 57 refused (429)
+  PASS: Rate: over-limit request 58 refused (429)
+  PASS: Rate: over-limit request 59 refused (429)
+  PASS: Rate: over-limit request 60 refused (429)
+  PASS: Rate: over-limit request 61 refused (429)
+  PASS: Rate: over-limit request 62 refused (429)
+  PASS: Rate: over-limit request 63 refused (429)
+  PASS: Rate: over-limit request 64 refused (429)
+  PASS: Rate: over-limit request 65 refused (429)
+  PASS: Rate: over-limit request 66 refused (429)
+  PASS: Rate: over-limit request 67 refused (429)
+  PASS: Rate: over-limit request 68 refused (429)
+  PASS: Rate: over-limit request 69 refused (429)
+  PASS: Rate: over-limit policy update refused, policy unchanged
+  PASS: Rate: first request in the next window admitted
+  PASS: Geometry: 64 partitions of 8 slots
+  PASS: Default part=1 readback has the gateway routes
+  PASS: Zero-filled slots are not listed (3 rules)
+  PASS: Explicit part=1 equals default
+  PASS: Partition 2..64 start inactive
+  PASS: Admin installs partition 5
+  PASS: Partition 5 readback shows the rule
+  PASS: Partition 1 untouched by the partition 5 write
+  PASS: Operator /demo denied before the last-partition rule
+  PASS: Admin installs partition 64 (last)
+  PASS: Decision scans to partition 64: operator /demo now allowed
+  PASS: Zero-padded part number accepted
+  PASS: Other query params are ignored
+  PASS: part is ignored on other routes
+  PASS: PUT part=0 rejected, store unchanged
+  PASS: PUT part=65 (N+1) rejected, store unchanged
+  PASS: PUT part=4294967296 rejected
+  PASS: PUT part=abc rejected (400)
+  PASS: PUT part= (empty) rejected (400)
+  PASS: PUT part (no value) rejected (400)
+  PASS: PUT part=-1 rejected (400)
+  PASS: PUT part=2x rejected (400)
+  PASS: PUT duplicate part rejected (400), store unchanged
+  PASS: PUT duplicate identical part rejected (400)
+  PASS: Operator cannot write any partition
+  PASS: GET part=0 denied
+  PASS: GET part=65 denied
+  PASS: GET part=abc rejected (400)
+  PASS: Operator cannot read a partition
+  PASS: All 63 non-gateway partitions provisioned
+  PASS: Provisioned partition 33 reads back
+  PASS: Gateway routes (partition 1) still reachable after provisioning
+EQUIVALENCE_OK,engine=stm32-linked-everparse,comparisons=lu
+[PAPER CORPUS] comparisons=12527 failures=0
+  PASS: paper reference 12527-case equivalence
+[CORE SELFTEST] PASS 354/354; synthetic identity only
+[ETH] link=UP phy=2 epoch=1
+[HTTP] READY 192.168.40.128/24:80 lab_bearer=1 RAM policy; no TLS
+[CTRL R4] START hz=4000 high=1
+[CTRL R4] hz=4000 high=1 samples=10000 misses=0 lost_releases=0 gap_anomalies=0 max_cycles=10836 critical_max_cycles=3663 critical_anomalies=0 isr_max_cycles=1398 eth_isr_max_cycles=2941 eth_isr_count=1200 stack_free=2852
+PGC1† ﬁ	  6  –  0  X  ~  h    +  L  é  k
+  P  L  r
+  k
+  k
+  
+  z
+  ≥
+  l
+  /  ‚  Ä
+  i
+  9  ,  l
+  Â  o  J
+  @
+  x  !
+  *  ,
+  ≠    v  Ö
+  ≠  †  ˙	  B
+  ò  
+  e  Z
+    Ô
+  ,
+  é
+  Æ  D
+  é  µ  J
+   
+  :
+  N  ‰  >
+  >
+  
+    
+  "
+  ¨  2
+  !  +
+  d
+  b
+  
+  ∞  J
+  Â
+  Ã  J
+  -  .
+    
+  ‡  ƒ   
+  L
+  @  
+  k
+  4
+  3  √  o
+  l
+  w  u
+  ô
+  Ç
+  <
+  ˘  l
+      |  m
+    ê
+  ®  o
+  7  Ω  M
+  >
+  È   
+  
+  ã  m  
+  Ã  ±  l  .
+  9
+  
+  œ  z
+  6  6
+  I
+  ¨  (  ı
+  Ã  >
+  k
+  X
+  -
+  
+  Ç
+  r  s
+  8
+  Ì
+  R
+  ƒ
+  B
+  
+  ∞
+  M  ·  R
+  \  6
+    .
+  ~  ù  Æ  œ  	  ,  J  N  
+  é
+    à
+  ç  J
+  $  é  l  l
+    ¨  l
+  ﬂ  ñ  x
+  |
+  p
+  Ø  s
+  l
+  ˝
+  3
+  ¡
+  Ä
+    “  å
+  a
+  A  ø  N  L  Û  
+  3  
+  E  ∂  L  Î  /  -
+  >
+  ,
+  
+  Ù
+  ˝
+  }
+  9
+  ë  ç  P
+  C
+  “  /  3
+   
+  k  
+  .
+    á
+  >
+  M
+  
+  B  "
+  +   
+  
+
+  Ï
+  J
+  v
+   
+  .
+    Ø  È
+  o  å
+  È  "  “  
+  §  .
+  1
+  /  è  Î  œ  å  N
+    k
+  å  {
+  Å
+  ~
+  ë
+  
+  a
+  l
+  l
+  S  {
+  d
+  w
+    ô  l
+  L  ﬁ  
+  
+  ,
+  k  À
+  1  o  
+  Ã  Õ  ˘  Ì
+  Õ    -
+  $  
+  e  N
+  ≠  å  å
+  >
+  ‰
+  H
+  b  8
+  P  Ø  !
+    
+  è
+  
+  )  N  ï
+  N  T
+  
+  =
+  ˛	  >
+  ã  D
+  I  
+      O  ¸
+  	
+  
+  .
+  ≤    û   
+      ¨  k  ï  ≈
+  k
+  `
+  r
+  à
+  `
+  (
+  
+  |
+  l
+  ˘  
+  
+  l
+  ]
+  
+  k
+  á  +  Ç  >
+  
+  )  
+  
+  Î  m  
+  ,  À  ,
+  œ  >
+  ú  ?
+  .
+  =  º  D  »  †  l  T  ’  v
+  >
+  G
+  ˇ  .
+  N  >
+  œ  ‘  
+    
+  "
+  Ì
+  ˘
+  Ç  1
+  ´  _  Ñ
+  Í      I  l  O  ÷
+  p
+  ˝
+   
+  J
+  ÷    >
+  ^
+  g    K  "  n  Å
+  L  Ã  r
+  u
+  k
+  å
+  p
+  ≠
+  l
+    ú    x
+  Y  ‰  Ä
+  a
+  Ì
+  L
+  X
+  Y!  –  
+  
+  @  Ç  O
+  L  .
+  C
+  ¢  1
+  O  -
+  ?
+  ÿ  
+  :
+  Ó
+  
+  Q
+  Á  W
+  
+  
+  
+  ,  M  H
+  |
+  
+  B    >
+  ?
+  ;
+  S  
+  N
+  ü  û    Ç
+  ˜	  ‰  #
+  /  ¬
+  
+  N
+  Ã  e  B  p
+  ˘  Î
+  ˆ  t    J
+  ∂  0
+  
+  ì
+  >
+  €  c
+  {
+  y
+  r
+  v
+  `
+  <
+  /
+  k
+  ˝
+  ì  
+  _
+  Ú
+  a
+  
+  p
+  Î
+  å  J
+  >
+  
+    ú  
+  ,
+  ˆ
+  ã
+  ´  Ò
+    ç  ≠  §  Ì    è
+    Ï  Ï
+  s     ‚  Ø    >
+  @
+  
+  8
+  
+  -
+  D  ˙
+    -  *
+    
+      ~
+    >
+  &
+  l  >
+  r
+  >
+    Ô  ]  J
+  ·  3
+  Ù  8
+  Ç  s  }
+  Œ  ø  4  k
+  k
+  S  Å
+  û
+  Ç
+  <
+  {  l
+  l
+  s  Ç  Ä
+  n
+  3
+  
+
+  
+  Ä
+  Ç  .
+  G
+      
+  
+  `  y
+  -  l  k
+  /  ,   
+  
+  ?  >
+  ë
+  #
+    ı
+  Ã  ¿  û
+    H
+  ê  À  N  •  @
+    B
+  >
+  ‡
+  q  ,
+  -
+  L  r
+  ç
+  ‹  "  8
+  Ó
+  ø
+  Æ  J    .
+  ™  Ω  
+  .
+   
+  ≤  #
+  >
+  
+  .  K  l
+  é
+    ê
+  ﬂ    {
+  l
+  }
+  œ  `
+  Ç
+  l
+  3
+  ï    {
+  S  L  e
+  Â  8
+  M
+  Y
+    ,
+  
+  
+  ≠  ë
+  Y
+  ,  l  #
+  $  .  
+  é
+  I
+  2
+  >
+  √  
+    Z
+    >
+  ,
+  ‰  ı  =
+      9
+  /  X
+  ê  Ö
+  
+  ç
+  ,
+    L  i
+    .  9
+  1
+  
+  Ø  J    æ  è
+  d
+  .
+  æ  -  ƒ  L
+  \  «  w  L  Î	  Œ  k
+  ü
+  k  r
+  t
+  {
+  ,
+  k
+  ≥
+  ˝
+      r
+    9  D  Ä
+  ,  ,  >
+  C
+  Û  ,
+  
+  ,   
+    
+  Ã    Ö
+  L
+  =
+  á
+  ø  Ø  =  >
+   
+  <  ,  ﬁ  ,
+  é
+  Ï  ¯  ˛
+  (
+  D  @
+  n  L
+  L
+  ∆  
+  
+  C
+  G
+  å
+  ‡
+  ,
+  J
+  Ó
+  ™
+   
+  Ô
+  )  Ù
+  ê  .  .
+  ˝
+   
+  §  s    >
+  <  9  v  ◊    N  k
+  k    r
+  k
+  k
+  -
+  p
+  ¡
+  l
+  e
+  "  Ä
+  j
+  Û  T
+  {
+  å
+  Ã  *
+  L
+  «  Ç  P
+  
+  Ï
+  9  Î  å
+  ,  o  6
+  J
+  —  /  ˇ
+  |  9
+  °  ¬
+  <
+  \
+  -    ?  _
+  f  Ø  §  ‚  Œ  J
+  >
+  È	  
+  
+  å
+  U  ,
+  I
+  8
+  
+  Ô
+  
+  ﬁ
+  L
+  ∫  +
+  #
+  n  !  o
+  ﬂ  d  N    ”  Ó
+  k
+  L  S  Õ  p
+  Ç
+  Ã  %  
+  {
+  ˛	  Ô	  ë
+  l
+  o  <
+  Ö
+  e
+  Q
+  J  {
+  k
+  +
+  J
+  8
+  *
+     B  %  ¸  ,
+  ˜
+  k
+    †  †  Ï
+  E
+  È	  Ç  ù  M
+  ¨  6
+  .  S  %
+    #
+  ¢  -  !
+  1
+  Q  b  Z
+    ã
+  D  
+  9
+  €  Ô  
+  |
+  j
+  
+  ¡  -
+  x  1
+  &  #
+  C
+  ˙  
+  —  %
+  é
+  ﬂ    ?
+  
+  
+  ç  3
+  Û  í    {
+  X  r
+  î
+  k
+  I
+  3
+  k
+  l
+  s  
+    j
+  ^
+  ú  k
+  Ï  @  Õ  >
+  /
+  ,
+    Ë
+  l  R  N
+  ,  Ã  
+  $  }
+  ¸  .  ü
+  =  L
+  ˝	  ‚  Ú
+  Z
+    G
+  1
+  >  W  
+  .
+  Ω  3  >
+  9
+  ∏  ˇ	  
+  q  
+  _
+  7
+  #
+  
+  Æ  
+  û  <  Á
+  &
+  L  a  *
+  ó  /
+  æ  M  l
+  /
+    ì  D
+    ¬
+  é  k
+  l
+  ,  r
+  o
+  l
+  Ï
+  p
+  ø
+  ˝
+  ¬  ‹  m
+    9  ¯	  w
+  W
+  Ó
+  ¬  G
+  ã  –  "
+  
+  `  y
+  
+  À  J
+  .  ü  å
+    
+  ]  2  e    
+    ˛
+  
+  é
+  ∂  ˛  4
+    
+  /
+  d  t  >
+  Ä  
+  Û  8
+  _
+  ,
+  )
+  
+  J
+  /
+  J
+  W
+  è
+  n  ó  
+  
+  l    ¨  S  /  K
+  ‰  Z
+  7    ì  ﬁ
+  p
+  ~
+  k
+  ¶  Ä
+  k
+  6  3  °
+  l
+  ∞  <
+  Ä
+  y
+  X
+  Â  o
+  w
+  §  .
+  >
+   
+  f  |
+  
+  |
+  a  ∂
+  ç  Û
+    ç
+  >
+  Á  	
+  
+  V
+  ´  .
+  ,
+  .
+  O    ≠    8
+  
+  Ö  Ì  Æ  l  …  K  ?
+  Õ  è
+    L  Ì  
+  ı  <  
+  3  +     *  1  ≤
+  ¸  ^  Ø  9
+  è
+    Å  Ó
+  è
+  K  Ô  ¨  ø  k
+  y
+  ´    o
+  ~
+  p
+  #
+  `
+  m
+  l
+  ≥  x
+    X
+    3
+  k
+  Ä
+    é
+  Ã  C  4  
+  "
+  C
+  À  N
+  /
+  Ã  ë
+  .  K  —  ˝  .
+  ù  >
+  \  
+  Ã  ?
+  ¨  G
+  -
+  æ  
+  Ÿ  '
+  
+  8
+  N  F
+  õ  
+  #
+  Ï
+  ç
+  m  L   
+    ?
+  J
+  ë
+  .
+  n  ›
+  ó  C
+  
+  Ω  è
+  ÷  #
+  l
+  8
+    4  7  ¨  b
+  .  k
+  Å
+  l  r
+  t
+  p
+  -
+  k
+  ≥
+  ˝
+      m
+    ô  ¯	  á
+  V
+  Ì
+  b  G
+  K  ä  &
+  
+     ©  M  Î  .  ç
+  
+  ,
+  Á
+  
+  ‚  '  ≈  x  
+    û
+  	
+  é
+  W  ò  3
+  Æ   
+  f
+  •    9
+  Ä  
+  !
+  >
+  _
+  ,
+  !
+  !
+    C
+  -  !
+  ‚    V
+  Ù  ¯
+  $  l  Ï
+  >
+  Ä
+    ‚  .
+  ˇ
+  ÷  +  3
+  
+  k
+  k
+  w  ó
+  c
+  Ç
+  o  Ì
+  o
+  Ä
+  ˚
+  Ó
+  m
+  d
+    3
+  œ  x
+  2
+    Ô
+  $  Ä  
+  
+    8  \  Õ  k  
+  
+  ‘  !
+  ´  @  §  Ù
+  A
+  ∆  
+  l    
+  é
+  Ã  ÿ  b
+  Œ  $
+  B  N  9
+  L
+  H
+  *
+    ,
+   
+  Ú
+  
+  ¿  ÷
+  (
+  
+    Q  €  ,
+  J
+  ‚
+  /  ;
+  >
+  .  X  R
+  .  •  O
+  s
+  ¨  C
+  @
+  .
+  {
+  
+  l
+  †  \  ñ  j
+  Å
+  \
+  p
+  #
+  a
+  l
+  ˝
+  q    Ä
+  ˙
+    3
+  k
+  r
+  N
+   
+  
+  µ  
+  
+  
+  M  |
+  >
+  ‡
+  k  
+  è
+  
+  +
+  ı	  .
+  Ω
+  ¥   
+  
+  
+  ?
+  ?  O  3
+   
+  Î  
+  Ô
+  >  ç  >
+  ?
+  º  "  
+  
+  ~
+  
+
+  Ï
+  >
+  v
+  Ã
+  #
+  ú  è
+  ·	  Ó
+  /     	
+  R    X   
+  W
+      Ã  ∞  k  ?  r
+  t
+  k  ä
+  o
+  b
+  |
+  0
+  _
+  l
+  l
+  ì  Ä
+  d
+  e
+  ≤
+  9  l
+  Î  ~  ¬  
+  m  
+  Q
+  “
+    
+  Ã  l  ô  ç
+  m  ¨  ,
+  $  
+    R
+  L  Ã  /
+  /  '
+  r
+  A
+  8
+  /  è
+  Œ  û
+    .
+  
+  á
+  
+  ∑  J
+  Ù  Ú
+  ì
+  Ô	  >
+  
+  o  ¨    Ø  ]
+    .
+  Ÿ
+  ≥  n  •  á
+  >
+  Q  
+  å  C
+  +  g    k
+  x  r
+  í
+  Å
+  (
+  !
+  l
+  l
+  ô  Ç    p
+  3
+  3  p
+  6  ]  Ø  J
+  
+"  %  
+  
+  
+  ,
+  O
+  ,
+  À  
+  è
+  
+  Q  n
+  =
+  *
+  8
+  è  m
+  *  N
+  ¨  G
+  Ö  æ  o
+  å  /
+  ‘  ‚  8
+  A
+  
+  
+  
+  E  s
+  \  #
+  4  H  
+  3
+  
+  ;  *
+  
+  Ø  D
+  
+  c  .
+  ≤  B  é
+  /  Ã  Ü
+  v  ó  ™  
+  `
+  x  r
+  ô
+  Å
+  <
+  "
+  m
+  l
+  ô  Ç  Ä
+  l
+  P  Ù  Ä
+  C
+    9
+  +
+  #  5  ã  
+  
+  x
+  ˝    ´   
+  Ï
+  ,
+  î  ì
+  '
+  8  o  
+  
+  B  6
+  8
+  
+  3
+  G
+    é  /
+    8
+  I
+  ≈  l
+  ≠  
+  
+  Ù  ,
+  L
+  8
+  !
+  å
+  Õ
+  Ω  Ù
+  z  Ï
+    
+  “  	
+  
+  !
+  •  #
+  O
+  1  œ  ◊  +  K  
+  ~
+  k
+  b
+  r
+  Ç
+  q
+  Ã  ¸
+  ´
+  l
+  Ç  B  Ä
+  i
+  ˘  e  k
+  ã  Ì  J
+  L
+  p  ,
+  
+  ,  <
+    V
+  
+  9
+  3  
+  >
+  ò  
+  "  H
+  ¨  N  ¬
+  Ó
+    `  
+  5
+  >
+  
+  Ÿ  >
+  
+  F
+    F
+  L  Ñ
+  œ
+  E  ,
+  Ù  L  Ù
+  b
+  J
+  +  ¨
+  ¬    >    n  
+  8
+  O  Ó
+  _  T  §  œ  ∑
+  L  W  k  k
+  
+    §  o
+  q
+  
+  3  ã
+  †
+    H
+  Ä
+    Q
+  *
+  `
+  Å
+  Ñ  >
+  >
+  X
+  ˝	  
+  
+  ,
+  ˆ
+  1
+  K  |
+  ¥  å  9
+   
+  )  -
+  –  ≠  H
+    O  ,
+  .
+  Ø  µ  J
+  ,
+  a  å    >
+  è  S  
+  P  
+  Ö
+  3
+  
+  M  !  «  ù  Î
+  .
+  '
+  J
+  1
+  D  
+    Æ  9
+  •    @
+  
+    C
+    C
+  ü
+  k
+  Ä
+  C
+  W  d
+  k
+  
+  #
+  b
+  l
+  l
+  H  l
+  Ä
+  x
+  ±
+  9  k
+  Ï  ﬁ  ¬  
+  º  z
+  "  
+  
+  x
+  ú    K  
+  ,
+  -
+  4  
+  '
+  8    
+   
+  Ç  -  ﬁ  k  O  º  9  
+  E
+    ?
+  9
+  /  ∏
+  	
+  
+  
+  
+  
+  ¿  >
+  b
+  8
+  »
+  Æ  N
+  L
+  ¸	  ,
+  $  b
+  ã
+  
+  Ó
+    >
+  
+  ¥
+  S  V
+    R
+  ˆ  y
+  z
+  C
+  l
+  l
+  Ä
+  (
+  1  l
+  l
+  3
+  <
+  Ä
+  u
+  Q
+  ç
+  k
+  å
+  ,  è
+  L
+  
+  
+  
+  
+  •  v  v  <  
+  @  À  G
+  @
+  
+  ¬    å  F
+  3
+  æ  
+  n  !
+  ç  R
+  W
+  j
+  J
+  !
+    
+  o  %
+  o  E
+  ˛    +  R  r
+  º  .
+  
+  Õ  ,
+  /  !
+  ‡
+    
+  N  .  è
+  ˜  Æ  >
+  
+  Œ  Å
+  ˜  é  ´  ö
+  c
+  6  s
+  p
+  t
+  ‹
+  t
+  É
+  l
+  D
+  !    w
+  π  Ã  l
+  e  o  >
+  @
+    ∂  
+  
+  <
+  b
+  Z
+  ¿  k  2  ?
+  -  .
+  n
+  Ó
+  î  6
+      r  J
+  ¨  9
+  1
+  D  
+  ’  Ì  n
+  Û
+  >
+  8
+  ≠  ¬
+  ,
+  +  r
+  ]  ¸  ß  +  ∂  Ø  ˇ  .  Ç
+  
+  L  )  ò
+  
+  /
+  ª  w
+  á
+  7
+  d
+  n  ¨  v
+  æ  Ï
+  
+     6  Å
+  k
+  p
+  O  t
+  l
+  ˝
+  3
+  a
+  Ä
+    í  L  
+  °        Ã  /  
+  
+  ç
+  ˆ
+  1
+  À    6
+    6
+  Õ
+  ≠  !  	
+   
+  x  ∂  µ  
+  N
+  Ä
+  L
+  l  
+  Ω  >
+  ç  /
+  
+  J
+  
+  
+  
+  6
+  o
+  -  P
+  m  J
+  8
+  ⁄
+  1  ª
+  3
+  s  Ï
+  Ø  Ô
+  }  .
+  §  m
+  
+  >
+  \  ~  ÷  l  d
+  Æ  k
+  +  À  r
+  k
+  k
+  å
+  _
+  o
+  l
+  –  ö  Ä
+  x
+    ,  k
+  Â  ≠
+  M
+  W
+  V  
+  
+  ,
+  ,
+  y
+  +  J
+  À    <
+  L
+    œ  û
+    9
+  ´  b
+  7
+  W
+  Ã  ¨  ﬁ
+  L
+  ™  Ó
+  E  "    -
+  >
+  ¶  
+  
+
+  -
+  -  Û
+  Ä  ∏  >
+  
+   
+  .
+  3
+  
+  ;  *
+  
+  Ø  D
+  
+  c  /
+  ª  B  é
+  è  Ã  s
+    7  Í  k
+  Ä
+  ∏  Å
+  û
+  Å
+  <
+    l
+  l
+  y  ¬  b
+  e
+  C
+  	
+  `
+  m
+  Ì
+  B
+  A
+    ’  
+  
+  @  ò  Ã  !
+  l  k
+  ã
+  #
+    
+  
+  
+  9
+  ,
+  
+  |  
+  9
+  %  2
+  G
+  ﬁ    è
+  ï  8
+  
+  ,  ¯  ™  
+  
+  Ù  ,
+  J
+  8
+  !
+  Ì
+  -  }  ¥  ⁄  ¨  ﬁ  
+  ˘	  	
+  
+  Ö
+    
+  N
+  á
+  e
+  u
+  K  À  ˝	  k
+  {
+  R  u
+  ë
+  Å
+  <
+  º  l
+  l
+  S  b  Ä
+  |
+  ì    Å
+  ñ  J
+  M  ?  Œ  S  ⁄  *
+  ˆ	    
+  
+  <
+    ü  L  ,
+  -  
+  w
+  #
+   
+  
+  Ç  t
+  .
+  
+  ∞  G
+  ]
+  1
+    _  L
+  Ä  Œ  ≈  ¢  '
+  H
+  ?
+  Ô
+  
+  ,
+  ≠  r
+   
+  Î
+  .  L
+    3
+     ﬁ
+  j  Ï
+  7
+  ^  B  è
+  >
+  À  0
+  .
+  J
+  
+  
+  k  7  O    ô
+  c
+    f
+  p
+  o
+  œ  k
+  l
+  l
+  3
+  !  r
+  Ä
+  “  K  ~
+  ≈
+  _  Æ  ≠  g  K  
+  
+  m  
+  
+  À  ‡
+  ¬
+  .
+  L  8
+    
+  ∑  C
+  
+  !
+  ¸  ,
+  O
+  Ï  X
+  
+  u
+  .
+  #
+  ]  T  >
+  *
+  ®  
+  
+  ≤  
+  Ù  @
+  J
+    4  
+  ˝  ﬁ  z  å  
+     	
+    ”  Ñ
+      u
+  Ù
+  l  C
+  À  N
+  ó  
+  À  ä
+  `
+  z
+  Ä
+  *
+  {
+  m
+  l
+  â  ß
+  ˛
+  j
+    ô  l
+  Ã  N
+  ,  ,
+  ï  i
+  
+  
+  
+  ,
+  S
+  ,
+  À  
+  .
+  
+  Q  o
+  ù
+  >
+  *
+  å  Õ
+  
+  N
+  ¨  W
+  
+    ’
+  ˘
+  /  
+  >
+  G  _
+  û  
+  
+  Â
+  ¥  ˝  6
+  4  {  '
+  >
+  
+  €
+  (
+  
+  Ó
+  /  
+  ¢
+   
+  §  Ç
+  ﬂ  n    s
+  ∑  ◊  ä  k
+  k
+  X  Å
+  ô
+  Å
+  <
+  [  l
+  l
+  3  |  Ä
+  j
+  C
+  	
+  `
+  m
+  Ì
+  B
+  @
+  p  5  
+  
+  @  ò  l  !
+    {
+  }
+  #
+    
+  
+  
+  8
+  ,
+  
+  
+  Ä
+  >
+  %  2
+  U
+  $    è
+  5  8
+  
+    ˘  u
+  m
+  Ω  
+  R
+  ›
+  
+  _    J
+  !
+  æ  >
+  Í	  z  +
+  
+  À  o  7  9
+  O  8
+  #
+  {  V
+    K  >  k
+  Ö
+  ”  r
+  ™
+  Å
+  <
+  \  l
+  l
+  S  b  m
+  i
+  y    Å
+  V
+  Ì
+  "  X
+  ¿  
+  
+  “
+  
+  ñ
+  ,
+  À  `  d  Ã  9
+  è
+  u
+  
+  
+  >
+  
+  
+  p  J
+  ]
+  
+    7  _
+  
+  >
+  =
+  J
+  ∫  >
+  ¯  
+  ˝	  <  !
+  
+  R
+  E  T  >
+  -  r  .  j  å  '
+  b
+    
+  
+  /
+  ‡  #
+  *
+  
+  è
+  Ì  L  5
+  0  à
+    ã  r
+  m
+  k
+  
+  Å
+  `
+  l
+  P  U
+  ˆ
+  e
+  y  ã  y
+  ¨  -  1
+  \
+  Î  
+  ä  I  Õ  ±  N
+  -  k  .
+  #  Ñ
+  Ö  Œ  û
+  ›  @
+  ˝	  
+  6
+  @
+  ´  X
+  Õ  D  ü  ı
+  '
+  Å  8
+  >
+  G
+  ö  
+  ,
+  ¨  Ì
+  -    ë
+  ~  "
+  J
+  Ò
+  .
+  Œ  	  ,  ~  N  \  /
+  ª  Ì  
+  >
+  Ω  ∞  ◊  L  Î	  m  k
+  ¨  ´  r
+  |
+  l
+  ,
+  t
+  o
+  ˝
+  0  "  Ä
+    s  T
+  Å
+  Ï
+  /
+  L
+  @
+  û  
+  P
+  ,
+  ≠    q    J
+  Ï
+  
+  ,
+  é
+  B  6
+  ,
+  ?
+   
+  ı
+  l  ~  ,
+  é
+  +  ò  =
+  Œ  Ñ
+  B  O  L
+  9
+  H
+  k
+  
+  ,
+  ~
+  ú  ,
+  …  N
+  8
+  d  B  >  È
+   
+  o  ö  .  .
+    X  ã
+  
+  J
+  
+  é  Î  k
+  Ô
+    ô
+      Ü
+  Ç
+  o
+  œ  k
+  l
+  l
+  3
+  5  j
+  \
+  y
+  å
+  `
+  Ä
+  ﬁ  Ô
+  l    8  
+  
+  
+  x
+    ,  À  ˙	  ≠  Ì
+  ^  T  Ö
+  Y  /  
+  «
+  
+  ¿  ~  e  ã
+  X
+  ~  
+  œ  r
+  ?
+  Õ  .
+  ^  ˜
+  ç   
+  -
+  W
+  ˝  ,
+  _  3  J
+  ‚
+  .
+  @
+  ˘	  /    "  {
+    D
+  §  
+    ì
+  Ó
+  s
+  ã
+  ∑    p
+  Å
+  Î  %  m
+  j
+  B
+  r  ^
+  l
+  2
+  H
+  Ä
+  z
+  g
+  ¢  k
+  k
+  D  o  F
+  Ë  ¥  
+  
+  ,
+  ó
+  k
+  
+  
+  -    H
+  x  t  ù
+  N
+  ¨  è
+  <
+  /
+  Æ  ,  
+  
+  >
+  D  g  ƒ     ﬁ
+  i  Ï
+  L
+     
+   
+  
+  
+
+  Ì
+  <
+  2  Y
+  6
+  
+  .
+  9
+  Â
+  L
+  ,
+  ‚
+  n  )
+    '  œ  J
+  /
+  ç  Å
+  W  8
+  ´  ö
+  c
+  6  Ü
+  q
+  o
+  <  v
+  ï
+  l
+  0
+  Å    u
+  ”  À  Å
+  Î
+  m  L
+  L
+  ·  ,
+    I  Õ  ≤  s  
+  À  Û
+  /
+  J
+  ü  N
+  >
+  /  ˛
+  }  L
+  ò  b
+  6
+  @
+  Ã  ¨  ﬁ
+  _
+  »  Ô
+  Â
+  "    *
+  >
+  *  z
+    ¨  %
+  s  R
+  \
+  l  .
+  €
+  #
+    L
+  
+  ú    /
+  p  L  .
+  §  
+  4  
+  N  k
+  ´  l  ï  k
+  k
+  
+  r
+  w
+  `
+  (
+  /
+  k
+  l
+    
+  Ä
+  |
+  /  ú  ~
+  +  W  m  >
+  ê  
+  
+  
+  -
+  ˜
+  V
+  ±  ,
+  ?  ≥  ?
+      )
+  Z
+  ¨  .
+  #
+  .
+  Ø  Ã  *  ú  Ô
+  /
+  ƒ  l
+  ï
+  A
+  >
+  M  ˜
+  ,
+  ?  l  π  ç
+  
+  
+  Â
+    y  Ï
+  *
+  n    H
+  d  .
+  Ÿ
+  ¥  n    á
+  >
+  Q  
+  å  C
+  Â
+  ⁄     l
+  ∏  r
+  í
+  Å
+  <
+  ‹  m
+  l
+  9  Ç    w
+  h
+  ±  o
+  +  5
+  J
+  >
+  /
+  g  ã
+  
+  R  
+  ñ
+  l
+  
+  å
+  ¥  -
+  Ã  Û    n
+  ,
+  4
+  ,  k
+  R
+  è  /  r
+  8
+  
+  U  N  œ  L
+  3
+  Ì  *  
+  
+  ,
+  ,    W
+  ç   
+  Ø  J
+  >
+  U
+  N  Í
+  ¨  “  /  Á  ,
+  ≤  '
+  ı  8
+  ¢  q  k
+  é  7  4  k
+  ~
+  O
+  s
+  †
+  Å
+  H
+  ‹  l
+  ˝
+  y  B  Ä
+  ˙
+  3
+  4  r
+  ∂  ]  é  L
+  P  “
+  
+  
+  
+  m
+  Î
+  å  ◊  J
+  ò    
+  ?
+  ´  	
+  l  û
+    >
+  .  ≠  ç
+  
+  -  û  M
+   
+  9
+  N  ˛  L
+  ∫  ,
+  Ô
+  >
+  >
+  q  
+  |
+  L  A
+  
+  ¿  
+  2
+  
+   
+  Â
+  J
+  ,
+  B  n  5
+    •  /  M
+  °
+  j
+  Å
+  ∂  F
+  k  |
+  c
+  D
+  Å
+  Å
+  `
+  ¸  t
+  o
+  l
+  P  A    t
+  π  Ã  `
+  Î
+  Õ  6
+  U
+  ∑  `  
+  
+  6
+  “  Z
+  ,  k  è
+  ë  í
+  ˇ  '
+  ﬁ  =  >
+  ñ  
+  m  H
+  ¨  0
+  
+  ‰  V  /
+  q    8
+  .  X
+  í  
+  
+  ,
+  -
+  ≠  å
+  W
+  ^  œ  <
+  ]
+  
+  N    w
+  œ   
+  ˝
+  .
+  ≤  ß  %  >
+  ]  4  ◊  L  1
+  -  k
+  Å
+  l  r
+  t
+  p
+  -
+  k
+  ≥
+  ˝
+      m
+    ô  ¯	  á
+  V
+  Ì
+  b  G
+  Ω  5  
+  
+  ¿  ÿ
+  ,
+  À  <
+  .  ˇ  ó
+    .
+    
+
+  %
+  8  T
+  v
+  >
+  Î
+  N    ∏
+  9  Á   
+  /
+      >
+  Å  o
+  
+  Ã  ¿  |
+  ≠  A  «   
+  .
+  #
+  U
+  >
+  ‹
+  ì
+  ¬  K  d  8
+  >
+  æ  
+  ¥  Ã
+  Ô  f
+  K  +  µ  Ç
+  k
+    r
+  p
+  o
+  C
+  ê
+  k
+  l
+  9  
+  Ä
+  e
+    ∏  k
+  ¨  E  ¢
+  @
+  
+  ì  ã  
+  
+  Ÿ
+  ¸  F
+  À    ≠  0
+  
+  ß  h
+  
+  >
+  á  
+    N
+  ,  ¨  h  .
+  ˚	    .
+  b
+  
+    A
+  r  Ó  
+  1
+  
+  
+  ¿  ?
+  ¬
+  >
+  ⁄
+    H
+  ;
+   
+  /
+  Ö  b
+  Î
+  
+  Ô
+  d  %
+  .
+  ¥
+  ≥  V
+    V
+  U  Å
+  Ä
+  C
+  l
+  b
+  
+  A
+  2  `
+  l
+  3
+  E
+  Ä
+  i
+  Z
+  ≠  k
+  ¨  ¨  Ø  >
+  
+  ¶  ,
+  
+    
+  ¨  K  í
+  
+  .
+  À
+  j  §  °
+  J
+  l
+  @
+  '
+  ˜  7
+  =
+  π  Ô  F
+  ‰  2  .
+  ë
+  ≈  
+  L
+  Ä  œ
+  ,
+  =
+  ã  r
+  
+  8
+  o  i   
+  !  
+  ˘	  Ï
+  0  E
+  
+  î
+  E  V
+  ﬂ  Ö
+  G
+  ·  U  ≠  D
+  Ì    {
+  Ï  k  r
+  m
+  k
+  
+  p
+  Å
+  l
+    
+    x
+  s  E  Ä
+  Ä
+  Ì
+  ¢
+  X
+     h  
+  
+  j
+  
+  R
+  Î  .
+  C
+  ‚
+  ˝	  Ó
+  ,
+  >
+  Ù  
+  Ÿ  .  
+  9
+  Ó
+  Y
+  û  ´  
+  ,
+  Ì
+  Å  æ  ,
+  c  ß
+  Œ   
+  
+  ≤  
+  N
+  ˛  ^  »  ∞
+  	
+  
+  #
+  ?
+  "  
+  
+  .
+  Á
+  Ô
+  À  I      Ë
+  w    2
+  a  k
+  l
+  7  O
+  {
+  É
+  Ô  ç
+  –  Ä
+  Q
+  @  m
+    t
+  3
+  U
+  l
+  2
+    .
+  ˛  B  
+  
+  X  9  
+  ú  
+  æ  >
+  +  Ø  
+  ù  
+  w
+  >
+  ∑  
+  Æ  ‹
+  ®  Q
+  K  L
+  
+  /    ‚  o   
+  
+  /
+  ,
+  —  M  Û
+  
+  L
+    .
+  Ø    .  j  
+  p  …  ô  
+  .
+  §  i
+  ç  L
+  >  m  À  Ä
+  .
+  K  ~
+  _  V  v
+  k
+  Ä
+    ~
+  l
+  l
+  3
+  ‘  Ä
+  n
+   
+  C
+  p
+  t
+  ﬁ  Ô
+  l    Ÿ
+  
+  
+  ,
+  y
+  j
+  =
+  À  Í
+  Õ    F    E  
+  8
+  -
+  0  
+     ~  d  ã
+  X
+  ~  
+  Œ  s
+  >
+  Œ  .
+  ^  u
+  -  P
+  
+  R
+  =  ,
+  _  «  J
+  '
+  ﬁ  >
+  ‡	  S  K  b
+  k
+  Ô
+  >
+  •  #
+  ˝  M
+  Ì
+  s
+  D
+  ˆ  ]  p
+  p
+  ,  T
+  z
+  Ä
+  8
+    {
+  l
+  3
+  6
+  Ä
+  t
+  d
+  Õ  `
+  Ã  l  Œ  ?
+  ∂
+    	
+  
+  >
+    V
+    <
+  5  ,
+  E
+  Ï  
+  
+  N
+  ¨  .
+  
+  .
+  Ø  ]  L  T  ?
+  
+  †  Ã  è
+  K
+  	  å
+  J
+  M  
+  ˛  ’	  Õ
+  P
+  -
+  Ï
+  !    D  2  ”
+  .
+  Z
+  û  
+  —  %
+  /
+  ª  ≠  >
+  1
+  
+  ç  3
+  Û      l
+  ó  r
+  ü
+  Å
+  (
+  S  m
+  l
+  ˘  B    x
+  Ô
+  3  e
+  ∑
+    ¬  X
+  å!  ≠
+  +  
+  
+  ,
+  O
+  ,
+  l  Œ   
+    
+  #
+  †  :
+  Ñ  F  Ã
+  ·  ‚
+  /  
+  /
+  ,
+    N
+  ,
+    (
+  Ô
+  /
+  æ    
+    Q
+  ^
+    è
+  Ø  ‹
+  ˇ    h
+  ^  ç
+  ¨  
+  Í
+  ‹
+  í
+  Ù
+  é  ˜  1
+  .  Œ  å  œ  ã  N
+  V
+  l
+  ã  l
+  Ä
+  y
+  p
+  /
+  p
+  m
+  l
+  Û  f    x
+  2  3
+  Ö
+  s
+  ˇ
+  
+  M  ⁄  n
+  
+  
+  
+  ,
+  S
+  ,
+  À  
+  .
+  
+  Q  n
+  ˛
+  D
+  >
+  ƒ  ,
+  L  N
+  ¨  H
+  -
+  ƒ  ñ  :
+      J
+  G
+  8  
+  Ç  Ì
+  ‡
+  ≥  π  <
+  û  O  ^  M  ≤
+  é  8
+  Í	  Ï
+  6  ö  ¯
+  .  E
+    •  ¸  b
+  Õ
+  s
+  D  ñ  ”  k
+  k
+  v
+  ?
+  Ä
+  m
+  ∞  
+    m
+  P
+  Ÿ  Ä
+  ˇ
+  X
+  3
+  k
+  x
+  3  
+  Ó
+  d  ˘  
+  
+  ∑  ò  t
+  ú  -
+  æ  @
+  Î  o  
+  ˛  
+  ◊
+  ?
+  ´  
+    "    >
+  L  L
+  
+  /  ≈  ¢  .  *
+  9
+  ∂
+  Ì
+  
+  6
+  `  
+  ¡  !
+    Ã  —
+  
+  0
+  €  *  L  (
+  
+  
+  b  å  Ì  '  Ø  o  å    W  +  ü  k
+  Å
+  ì  r
+  Æ
+  Ç
+  <
+  ª  l
+  ˝
+  Y  ¬  m
+    3
+  ‘  r
+  W  Ÿ  œ  9
+  p  ö  -
+  
+  ≠    ã
+    t
+  Ã  
+    Ì
+  ƒ  l  w  
+  >
+  8  
+  º
+  N
+  ¨  H
+  À  È  /  ≥
+  #
+  ù  ≥  >
+  >
+  ª  ú  -
+  •  l
+  Ω  
+  3  
+  N  O  ˇ  œ  Ç
+  ˛	  L  )  ò
+  ‰  /
+  ª  w
+  á
+  9
+  ¸	  m  L  p
+  ^  Ï
+  ~
+    6  `
+  w
+  o
+  Ô
+  k
+  l
+  ˝
+  3
+  a
+  Ä
+  ˙
+  2  Ï
+  o
+  °    Æ  ¨  ”  o
+  
+  
+  å
+  ˆ
+  #
+  À    6
+  ñ  -  .
+  "  ˜
+  L  >
+  ,
+  
+  Ø  †  Z
+    J
+    ·
+  Ç
+  r  s
+  8
+  Ì
+  l
+  ﬁ
+    Ì    å
+  !  J
+  \  7
+    /
+  ^
+  4
+  é
+  Ø  È
+    *  .
+  û  /
+  ª  i
+  
+  ?
+  
+  n  L  p
+  ^  Ï
+  ~
+    6  Å
+  k
+  p
+  O  t
+  l
+  ˝
+  3
+  a
+  Ä
+    í  L  y
+  °    Æ  ¨  ç  
+  
+  
+  ´  v  u
+  J
+  ^  ¨  Ï
+  "  >
+  n  
+    9
+  0
+  
+  <  ˛
+  #
+  è
+  S    /  Ú	  Õ
+  <  ì
+  J
+  9
+  }  
+  ä  #
+  _
+  6
+  
+  8
+  c
+  
+  #
+  ›
+      .
+  o  
+  ú  Ú
+  T  ¯   
+  @  Æ    Ã  ∞  k  ﬂ  l
+  k
+  k  y
+  ~
+  c
+  |
+  0
+  _
+  l
+  l
+  ì  Ä
+  d
+  e
+  ≤
+  9  l
+  Î  ~  ¬  
+  ˘  *
+  ˙	  
+  
+  y
+  %
+  ,
+  À  ≤  ‰
+  ±  =
+    ò  
+  >
+  ò  q  
+  L  >
+    À  G
+   
+  &
+  œ     
+  ß  8
+  :
+  
+  
+  6
+  Ù  s  >
+  S  #
+    ç
+  n
+  V
+  ∫  å
+  e  	
+  Ñ  
+  n  •  Â
+  ¬
+  
+  N
+    k  3
+  ¡  ¸
+  k
+  6  W  |
+  ~
+  l
+  Õ  k
+  Ç
+  l
+  ®  Ä
+  F
+  i
+  D
+  Æ  k
+  2
+  b    ^  ‰	  Ì  
+  
+  ,
+  ˆ
+  k
+  r  ,
+  ?    9
+  x    
+  N
+  ¨  .
+  
+  .
+  Ø  -  n
+  5
+  >
+  y
+   
+  
+  4  "  g  B
+  |  ç  
+  6
+  2   
+  ,
+  ¡  ﬂ	  R
+    -  Ã
+  Ë   
+  Ø  
+  
+      G  ú  O    Ã  ∂
+  ˜  À  ü  l
+  l
+  í  r
+  ≠
+  Å
+  <
+    m
+  ˝
+  3  ú  Ä
+    2
+  ”
+  o
+  w  ≠  Ç  X
+  6&  0  
+  
+  ¿  Ÿ
+  ,
+  À  7
+  .  Â  ã
+    
+  ^  8
+  +
+    
+  s    
+  è
+  s
+  
+  ì
+  (   
+  ]
+  D  ≥  >
+  p    
+  =
+    
+  -  j
+  v
+  l
+  .
+  #
+  \
+  /
+  }
+  D  ê  C
+  :
+  Î
+  ,  E  N  ﬁ
+  !
+    u
+  ã    ï  `
+  Ä
+  ˜  r
+  z
+  Å
+  <
+  P  k
+  l
+  ˘  Ï
+  ^
+  e
+  ˙
+  Ã  `
+  l  V
+  J
+  G
+  ∂
+  ˝	  -  
+  5  
+  
+  J
+  Ö
+  k   
+  D  -  ‚  
+  
+  a
+  8
+  §  3  F
+  8
+  3  l  M
+  
+  3  9
+  .
+  H
+  -  N  ﬁ    ,
+  Ì
+  {
+  ,
+  9
+  t  ,
+  #
+  m
+    a  
+  l
+  
+  &  ,
+    #   
+  §  !
+  .
+  Ô
+  l  V
+    ∑
+     k
+  k
+  ò
+  r
+  †
+  Ç
+  H
+  ì
+  l
+  l
+  s  Ç  m
+  i
+  Ô
+  h  o
+  ∂  \  é  J
+  T*  ≈
+  
+  
+  ,
+  ˆ
+  m
+  ¸  —  1  ±  >
+    %  
+  N
+  ¨  .
+  Ã  n  %
+  ,
+  .
+  ›
+  L
+  Ö  Ø  n  æ  >
+    å
+  8
+  8
+  G
+  ˙  Ñ
+  ,
+    ≠  7
+  À  Q  é
+  ‰
+  j  q  
+  <  Ñ  Ó
+  Œ  .
+  ≤  `  /
+    C
+  œ  ã
+  ü
+  k
+  Å
+  ã
+  ¯  |
+  å
+  
+  
+  w
+  m
+  l
+  $  e
+    x
+  ì
+  Î
+  ~
+  E  O  œ  @
+  u  «  
+  P  >
+  L  N
+   
+  Ã  #
+  N  6
+  ±  |
+  ˛
+  =  >
+  ç  ‹
+  %
+  \
+    X
+  1
+    5  m
+  #
+  =  ¥  J
+  K
+  Ï  
+  ,  .
+  
+  ˝  
+  R
+  &
+  å    #
+  {  '
+  ˙	  Ï
+  Ò  è  }  N  ™  #
+  ,  >
+  ^
+  ˚  ã
+  l  "  Ì  l
+  l
+  Ç
+  s
+  m
+  r
+    g
+  ∏
+  ˝
+  Å  "  Ä
+  Í
+  ”  Â  k
+  Ä
+  î  .
+  G
+  E'  
+  ˘	  
+   
+  V  -
+  À    ,
+  r  >
+  /
+  
+  
+  1  >
+  ∏  
+  ì
+  û
+  Ã  .  ˜  ò  3
+  M   
+  W
+  D  ≥  >
+  o  Œ
+  
+  Ã     b
+  ≠  A  «   
+  .
+  #
+  U
+  ?
+  ‹
+  .
+  ™  D
+  }  é
+  8
+  Ω  —  a  ö
+  ï
+  Ü
+  ˜  ó  j  x
+  q
+  +  l
+  
+  Ä
+  A
+  Q  Ñ
+  l
+  C
+  J
+  Ä
+  Y
+  Ì
+  -  ~
+  ,  ≈
+  >
+  T
+  .
+  à  
+  
+  
+  x
+  
+    K  
+  Ã  
+    9
+  ¬  é  h  >
+  ◊  *
+      +
+  Ó
+  u
+  
+  
+  «
+   
+  a
+  E  S  ?
+  v  †  
+  ‹
+  
+  ¡  !
+  8
+  ¸     ,  »
+  á
+  0
+  Î
+  /
+  L  ;
+  .
+  
+  "   
+  #
+  •  n  è  g
+  u
+  ÷  ∂
+  €  l
+  Å
+  k  •  `
+  Å
+  ‚  Û
+  î
+  †
+    K
+  Ä
+    F
+  Ñ  o
+  n
+  ƒ  >
+  +
+  
+  ·
+  
+  
+  
+  ñ
+  <
+  K  <
+  5  l  G
+   
+    b
+  
+  l  ü
+      †  â  ≈
+  -    Ó
+  
+  e   
+  î
+    >
+  Õ  H
+  
+  
+  Î
+  r
+  \  <
+    ÿ  Ñ    ,  J  #
+  é
+  .
+  $  ‚  
+  $  f  Ô
+  N
+  #
+  G
+  s
+  Ã  ,  M  l
+  k
+  í  r
+  â
+  k
+  B
+  e
+  m
+  l
+  ¡  \  Ä
+  j
+  3  •  `
+  d
+  Ì
+  ¢
+  Z
+  }#  ’  ,
+  
+  
+  y
+  M  +  O  Ú
+  ã  "  O   
+  ï
+  Æ  
+  Ã
+    !
+  ﬁ
+  
+
+  /    
+  
+  N
+  ¨  ¢  Ê  ¶
+  8
+  %  
+  
+  
+  å
+  Ä
+  R  -
+  ¡  ÷
+  $  Ó
+  +
+  L  x
+  o  °    
+  d
+  
+      Ö
+  ¬
+  
+  H
+    k  2
+  
+  k
+  k
+    7
+  `
+  ~
+    ç
+  u
+  l
+  ˚
+  é
+  r
+  d
+    3
+    k
+  3
+  ‚
+  .
+  d  R
+  
+  ”
+  
+  
+  À  J
+  Ã  V
+  ¨    
+  /
+  .
+  N
+  Ü  >
+  ß  
+  ç
+  8
+  
+  é
+  K  ∏
+  À  >
+  #
+  º    L
+  r  	
+  ”
+  >
+  Ù  6
+  J
+  J
+  ¨    Ù  
+  >
+  ∫  ,
+  o  1  E
+  /  .
+  ≤    ﬁ  ~
+  Æ  V
+    ˘  -  k
+  r
+  ,  Ñ  “
+  {
+  ˆ	  J
+  •
+  l
+  –  J
+  Ö
+  x
+  d
+  Ñ  k
+  å  ≈  .
+  J
+   
+    
+  
+    k  y
+  <
+  À  ¨  “    ˝  
+  @
+  ⁄
+  å  d
+  
+  -
+  Ã  ÷
+  Z
+  K  X
+  ∂
+  v   
+     Â
+   
+  >
+    
+  ¸  =
+  Ã  p  +  Q
+  K  J
+  3   
+      ∫  Ã  	
+  n  Ÿ
+  ~
+  ˚  
+  -  >
+  Q  .
+  Ä
+  ¨  ã  V
+  k
+  \
+  ∑
+  r
+  k
+  {
+  <
+  
+  x
+  ˝
+  Ÿ  ,
+  m
+  ˙
+  Q
+  .  o
+  f  Î
+  I
+  >
+  
+  ¬  
+  
+  ,
+  ˆ
+  
+  K  ë
+  µ  -  M  D  &
+  $  ü
+    Ï  Ï
+  >
+  C
+  ´  Ã   
+  J
+  ≠  
+  Ó
+  !
+  =
+  /     å  I
+  >
+  ^  Ø  ´  6
+  Ù  L  L
+  -
+  -  |
+  
+  ¸  G
+  
+  è  Î  >
+  •  œ  5  8
+  Ç  û  k
+  Ô  §  9  k
+  Ç
+    r
+  r
+  |
+  <
+  º  g
+  l
+  Å    a
+  j
+  3
+    Ä
+  k
+  1  /  8
+  '  
+  
+  
+  
+  x
+  º  -  À  ˙	  ¨  Ì
+  @  T  Ñ
+  X  .  ,
+  /  	
+  ≠  ^  Ï  ì
+  G
+  ~  Ó
+  ˛
+   
+  0
+  Y  1
+  ò  
+  
+  ¸  
+  _
+  %
+  !
+  _  ñ  Ô
+  Ô
+  :
+  J
+  ¸	  0  §  ï    .  8
+  §  —  ·  á
+  Ã  ÷  +  ˜  ]  `
+  \
+  Ã  T
+  z
+  Ä
+  8
+    k
+  l
+  2
+  6
+  Ä
+  u
+  Q
+  Õ  b
+  Ã  l  Œ  >
+  
+  V  
+  Q
+  I
+  Ã  A
+  Õ  
+  À  ,
+    £  ‘  R
+  ’
+  K
+  å
+  B  U  =  N
+  ±  å    W
+  
+  ﬁ  ’  J
+  C
+    ÿ
+  
+  
+  ∞
+  ≠  Ï
+  e
+  
+  Œ
+  l
+  .
+  T
+  Ù
+  4
+  L    ,
+  í
+  
+
+  æ  e    é
+  N
+  #
+  Œ  ,  å  å
+  Ø  Å
+  ö
+  w
+  r
+  
+  k
+  m  ~
+  †
+  l
+  B  ‹    e
+  Û  e  p
+  ,  Ç    U
+  é%    ,
+  
+  Ä
+  ﬂ
+  H
+  ´  Î    Œ  k  á
+  Ω  ¬
+  n
+  X
+  p  
+  ›
+  N
+  ¨  G
+  R  D  s    .
+  t  Å  >
+  A
+  N
+  
+  
+    G
+  ^
+  <
+  #
+  .
+    H
+  ˛  L
+  €
+  Ã  ¯
+  :  L
+  o  Ô
+  L  "  o  Â
+  =
+  s
+  K  7  
+  {
+  k
+    r
+  |
+  Å
+  <
+  s  ~
+  l
+  3  ⁄  Ä
+  e
+  ê
+  ”
+  Ä
+  b
+    b  X
+  ∑$  
+  
+  
+  †  ¯  ,  !
+  À  V
+  w
+  .
+  q  
+  
+  
+  >
+  å
+  
+  
+  ‡
+  ˛
+  Ö  -
+  X
+  ‰  «  O  U  9
+  Ì
+   
+  ~
+  V  ç  *  ,
+  W
+  ]  ,
+  _  3  J
+  ‚
+  .
+  @
+  ¸	  0    "  k
+    F
+  §   
+    3
+  Ó
+  s
+  ã
+    Z  Ö
+  k
+  ´  ”  o
+  ]
+  b  í  ã
+  l
+  C
+  7
+  Ä
+  i
+  d
+  ¬
+  k
+  k
+  ‰    >
+  
+  
+  
+  ﬂ
+  
+  ˆ
+  k
+  “  ‹
+  ¥  7
+  >
+  ò  
+  †  H
+  ¨  O  Õ  Œ  %
+  \  å
+  Ù
+  F
+  m  
+  œ  D  o  Ÿ  L  >
+  .
+  >
+  Ñ  Â  ´  <
+  Ù  =  m    ,
+  
+  è      (
+  Ô
+  
+  .
+   
+  §   
+  >
+  
+  Œ  Î  k
+  .
+  ´  ô
+    V  Ä
+  l
+  o
+  o  {
+  l
+  l
+  3
+  5    x
+  ì
+  Î
+  ~
+  E  O  œ  @
+  ü  
+  
+  
+  ,
+    N
+  
+  Ã  -
+    ç
+  ±  ›
+  Æ  Ê  X
+  
+  
+  ∞
+  N
+  ¨  H
+  
+  
+  0  
+  
+  J
+  Õ   
+  §  Ñ  +  6
+  ’  m  <
+  
+  I
+  Ô
+  3
+  r
+  
+  €
+  
+  
+
+  é
+  o  
+  B
+  !
+  •  3
+    o  ¨
+  s
+  W  w  *  k
+  Å
+  ¯
+  Å
+  †
+  Å
+  <
+  º  l
+  l
+  y  ¬  b
+  e
+  C
+  	
+  `
+  m
+  Ì
+  B
+  Z
+  ∆  p  ,
+  
+  4
+  ÿ
+  L  +  N  Ú
+  ã  ú  N   
+  ı
+    
+  ≤
+  å  T  t
+  Ó
+  
+    ˇ  7
+  >
+  ¨  ô  k  ≈  F
+  
+  
+  
+  <
+  ¿  
+  ¿  L
+  	
+  8
+  ˚
+  ˘
+  Q  "  N
+  
+  d  Ô  	
+  ´  ,  ∑  >
+    
+  T
+  -  x
+  Ä
+  +  ⁄	  k
+  v
+  ˜  r
+  z
+  Å
+  <
+  P  k
+  l
+  ˘  
+  Ä
+  r
+    .  `
+  Ê  Î
+  B
+  U
+  
+  ù  
+  
+  E  ò  
+  K
+  Ã  n  m  
+  
+    _
+  	  >
+  ß  Á	  ,
+  À  ~  7    V
+  
+  9
+  8
+  á
+  .
+      
+  
+  ç  k
+  U  —  >
+  Ô
+  ~  R
+  °
+  ‰  J    ¬  Œ  î  T    }
+  ˘  §  ?
+  h
+  ©  -  ¨  Ï
+  Õ  à
+    ã  r
+  m
+  k
+  
+  k
+  µ
+  l
+  –  ˙    e
+  S  ≈
+  l
+  À  å
+  @
+  L
+  ‰#  ê
+  
+  
+  6
+  “  O
+  ,  k  é
+  @  ã
+  ‚  '
+    ›
+  E
+  Ø  
+    Z
+    ,
+  
+  Ñ  ï  I
+  ±  ¯
+  ø  Ó
+  J
+  G
+  È	  À
+  
+  ,
+  Ï
+  ¥  6
+  {  !  9
+  é
+  }  O  a    å
+  
+  
+  û  #
+  
+  §  -  >
+  
+  i
+  Ã  `
+  ø  C
+  
+     6  Ä
+  p
+  Ä
+  Ô
+  c
+  l
+  l
+  3
+  T    e
+  ì  ã  t
+  Ñ  è  ?
+  Z
+    
+  
+  ,
+  å
+  Ã  ^
+  
+  Ã  -
+  œ  Ï
+    =    F  Z
+  
+  
+  
+  N
+  ¨  W
+  
+  
+  Ô  .
+   
+  >
+  
+  !
+  d    
+  
+  ~
+  Ç    L
+  
+   
+  .
+  
+  ª
+  (
+  s  Ï
+  Ø  Ô
+  }  .
+  §  m
+  
+  >
+  \  Ü  ÷  l  e
+    k
+  +  À  r
+  y
+  {
+  å
+  
+  ≥
+  l
+  °
+  <  y
+  e
+  y  ã  d
+  ‰    >
+  ;
+  Å  
+  
+  -
+  ,
+  y
+  À
+  <
+  À    7
+  J
+  ˙  o  8
+  º  >
+  ´  ˇ	  Ã  ü
+  ,
+    3
+  X
+    .
+  %
+  Q
+  Æ  K
+  B
+  T  *
+  
+
+  ,
+  ,  Û
+  Ä  N
+  l  -  Í  Õ
+  Ò
+  Î
+  Ò	  |
+  å  _    l  Ã  ¯  é
+  >  r  n  v  À  ,  ]
+  y
+  k
+    r
+  k
+  `
+  C
+  O  z
+  l
+    
+  Å
+  \
+  e
+  
+  o
+  ∆  Î
+  Ç  *
+  
+  *  
+  
+  —  Ÿ
+  ‹
+  +  A
+  ≤  O    4  .
+    Ù    
+  
+  R  
+  N
+  >  C
+   
+  ´  é  l
+     '
+  3
+  >
+  ¬  
+  -
+  >
+  À
+  |
+  1
+  8
+    ö  å  ¿  
+  ˙	  Ï
+  –
+  
+  ,
+  å  ‰
+  é  ˜  !
+  J
+  !  g
+  ç  ÷  m  +  ©
+    ã
+  u
+  m
+  o
+  º  ~
+  `
+  l
+        v
+  S  K  m
+  D  9
+  /
+  >
+  $   
+  
+  -
+  ,
+    Z
+  
+  Ã  ,
+    ç
+  ±  `
+  Ø  á  G
+  
+  ,
+  @  N
+  l
+  S
+  )  
+  0  
+   
+  I
+  Õ   
+  §  V  
+  *    °  N
+  ]  H
+    .
+  ﬁ  ˝    /  …  å  	  Æ  
+  Ó
+  ^  }
+  Ì  J
+  Ñ  é  l  k
+    L  ~
+  Ä  ñ  u
+  y
+  p
+  Ø  s
+  l
+  ˝
+  3
+  a
+  Ä
+    ë  L  o
+  °    Æ    ¨  
+  
+  1  ,
+  ñ
+  l    >
+  !
+      $
+    7
+  ,
+  ?
+  
+  
+  :
+  ,
+  N
+  k
+  M
+  2
+  
+  ,  .
+  U
+  9
+  Z  .  ¯  &
+  
+  <
+    
+  ,  e
+  v
+  R
+  
+    :
+  >
+  	
+  Â  0  è  ù   
+  ,  *
+  n  >
+  1
+  
+    C
+  •  B  o
+  m
+  ÿ  r
+  ë
+  Ç
+  <
+  ì
+  l
+  l
+  ≥  ¸  m
+  p
+  C
+  s
+  Ä
+  |
+  M  ¢
+  T
+  Ñ#  u  ,
+  
+  l  
+  
+  J
+  Ö  +  .
+    Æ  u
+  ú  >
+  Z
+  j
+  J
+  å  Ô
+  7
+  >
+  å  m
+    N
+  ¨  
+  8
+  N  /
+  Æ    
+  
+  <
+  j
+  <  m  X
+  ÷
+  
+  >
+  n  L  L
+  Ç
+  Q  ,  <    é
+  >
+  æ  
+  @
+  Ó
+    ã
+  k
+  L  1
+  k
+  {
+  Î
+  ÿ  Å
+  Ö
+  |
+  6
+  k
+  w
+  ˝
+  #  Ä
+  d
+    p  ì  k
+  K  ˛
+  b  ˛  %  
+  
+  l
+  K
+  À  J
+  Ã  V
+  
+  Ó
+  
+  .
+    ı
+  î  9
+  ˝  
+  v
+  >
+  Î
+  N    ∏
+  S  Ë  
+  
+    #
+  ê  
+  ˘	  -
+  Ã  ì
+     [
+  l  -  ä  Õ
+  ë
+  Î
+  /
+  |
+  Ï  Ç    Ã  Õ  X  è
+  û  å  Œ  v  À  ,  
+  É
+  `
+  ∑
+  r
+  ~
+  k
+  <
+  ∞  k
+  l
+  y  
+  Ä
+  i
+  r
+    k
+  Ã  k
+  ¬  2
+  §  
+  j
+  ,
+  M  ∂  ∂
+  2  Ï
+    ”  *
+  /
+  
+  (  Z
+    Ô
+  ,
+  é
+  Ø  D
+  é  µ  J
+   
+  9
+  Ô
+  ˛  R
+  F  W
+  
+  ,
+  
+  
+  
+  Ù  ,
+  /
+  
+  E
+  À  G
+  ¢  \  d
+  B  O  
+  M
+  /
+  .
+  ÷  î
+  Â
+    k
+  ã
+  7  ´
+  k
+  
+  l
+  Â  }
+  s
+  6  s
+  â
+  “
+    H
+  Ä
+    F
+  Ñ  o
+  n
+  d  >
+  >
+  
+  ˙  ¢  
+  Ω  Ÿ
+  +  
+  3  é
+  L
+    E  ã  Ø  
+  ˜  /
+    l  
+  
+  ¿  9
+  •  T
+  x  k
+  .
+  (  Æ  8
+  #
+  Ó
+  û  9  
+  p    L  1
+  
+    ,  /
+  T
+  T  ô
+  ¨  d  
+  Ú
+  
+
+    ≈    Ô
+  Z
+  $
+  [
+  å  ´  L  o  ≤
+  z
+  p
+  Ü
+  é
+  z
+  <
+    l
+  l
+  y
+  ¬    u
+  3  
+  n
+  k
+  N    X
+  N)  
+  |
+  2  
+  
+  S
+  !
+  ¨    J
+    
+  #
+  @  .
+  $  Ê  l
+  Å  Å
+  Œ  
+  
+  :
+  ≠  `
+  -
+    8
+  é
+  K
+  ^  ‘  k  %
+  ı  ù  ,  #
+  /
+   
+  Ö  1
+    b  ˛
+  z  Ï
+  l
+  |
+  §  .
+  >
+  æ  d  B  
+  ü
+  7  c
+  C
+  
+  k
+  k
+  ◊  W  å
+  è
+  l
+  Ã  k
+  Ç
+  l
+  ®  Ä
+  F
+  i
+  D
+  Æ  k
+  2
+  ¬    D  2  -  
+  
+  ,
+  ñ
+  k
+    ,
+  @  ≤  >
+    ≈
+  0
+  Z
+  ¨  .
+  ,  œ  %
+  !
+  ”  |
+  /
+  .
+    "  &
+  8
+  8
+  
+  
+  
+  Ã    C
+  b
+  X
+  N  
+  ‡	  Ï
+  /
+  #
+  "
+  >
+  ,
+  N  \  .
+  ≤  ç  $  >
+  \  «  v  Ï  Î	  m  k
+  ´  ´  r
+  Ä
+  |
+  ,
+  u
+  ¡
+  ˝
+  ¢
+  º  m
+    Ÿ  Â  {
+  k  Õ  9
+  L
+    ,
+  
+  
+  -  ÿ
+  +    Õ  /
+  J
+  ]  !
+  h  
+    O  æ  $  
+  ´  >
+  ¨  L
+  Ã   
+  ë  o  
+   
+  Ì  8
+  
+  ü  
+  D
+  G
+  ¨     L  >
+  ¸   
+  $  è
+  K
+  #
+  Ò  Ã     Ø  h  >
+  æ  Ø  T
+  8
+  J
+  T  ¨  é  ê  x
+  k
+  q
+  “
+  r
+  ~
+  }
+  ,  ú
+  ´
+  ˝
+  ¢  B  Ä
+  ˙
+  9  
+  É
+  W
+  Ì
+  .
+  T
+  3$  
+  +  
+  
+  ˆ
+  L  Ø  L  ã  ,
+  .
+  
+  X
+    [  8
+  È  å
+  
+  >
+  Ã  è  W  ò  4
+  Ó
+   
+  W
+  E  S  >
+  ﬁ    
+  ˇ	  
+  ¡  >
+  1
+    »
+  Ô
+  z
+  l
+  M
+  
+  ã  É  
+
+  C  L   
+  l
+   
+  ú  S  ‹
+  s
+  7  w  
+  y
+  Å
+    ƒ
+  o
+  Ä
+  "  2  é
+  l
+  ≈  <
+  d
+  W
+    §
+  o
+  L  E  ¬  >
+   
+  
+  m
+  
+  Ω  h  
+  .
+    k
+    R
+  o  "  
+  
+  a
+  X
+  ˆ  ”
+  6
+  8
+  «  k  >
+  Ñ  Û  ≥  Õ  >
+  .
+  >
+  ﬁ  e  K  å  1
+  ,
+  ?
+    ,
+  k  #
+  ~  
+    i  ˛
+  Ï
+  
+  ¨  >
+  Ó
+  X  b  .  5
+  8
+  Ä
+  L  v  *  `
+  b
+    r
+  `
+  Å
+  H
+  4
+  o
+  l
+  Y  Ç  Ä
+  w
+  C
+  Û  Å
+  V
+  Ì
+  "  X
+  ü%    
+  
+     ó  }
+  ä
+  l  ´  L
+  =
+  "
+  é  ]  ‘	  {
+  8
+  á  Õ
+  *  N
+  Ö  å  ]  >
+  
+    
+  ˝  
+  @
+  ?
+  z  
+    Q  r
+    I
+  ß  
+  ‰
+  -  _
+  .
+  ™  ,
+   
+  
+  
+  r  -  ^  é
+  ]
+  f
+  Œ  ,  ê  Ã  I
+  ∂  k
+  +  É
+  å
+  k
+  e
+  #
+  `
+  l
+  l
+  S  ß  _
+  _
+  2  3
+  k
+  r
+  N
+  .
+  ,
+  £  :  
+  
+  -
+  ˆ
+  V
+  ]  
+  ?  ±  ?
+  x  .  )
+  Y
+    .
+  m    9
+  ,
+  .
+  ﬁ
+  8
+  K  O  n  ^  >
+    å
+  8
+  8
+  G
+  Â  
+  ,
+  ≠  Ì
+  Ã    3
+  ﬁ  )
+  J
+  Q  e   
+  d
+  .
+    #
+  ≤  °
+  
+  ø  ÷    D
+  0
+  k
+  q
+  C
+  ò  x
+  Ñ
+  |
+  #
+  
+  m
+  l
+  á  m
+    X
+  P  Æ  y
+  C
+   
+  Œ  ‰  
+  
+  å  ,
+  À  p  N
+  Ö  K    .  t  —  ù  ˙
+  ﬁ  í
+   
+  ·  v
+  >
+  -
+  
+  ∏  ,
+  Q  N
+  3
+  œ  >
+  .
+  
+  +  |  ï
+  ¸  ~
+  ˛  ∞
+  ®  ®  *
+  /  P
+  î
+  b  π  Ã  Æ
+  B  Ô
+  3
+  ‡  J
+  Ô
+  .
+  
+  ¢  +      ¯  k
+  l
+  S  r
+  ë
+  ã
+  (
+  ‹  p
+  ˝
+  y
+  ¸  m
+    D
+  3  {
+  ÷  ë  >
+  8
+  g  
+  
+
+  
+  j
+  V  ,
+  À  n  ,
+  r  >
+  /
+  
+  
+  	
+  ?
+  ∏  ﬂ	  x  
+  N
+  ¨  U
+    
+  Ó
+   
+  X
+  ‰
+  ç  V
+  
+  
+  -
+  m  6
+  ¡  L
+  l  m  *  
+  0
+  Î
+  ~  j  $
+  L  ~
+  <
+  >
+  •   
+    e  -
+  Ä
+  Ï
+  ¨  4  Ç
+  k
+  Ä
+  r
+  |
+  o
+  C
+  Ô
+  z
+  l
+  π  ç
+  m
+  u
+  Q
+  é  o
+  á  2
+  ¬  ,
+  
+  «  Ó
+  *  Q  «    Ú
+  =  u  Õ  L
+  J
+  
+  x  H
+  ¨  N  Ì
+  „  m  ç  ,
+  L
+  L
+  D  Æ  3
+  ¬
+  T  Ÿ  L  G
+  é  
+  
+  5  
+  !
+  L  
+  ¿  /
+  
+  R
+  >
+  œ  ‡
+  û
+    .
+  N  
+  §  .
+  ,
+  
+  N  l  ∑
+  N  À  ö
+  @  v  f
+  y
+  o
+  œ  Å
+  Ç
+  l
+  3
+  ï    j
+  y
+  å
+  l
+  Â  Ô
+    F
+  ô  Ì
+  
+  -
+  ,
+  M  N
+  ,
+  À  
+  N  
+  Q  o
+  æ    >
+  ó  Ì  
+  N
+  ¨  U
+  
+    ’
+    %
+  
+  >
+  è
+  G
+   
+  
+  
+  À
+  U  ù  6
+  4  ë  '
+  9
+  
+  €
+  (
+  
+  Ó
+  /  
+  ¢
+   
+  §  Ç
+  ﬂ  o    s
+  ∑  w  ä  k
+  d
+  ¯
+  Å
+  ©
+  Å
+  <
+  \  l
+  l
+  3  |  Ä
+  j
+  C
+  	
+  `
+  m
+  Ì
+  B
+  A
+  ç  0  
+  
+     h  |
+  0
+  ,    +  %
+  J
+  .
+  Û  |
+  ∏  
+  /
+    ﬁ  Ø    ¥
+    Ó
+  ˘	      .
+  B
+  •  }  r
+  -  P
+  
+  R
+  <  ,
+  _  «  >
+  !
+  K
+    ∫  
+  o  ‹  ú  
+  Ó
+    ã
+  #
+  >
+  ˛  -  ã  p
+  è
+  ´  ô
+  _  V  Ä
+  ~
+  o
+    r
+  l
+  l
+  3
+  ‘  c
+  Y
+  í  D
+  
+  k
+    è
+    R    ,
+  
+  Ï
+  9     
+  Ã  ´  -  m    ‘    ÷
+  >
+  å
+  
+  
+  ‡
+  û
+  %  2
+  U
+  Ñ  f  Ô
+  ı  8
+  ‹  $  ≤  ,
+  ◊  @
+  Ù  ,  >
+  Ô
+  
+  G  R
+  ≠  J    /  π  
+  .
+  ∑  %
+  Ã  ≈  
+  >
+  ¿  
+  k
+  Ï
+  A  c  k
+  k
+  8  r
+  û
+  Å
+  <
+  Y  l
+  l
+  S  b  Ä
+  n
+  C
+  Û  r
+  V
+  Ì
+  "  X
+  K    
+  
+  @  «  º    Õ  e  
+  w
+  #
+  
+  
+  2  ‹  ˛  _  
+  +  û
+  W  G
+  ÿ  w  .
+  .
+  ƒ  J
+  !
+  è
+   
+  Á  ,
+  
+  ç  ,
+  W
+  !
+  n
+  $  #
+  $
+  1
+  ¸	  L  D  ú  é  
+  Ñ  D  ≥  .
+  N
+  ç    l  l  C
+  è  Å
+  ã  k  r
+  l
+  z
+  ,
+  ~
+  Õ
+  l
+  A
+  ¬    j
+  ô  $  p
+  Ä
+  ?  "  G
+    
+  
+  
+  †  
+  S
+  
+  À  ‹
+  Ô
+  b
+  ±  ›
+  
+  p
+  G
+  
+  
+  (
+  N
+  ¨  A
+  F  /
+  @  è
+  œ  û
+  B  |  û  -  E  
+  ~
+  Î
+  º  
+  J
+  ≤
+  .
+  #
+  ‘  ]  >
+  Î	  Ï
+  N  «  2  
+  .
+  Õ
+  ^  Ç  
+  M
+  ˜  k
+  2
+  
+  k
+  
+    ∑  m
+  ã
+  o  l  o
+  {
+  h
+    Ä
+    x
+  C
+  .  Å
+  -
+      >  ,  P
+  
+  w  ˘  o
+  <  ,
+  æ  >
+  !
+  
+  ¡  ƒ
+  Ï
+  L
+  e    Ç  í
+  N
+  ¨  G
+  1
+  ﬁ  ı  Õ
+  #
+  ú    ?
+  >
+  l  
+  P
+  Ú
+  ¥  ˝  ≤  G  -
+  /    º    /
+  ˘	  Ï
+  	  
+  
+  #
+  •  o  ±  L
+  U  k
+  +
+  l
+  C
+  C
+  t
+  _    {
+  k
+  o
+  #
+  z
+  l
+  ˝
+  3
+  
+  m
+  ˇ
+  2  Ï
+  }
+  °    Æ  ≠  =    
+  
+  Õ  ÿ
+  +    Î  .
+  L
+  
+
+  n  ﬂ  h  ,
+  ?
+  D  
+  W  .
+  Ã  ê
+  V
+  ÿ
+  C
+  Ω  è  -  
+   
+  9
+  
+  
+  P
+  K
+  :
+  ,  j
+  Ã  >
+  >
+  €
+  
+  ª
+  v
+  ‘  L  2  O  }  .
+  §  Á
+  R
+  J
+  º    7  Ã  "  n  k
+  Î  {
+  r
+  k
+  |
+  ¨  k
+  Õ
+  l
+  ¬  \  a
+  n
+    Ö  k
+    #
+  >
+  L
+  »   ,
+  ä  Ã
+    ®  Ï
+  L
+  
+  ´  
+  E  1
+  
+  E
+  >
+  ∏  
+  /
+    ƒ  Ø    æ
+  x  Ó
+  b
+  ,  w  è
+  ?
+  •  x  8
+  -  j
+  ,
+  W
+  ú  -
+  `  Ø  L
+  3
+  P
+  u  ∫  
+  o  ‹  ¸  
+  Ô
+  e  i
+  $
+  >
+  ‰  .  ã  p
+  è
+  ´  ö
+  ø    {
+  v
+  ~
+  o  u
+  l
+  l
+  4
+  4  m
+  q
+  ì
+  ã
+  Ä
+  Ä
+  .
+  N  Ã    ˝	  
+  
+  
+  x
+  \  m    
+  M  -
+  Ù  Û
+  #
+  ô  o  
+  
+  
+  †  æ  E  C
+  X
+  D  Ü    {
+  ?
+  .
+  
+    ¢  :
+  N  U
+  
+  >
+  ˛
+  
+  ë
+    ˇ
+  J
+  ∫  ,
+  Æ  ˝
+  
+  b
+  .
+  ≤  œ  
+  T
+  Õ  Ã  l  +  µ  ö
+  k
+  W
+  r
+  î
+  {
+  <
+  C
+  k
+  l
+  Ÿ  
+    x
+  h
+  
+  k
+  C
+  K  .
+  >
+  	
+  »    -
+  —  ,
+  ˆ
+  k
+  ,
+    q  Ì
+  >
+  ñ  ‰  ¸  Â  4
+  V
+  ó  ,    8
+  Q  œ  Õ  q
+  .  2
+  L
+  d  /
+   
+  ÷	  
+  ù  ä  
+  ¡  å
+  x  Ò
+  $  #
+  —  L
+  ‹
+  ‰  ¬  Œ  .
+  p  L
+  Œ  å  J
+  ë
+  .
+  k
+  Ï
+  À
+  ”  q
+  k
+  ~
+  r
+  k
+  `
+  <
+  Ô
+  k
+  ˝
+  Ÿ  
+  Ä
+  ˙
+  Q
+  Ù	  `
+  F  C
+  H
+  >
+  
+  ﬂ  
+  
+  !
+  ˆ
+  6
+  K  6
+  .  m  ç
+  û  ©  U  H
+    å  |
+  ?
+  ¿  |
+  Ô
+  M  >
+  å  
+  Œ  §  œ  $
+  Î	  Ï
+  >
+  >
+  >  Á  Â
+  ñ  l
+  ,  ,
+  #
+  >
+  
+  /
+  —  P
+  û  
+  ∑  J
+  •  Â
+  3
+  9
+  !  p
+  C
+  3
+  Û  7  p
+  Ä
+    r
+  z
+  Å
+  <
+  s  y
+  l
+  3  È  Ä
+  e
+  ê
+  ”
+  Ä
+  e
+    b  X
+  â  –  
+  
+  @  ò  Õ  !
+  l  l
+  ã
+  .
+  q  
+  
+  
+  >
+  å
+  ,  ¬
+  m      ≥  V
+  >  Æ  æ  T
+  9
+  z  ‰
+  ∏  /  
+  
+  Ù  -
+  J
+  8
+  !
+  Ì
+  -  |  ¥  9  ¨  ﬁ  
+  d
+  	
+  
+  ‰
+  d  .
+  O
+  G  º
+  Å
+  K  Î  ﬁ
+  k
+  k
+    r
+  Ö
+  î
+  I
+  ú  l
+  l
+   
+  ¸  Ä
+  v
+  3
+  	
+  
+  m
+  Ç  ‚  X
+  5  
+  e
+  
+  <
+  ¨  ∂
+  º  Ö
+  U  q  @
+  œ	    ˇ  U  Ã    ¸   
+  #
+  "  ˇ  
+  >
+  
+  ∞  *
+   
+  è
+  Ô
+  J
+  "  5
+    
+  ~
+  ,  .
+  Ã  ≤  8
+  8
+  Õ  Ã
+  /  ±  J
+  ;
+  
+  t  L
+  
+  ≤  Ì
+  >
+  a
+  
+  å  4
+  Ò  ^    k
+  w  r
+  à
+  Å
+  <
+  y
+  r
+  l
+  ô  ‚    [
+  C
+  s
+  d
+  k
+  ≠  b  G
+  ”  Y  ⁄  E
+  
+  !
+  ^  —  X  Ì
+  ?
+  >  j
+  v  ÿ  ~  
+  d    i
+  M  ,
+  
+  
+  S
+  Ÿ
+  m  O    ¥  Z  l    
+  /
+  
+  Î  µ  
+  Ç  ‚  ,
+  "  å
+  n  Ù
+  é
+  ‰  ¬  .  (
+  ?
+      &    d  è  w      ,  k
+  
+  ÷  ‹
+  {
+  l
+  %  Û  ë
+  •
+  /  <
+  ^
+  ˙
+  d
+  Ó  k
+  l
+  Õ  Ó
+    §  w  V
+  
+  ,
+  
+  ¿  
+  Ω
+      ,
+  $  ´  
+  ç  é
+  
+   
+  
+  Î  L
+  
+  ç
+  >
+  Õ  ë  n  E  J
+  
+  #
+  
+  4
+  Ñ
+  r  .  ü
+  
+  %  j    >
+  œ  G  f  m
+  >
+  n
+  
+  ’  Ÿ
+  ﬁ
+  I  
+  .  G
+  ±  /
+  Ä
+  L  +  ˇ	  k
+  l
+  l
+  r
+  |
+  q
+  6
+  Ô  k
+  ˝
+  U  M  Ä
+    d
+  
+  Å
+  D
+  +  L
+  >
+  
+  ì
+  u  s
+  
+  U  Æ  
+  p  <
+  >
+  >
+  å
+  
+  
+  å
+  ˛
+     
+  ,  l
+  x
+  #
+  #
+  >
+  p  O  9
+  "  .
+  H
+  9
+  ˝	  »
+  
+  ›
+  -  1
+  Y
+  ç
+  Ï  6  
+  @
+  
+  Ù	  /
+  o  7  Æ  Ø  .  í  L
+  .
+  G
+  
+  Æ  ´  k
+  Ø  À  ô
+  ﬂ  ÷  Ü
+  q
+  
+  |
+  x
+  †
+  l
+  3
+  a
+  a
+  e
+  Ÿ
+  Ï
+  o
+  Ä
+  /
+  O  Ã  >  J
+  Õ
+  
+  
+  
+  ‹
+  J
+  ‡
+  H  ˝  ´  ã
+  O  æ
+  ª  >
+  ò  ≥
+  
+  ∞
+  L
+  Ñ  K  ‰  1
+  ,  [
+  Ò
+  r  á
+  *
+  Ä  R
+    
+  s  R
+  ≤
+  
+  n  P  
+  7
+  é  ‰  |
+  ß  ‚
+  ¨  
+  Ç
+  /
+  '
+  ÷  L
+  /
+  >
+  
+  ç  l  ˆ  n    ö
+  c
+  w  j
+  r
+  É
+  /  p
+  ö
+  ˝
+  C
+  °  Ä
+    y    z
+  Ñ    J
+  @
+  ∏  s  
+  B  
+  Ò
+  
+  ^  6
+  .  ú  >
+  ¿  ˝	  ê
+  
+  H
+  J
+    é
+  œ  .
+  O  ƒ
+  8
+  
+  Õ
+  Ì  N
+    L
+  d    [
+  =  !
+  8
+  -    1  *  k    !  M
+  	  
+  p  A
+  
+  o  >
+  •  ƒ     .
+  ﬁ  å
+  p  C
+  ˛
+  k
+  p
+  å
+  ∏  Ä
+  Ö
+  {
+  #
+  k
+  k
+  l
+  å  j
+  d
+  e
+  è  
+  v
+  C
+  0
+  >
+  æ  
+  {  µ  ‚  q
+  ›
+  Ì
+    ˝  ,
+  E
+  ò  -
+  C
+  q  “  ^  3    j
+  &  è
+  o  —  S
+  ∏  
+  .
+  º  Õ
+  >
+  >
+  
+  
+  :  K     
+  
+    Î  *  ´  Ï
+  Ÿ
+  
+  ˝  ≥  h  /
+  .
+  œ    Ò
+  .
+  î  Û
+  Ï  w
+  À  ?
+  l
+  l
+  ˆ  r
+    v
+  H
+  è  k
+  l
+  Ÿ  ,
+  Û
+  x
+  \
+    o
+  À  r
+  J
+  *
+  
+  ^  5  À
+  W  
+  6
+  \
+  @
+  6
+  .  
+  >
+  R
+  ◊  *
+  s  f
+  R
+  k  ã
+  2  /
+  °
+  ?  J
+  ≠  1    Ñ
+  Ø
+    å
+  J
+   
+  >
+  ﬁ  Û  Î
+  -  
+    
+  #
+  L  å  e  Z
+  Ö  n  1  E
+  /  .
+  ≤  Æ  ~  
+  Ó
+  l
+  K  9  Õ  k
+  Ä
+  l  '     k
+  ‚  
+  ë
+  l
+  p  H
+  Ö
+  x
+  H
+  ≈  o
+  +  e  Ç  J
+  *  '  	
+  
+  1
+    
+  Q  Î  ú  '
+  H
+  ú  #
+   
+  Ø    T
+  $        
+  N
+  ¨  L
+  !
+  ê  N  
+  1
+  
+  é
+    W  ç    ,
+  M  ·  Õ     
+    Ó
+  H
+  L
+  ˛	  L  ú  î
+  ?
+  T
+  é  é  ˜  ~
+  ≤
+  Ó
+  k
+  Ï  D
+  8
+  k
+  
+  w  I
+  o
+  z
+  
+  3  û
+  °
+    H
+  Ä
+    Q
+  *
+  `
+  Å
+  Ö  ?
+  >
+    (  
+  ,
+  Ì
+  V  @  k  ú  t  >
+  >
+  Ï
+  
+  
+  .  b
+  J
+  ¨  Œ  
+  8
+  "
+  Œ  J
+  >  œ  Ö
+  ¢  Æ  J
+  >
+  ’
+  
+  
+  ç
+  
+  ]  -
+  n
+  
+  
+  .
+  o  H
+  %  .
+  ;  
+  /
+  
+  #
+  §  Æ    É
+  ¥  ,  ,
+  l  W
+  V  c
+  Ã  ~
+  á
+  [RUNTIME R4] total_cycles=0 tasks=0
+[RUNTIME R4] end
+[MPU
