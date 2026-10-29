@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>STM32 Policy Gate</title>
+<style>
+*{box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:1.5rem;max-width:760px;margin:auto}h1{font-size:1.4rem;color:#a0c4ff}h2{font-size:1.1rem}.card{background:#16213e;border-radius:8px;padding:1.2rem;margin:1rem 0}label{display:block;margin:.5rem 0}input:not([type=checkbox]){width:100%;padding:.6rem;border:1px solid #667;border-radius:4px;background:#0f1729;color:white;font-size:1rem}button{padding:.6rem .8rem;border:0;border-radius:4px;background:#4361ee;color:white;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.btns{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.6rem .2rem;border-bottom:1px solid #334}input[type=checkbox]{width:1.2rem;height:1.2rem}p{line-height:1.5}.muted{color:#b6c3d4;font-size:.9rem}#result{padding:1rem;border:1px solid #456;border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere}.ok{background:#0a2e1a}.err{background:#2e0a0a}[hidden]{display:none!important}
+</style>
+<script defer src="/dashboard.js"></script>
+</head>
+<body>
+<h1>STM32 Policy Gate Dashboard</h1>
+<div class="card">
+<form id="loginForm">
+<label for="user">Username</label><input id="user" value="admin" autocomplete="username" maxlength="32">
+<label for="pass">Password</label><input id="pass" type="password" placeholder="Lab password" autocomplete="off" maxlength="64">
+<div class="btns"><button id="btnLogin" type="submit">Login</button><button id="btnStatus" type="button">Check Status</button><button id="btnDemo" type="button">Open /demo</button><button id="btnLogout" type="button">Logout</button></div>
+</form>
+<p id="identity" class="muted">Log in to access protected paths.</p>
+</div>
+<section id="policy" class="card" hidden>
+<h2>Live policy — operator access</h2>
+<p>Changes apply immediately. Admin access stays enabled. Policy resets on board restart.</p>
+<table><thead><tr><th>Path</th><th>Allow operator</th></tr></thead><tbody>
+<tr><td>GET /demo</td><td><input type="checkbox" id="allowDemo" aria-label="Allow operator access to /demo"></td></tr>
+<tr><td>GET /api/status</td><td><input type="checkbox" id="allowStatus" aria-label="Allow operator access to /api/status"></td></tr>
+</tbody></table><div class="btns"><button id="btnRefresh">Refresh policy</button></div>
+<p id="policyState" class="muted"></p>
+</section>
+<p id="operatorNote" class="muted" hidden>Only admin can change policy. Use Open /demo to check your current access.</p>
+<pre id="result" role="status" hidden></pre>
+<p class="muted">Lab accounts: admin / admin456 and operator / oper789. HTTP only; no TLS. Logout clears this page's token; issued tokens do not expire or revoke.</p>
+</body>
+</html>

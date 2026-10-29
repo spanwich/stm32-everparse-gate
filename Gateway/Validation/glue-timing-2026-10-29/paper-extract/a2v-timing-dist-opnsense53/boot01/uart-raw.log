@@ -1,0 +1,890 @@
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=21
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3800/1884 margin=OK lwip=0/68 err=0
+[BOOT] policy_gate core validation; STM32F767ZI
+[BOOT] SYSCLK=96000000 HCLK=96000000 UART3=115200 FreeRTOS=V11.3.1
+[BOOT] lab Bearer HTTP transport; no TLS
+=== find_header_end test suite ===
+
+  PASS: standard GET request (result=33)
+  PASS: incomplete headers (result=35)
+  PASS: empty buffer (result=0)
+  PASS: 1 byte (result=1)
+  PASS: 2 bytes (result=2)
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=6964/1832 margin=OK heap_free=65520 heap_min=65504 log_drops=0
+  PASS: 3 bytes (result=3)
+  PASS: pattern at offset 0 (result=0)
+  PASS: pattern at offset 1 (result=1)
+  PASS: pattern at last position (result=6)
+  PASS: single CRLFs only (result=28)
+  PASS: first of multiple occurrences (result=4)
+  PASS: binary data (result=2)
+  PASS: realistic POST (header_end=96, body starts at 100)
+
+=== Results: 13/13 passed ===
+=== parse_method test suite ===
+
+  PASS: GET request (code=1 end=4)
+  PASS: POST request (code=2 end=5)
+  PASS: PUT request (code=4 end=4)
+  PASS: GET minimal (code=1 end=4)
+  PASS: PUT minimal (code=4 end=4)
+  PASS: POST minimal (code=2 end=5)
+  PASS: DELETE (code=8 end=7)
+  PASS: HEAD (code=32 end=5)
+  PASS: PATCH (code=16 end=6)
+  PASS: OPTIONS (code=0 end=0)
+  PASS: empty (code=0 end=0)
+  PASS: 1 byte (code=0 end=0)
+  PASS: 2 bytes (code=0 end=0)
+  PASS: 3 bytes (code=0 end=0)
+  PASS: POST no space (4 bytes) (code=0 end=0)
+  PASS: get lowercase (code=0 end=0)
+  PASS: Get mixed (code=0 end=0)
+
+=== Results: 17/17 passed ===
+=== extract_path_id test suite ===
+
+  PASS: GET /api/login (id=0x11111111 root=0)
+  PASS: POST /api/login (id=0x11111111 root=0)
+  PASS: GET /api/logout (id=0x22222222 root=0)
+  PASS: GET /api/status (id=0x33333333 root=0)
+  PASS: GET /api/policy (id=0x44444444 root=0)
+  PASS: PUT /api/policy (id=0x44444444 root=0)
+  PASS: GET / (root) (id=0x00000000 root=1)
+  PASS: /api/login?foo=bar (id=0x11111111 root=0)
+  PASS: /api/status?v=1 (id=0x33333333 root=0)
+  PASS: unknown /api/foo (id=0x00000000 root=0)
+  PASS: unknown /favicon.ico (id=0x00000000 root=0)
+  PASS: unknown /api/loginx (too long) (id=0x00000000 root=0)
+  PASS: unknown /api/logi (too short) (id=0x00000000 root=0)
+  PASS: path traversal /../etc/passwd (id=0x00000000 root=0)
+  PASS: path traversal /api/..hidden (id=0x00000000 root=0)
+  PASS: path traversal /api/../login (id=0x00000000 root=0)
+  PASS: null byte in path (id=0x00000000 root=0)
+  PASS: empty path (method_end == header_end) (id=0x00000000 root=0)
+  PASS: root with CR delimiter (id=0x00000000 root=1)
+  PASS: root with query (id=0x00000000 root=1)
+
+--- find_path_end tests ---
+  PASS: find_path_end space
+  PASS: find_path_end query
+  PASS: find_path_end CR
+  PASS: find_path_end no delimiter
+
+--- check_no_traversal tests ---
+  PASS: no traversal clean
+  PASS: traversal detected
+  PASS: traversal at start
+  PASS: single char safe
+
+--- check_no_null tests ---
+  PASS: no null clean
+  PASS: null detected
+
+=== Results: 30/30 passed ===
+=== parse_content_length test suite ===
+
+  PASS: Content-Length: 42 (val=42)
+  PASS: Content-Length: 0 (val=0)
+  PASS: Content-Length: 100 (val=100)
+  PASS: Content-Length: 1361 (max) (val=1361)
+  PASS: content-length: 42 (val=42)
+  PASS: content-length: 200 (val=200)
+  PASS: Content-Length: 1362 (over max) (val=1362)
+  PASS: Content-Length: 9999 (way over) (val=1362)
+  PASS: no CL header (val=0)
+  PASS: empty headers (val=0)
+  PASS: CL with extra spaces (val=50)
+  PASS: CL no space after colon (val=50)
+  PASS: CL among other headers (val=77)
+  PASS: CL at very start (after request line CRLF) (val=10)
+  PASS: partial header name (Content-Lengt) (val=0)
+  PASS: Content-Length: 5 (val=5)
+
+--- parse_digits tests ---
+  PASS: parse_digits 123
+  PASS: parse_digits 0
+  PASS: parse_digits 1362 clamped
+  PASS: parse_digits stops at non-digit
+
+--- skip_spaces tests ---
+  PASS: skip 3 spaces
+  PASS: skip no spaces
+
+=== Results: 22/22 passed ===
+=== extract_security_params test suite ===
+
+--- Known endpoints ---
+  PASS: GET /api/status (hash=0x33333333 method=1 body=0 olen=175)
+  PASS: GET /api/policy (hash=0x44444444 method=1 body=0 olen=175)
+  PASS: POST /api/login with body (hash=0x11111111 method=2 body=11 olen=186)
+  PASS: POST /api/logout (hash=0x22222222 method=2 body=0 olen=175)
+  PASS: PUT /api/policy with body (hash=0x44444444 method=4 body=5 olen=180)
+
+--- Dashboard ---
+  PASS: GET / (dashboard) (hash=0x00000000 method=1 body=0 olen=175)
+
+--- Error codes ---
+  PASS: no headers (incomplete) -> INCOMPLETE
+  PASS: DELETE method code (hash=0x33333333 method=8 body=0 olen=175)
+  PASS: HEAD method code (hash=0x33333333 method=32 body=0 olen=175)
+  PASS: path traversal -> PATH_TRAVERSAL
+  PASS: path traversal in api -> PATH_TRAVERSAL
+  PASS: unknown endpoint -> PATH_UNKNOWN
+  PASS: unknown short path -> PATH_UNKNOWN
+  PASS: body too large -> BODY_TOO_LARGE
+  PASS: body incomplete -> INCOMPLETE
+
+--- Wire format details ---
+  PASS: body bytes + zeroed region
+
+--- Edge cases ---
+  PASS: empty input -> INCOMPLETE
+  PASS: just CRLF -> METHOD_UNKNOWN
+  PASS: CL 0 no body (hash=0x33333333 method=1 body=0 olen=175)
+  PASS: path with query (hash=0x11111111 method=1 body=0 olen=175)
+
+--- Bearer token extraction ---
+  PASS: bearer token present (tlen=11)
+  PASS: no bearer token (tlen=0, region zeroed)
+  PASS: token truncated to 128 (tlen=128)
+  PASS: bearer + body (tlen=7 body=5)
+
+=== Results: 24/24 passed ===
+=== IPC.Extract test suite ===
+
+--- populate_auth_fields ---
+  PASS: auth basic: role=ADMIN(2)
+  PASS: auth basic: scope=0x0003
+  PASS: auth basic: subject_id_len=5
+  PASS: auth basic: subject_id='admin'
+  PASS: role clamp: raw=99 -> clamped=2
+  PASS: role boundary: raw=2 -> unchanged=2
+  PASS: subject_id_len clamp: raw=50 -> clamped=32
+  PASS: subject_id_len zero: len=0
+  PASS: subject_id zero: region untouched
+  PASS: scope endianness: lo=0x00, hi=0x3F
+
+--- populate_rate_field ---
+  PASS: rate basic: val=42
+  PASS: rate zero: val=0
+  PASS: rate max: val=255
+
+=== Results: 13/13 passed ===
+[Legacy vectors] 119/119
+=== Adapter and buffer boundaries ===
+  PASS: initial guards
+  PASS: empty input incomplete
+  PASS: no policy call before extraction
+  PASS: no dispatch before authorization
+  PASS: 4096-byte unterminated header
+  PASS: unterminated input unchanged
+  PASS: unterminated buffers intact
+  PASS: 4097 bytes rejected before extractor
+  PASS: oversized buffers intact
+  PASS: 4096-byte complete request
+  PASS: maximum request unchanged
+  PASS: 1361-byte body fills output
+  PASS: maximum body copied
+  PASS: maximum body input stable
+  PASS: 1362-byte body rejected
+  PASS: huge body length rejected
+  PASS: every fragmented prefix incomplete
+  PASS: complete fragmented request accepted
+  PASS: malformed request classification
+  PASS: malformed request cannot dispatch
+  PASS: malformed request classification
+  PASS: malformed request cannot dispatch
+  PASS: malformed request classification
+  PASS: malformed request cannot dispatch
+  PASS: 32-byte trusted identity
+  PASS: identity fields and separate auth storage
+  PASS: invalid identity revokes prior identity
+  PASS: invalid identity cannot evaluate
+  PASS: adapter rejects invalid role
+  PASS: adapter rejects oversized subject
+  PASS: adapter rejects missing identity
+  PASS: short security header rejected
+  PASS: corrupt body length rejected before copy
+  PASS: guard corruption stops processing
+=== Policy and dispatch boundaries ===
+[PolicyGate] path=0x33333333 method=1 role=OPERATOR scope=0x0001
+  PASS: operator sensor read allowed at 49
+  PASS: authorized dispatch occurs once
+  PASS: status response matches reference
+  PASS: forward result cannot be replayed
+[PolicyGate] path=0x33333333 method=1 role=OPERATOR scope=0x0001
+  PASS: rate 50 denied
+  PASS: rate denial cannot dispatch
+[PolicyGate] path=0x33333333 method=1 role=NONE scope=0x0001
+  PASS: insufficient role denied
+[PolicyGate] path=0x33333333 method=1 role=ADMIN scope=0x0000
+  PASS: admin still requires scope
+[PolicyGate] path=0x33333333 method=2 role=ADMIN scope=0xffff
+  PASS: wrong method denied
+[PolicyGate] path=0x11111111 method=1 role=ADMIN scope=0xffff
+  PASS: unmatched path denied by policy
+[PolicyGate] path=0x44444444 method=1 role=OPERATOR scope=0x0004
+  PASS: policy read requires admin
+[PolicyGate] path=0x44444444 method=1 role=ADMIN scope=0x0004
+  PASS: admin policy read allowed
+  PASS: policy read response
+[PolicyGate] path=0x22222222 method=2 role=OPERATOR scope=0x0000
+  PASS: zero-scope rule allowed
+[PolicyGate] path=0x33333333 method=1 role=ADMIN scope=0xffff
+  PASS: all requested scope bits allowed
+[PolicyGate] path=0x33333333 method=1 role=ADMIN scope=0x0001
+  PASS: partial scope mask denied
+[PolicyGate] path=0x44444444 method=4 role=OPERATOR scope=0xffff
+  PASS: non-admin policy update denied
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: rate-limited policy update unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: zero rules rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: nine rules rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: invalid rule method rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: invalid rule role rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: short policy body rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: trailing policy bytes rejected unchanged
+[PolicyGate] path=0x44444444 method=4 role=ADMIN scope=0xffff
+  PASS: valid policy update commits
+  PASS: policy update does not dispatch
+  PASS: stored policy slot preserved
+[PolicyGate] path=0x33333333 method=1 role=OPERATOR scope=0x0001
+  PASS: updated active rule works
+[PolicyGate] path=0x44444444 method=1 role=ADMIN scope=0xffff
+  PASS: stored slot matches despite count one
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=6180/884 margin=OK heap_free=65520 heap_min=65504 log_drops=0
+  PASS: policy tests retain buffer guards
+  PASS: EverParse access allow directly
+  PASS: EverParse rejects every truncated access length
+  PASS: EverParse rate predicate independently denies
+  PASS: EverParse scope predicate independently denies
+  PASS: EverParse policy allow directly
+  PASS: EverParse rejects every truncated policy length
+  PASS: EverParse policy admin predicate
+  PASS: EverParse policy rate predicate
+  PASS: HTTP every two-fragment split
+  PASS: HTTP byte fragments
+  PASS: HTTP processing cannot replay
+  PASS: HTTP framing/auth case 1
+  PASS: HTTP framing/auth case 2
+  PASS: HTTP framing/auth case 3
+  PASS: HTTP framing/auth case 4
+  PASS: HTTP framing/auth case 5
+  PASS: HTTP framing/auth case 6
+  PASS: HTTP framing/auth case 7
+  PASS: HTTP framing/auth case 8
+  PASS: HTTP framing/auth case 9
+  PASS: HTTP framing/auth case 10
+  PASS: HTTP framing/auth case 11
+  PASS: HTTP framing/auth case 12
+  PASS: HTTP framing/auth case 13
+  PASS: HTTP framing/auth case 14
+  PASS: HTTP framing/auth case 15
+  PASS: HTTP framing/auth case 16
+  PASS: HTTP framing/auth case 17
+  PASS: HTTP framing/auth case 18
+  PASS: HTTP framing/auth case 19
+  PASS: HTTP framing/auth case 20
+  PASS: HTTP framing/auth case 21
+  PASS: HTTP framing/auth case 22
+  PASS: HTTP framing/auth case 23
+  PASS: HTTP framing/auth case 24
+  PASS: HTTP framing/auth case 25
+  PASS: HTTP framing/auth case 26
+  PASS: HTTP maximum binary body
+  PASS: HTTP incomplete body waits
+  PASS: HTTP 4096 unterminated header
+  PASS: HTTP overlong bearer rejected
+  PASS: HTTP binary admin policy update
+  PASS: Bearer failed lookup clears identity
+  PASS: HTTP response framing and challenge
+  PASS: HTTP response small buffer fails
+  PASS: Dashboard served without authentication
+  PASS: Dashboard cannot bypass incomplete framing
+  PASS: Dashboard POST is not a public route
+  PASS: Dashboard rejects body
+  PASS: Dashboard rejects lookalike route
+  PASS: HTML header
+  PASS: HTML header bounds
+  PASS: Admin login with byte fragmentation
+  PASS: Issued token matches independent HMAC vector
+  PASS: Issued token Bearer encoding
+  PASS: Issued admin token status
+  PASS: Issued admin token policy
+  PASS: Issued admin token logout
+  PASS: Original stateless logout retains token validity
+  PASS: Every token nibble authenticated
+  PASS: Operator login accepts whitespace/order/ASCII escape
+  PASS: Issued operator status
+  PASS: Issued operator denied policy
+  PASS: Login JSON/credential rejection 0
+  PASS: Login JSON/credential rejection 1
+  PASS: Login JSON/credential rejection 2
+  PASS: Login JSON/credential rejection 3
+  PASS: Login JSON/credential rejection 4
+  PASS: Login JSON/credential rejection 5
+  PASS: Login JSON/credential rejection 6
+  PASS: Login JSON/credential rejection 7
+  PASS: Login JSON/credential rejection 8
+  PASS: Login JSON/credential rejection 9
+  PASS: Login JSON/credential rejection 10
+  PASS: Login JSON/credential rejection 11
+  PASS: Login JSON/credential rejection 12
+  PASS: Login JSON/credential rejection 13
+  PASS: Password length boundary
+  PASS: Password length boundary
+  PASS: Password length boundary
+  PASS: Credential helper enforces its own bound
+  PASS: Every truncated login body rejected
+  PASS: Login output bounds
+  PASS: Login leaves guards intact
+  PASS: Public JavaScript with fragmented headers
+  PASS: Demo GET requires authentication
+  PASS: Demo rejects non-GET
+  PASS: Demo query retains alias
+  PASS: Operator demo denied by default
+  PASS: Admin demo allowed
+  PASS: Demo has distinct integration route ID
+  PASS: Status remains allowed independently
+  PASS: Operator cannot inspect policy
+  PASS: Admin reads actual rules
+  PASS: Operator cannot change live policy
+  PASS: Admin enables operator demo
+  PASS: Operator demo succeeds immediately
+  PASS: Admin disables operator demo
+  PASS: Operator demo denied immediately
+  PASS: Admin retains demo access
+  PASS: Admin disables operator status
+  PASS: Operator status denied
+  PASS: Admin status remains allowed
+  PASS: Policy readback reflects edited role
+  PASS: Live policy integration guards
+  PASS: Mediation public handler explicitly admitted
+  PASS: Mediation public invocation consumed
+  PASS: Mediation public class cannot select API
+  PASS: Mediation public method restricted
+  PASS: Mediation stored slot matches despite count one
+  PASS: Mediation decision cannot dispatch twice
+  PASS: Mediation operator cannot commit candidate
+  PASS: Mediation commits exact active candidate
+  PASS: Mediation policy transaction consumed
+  PASS: Mediation malformed login has no effect
+  PASS: Rate: 49 requests in one window admitted
+  PASS: Rate: over-limit request 50 refused (429)
+  PASS: Rate: over-limit request 51 refused (429)
+  PASS: Rate: over-limit request 52 refused (429)
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=0
+  PASS: Rate: over-limit request 53 refused (429)
+  PASS: Rate: over-limit request 54 refused (429)
+  PASS: Rate: over-limit request 55 refused (429)
+  PASS: Rate: over-limit request 56 refused (429)
+  PASS: Rate: over-limit request 57 refused (429)
+  PASS: Rate: over-limit request 58 refused (429)
+  PASS: Rate: over-limit request 59 refused (429)
+  PASS: Rate: over-limit request 60 refused (429)
+  PASS: Rate: over-limit request 61 refused (429)
+  PASS: Rate: over-limit request 62 refused (429)
+  PASS: Rate: over-limit request 63 refused (429)
+  PASS: Rate: over-limit request 64 refused (429)
+  PASS: Rate: over-limit request 65 refused (429)
+  PASS: Rate: over-limit request 66 refused (429)
+  PASS: Rate: over-limit request 67 refused (429)
+  PASS: Rate: over-limit request 68 refused (429)
+  PASS: Rate: over-limit request 69 refused (429)
+  PASS: Rate: over-limit policy update refused, policy unchanged
+  PASS: Rate: first request in the next window admitted
+EQUIVALENCE_OK,engine=stm32-linked-everparse,comparisons=lu
+[PAPER CORPUS] comparisons=12527 failures=0
+  PASS: paper reference 12527-case equivalence
+[CORE SELFTEST] PASS 322/322; synthetic identity only
+[GATE-N32] policy=opnsense-19.1.7 n=53 vectors=20256 accepts=5040 mismatches=0 fail_closed=0
+[GATE-CYC] impl=verified_gate n=53 case=first answer=1 min=2108 med=2108 max=2605
+[GATE-CYC] impl=verified_gate n=53 case=last answer=1 min=90640 med=91138 max=94549
+[GATE-CYC] impl=verified_gate n=53 case=absent answer=0 min=90723 med=91221 max=94151
+[GATE-CYC] impl=verified_gate n=1 case=first answer=1 min=2108 med=2108 max=2606
+[GATE-CYC] impl=verified_gate n=1 case=last answer=1 min=2199 med=2199 max=2697
+[GATE-CYC] impl=verified_gate n=1 case=absent answer=0 min=2233 med=2233 max=2734
+[GATE-CYC] impl=adapter+verified_gate n=1 case=first answer=1 min=4100 med=4208 max=4713
+[GATE-CYC] impl=monolithic_rbac n=1 case=first answer=1 min=2146 med=2149 max=2651
+[GATE-CYC] impl=adapter+verified_gate n=1 case=last answer=1 min=4194 med=4432 max=4941
+[GATE-CYC] impl=monolithic_rbac n=1 case=last answer=1 min=2239 med=2242 max=2752
+[GATE-CYC] impl=adapter+verified_gate n=1 case=absent answer=0 min=4222 med=4421 max=4964
+[GATE-CYC] impl=monolithic_rbac n=1 case=absent answer=0 min=2686 med=2686 max=3195
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=0
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=0
+[HEARTBEAT] RUNNING 0/0 stack_fre[GATE-DIST] what=empty n=0 case=bracket irq=on answer=0 samples=10000 min=10 mean=10 p50=10 p99=10 max=10
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=1
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=1
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=1
+[GATE-DIST] what=decide n=53 case=first irq=on answer=1 samples=2000 min=2107 mean=2122 p50=2107 p99=2597 max=2607
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=1
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=1
+[H[GATE-DIST] what=decide n=53 case=last irq=on answer=1 samples=2000 min=90322 mean=90789 p50=90832 p99=90849 max=94268
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=2
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=2
+[HEARTBE[HE[HE[HE[HEAR[GATE-DIST] what=decide n=53 case=absent irq=on answer=0 samples=2000 min=90413 mean=90871 p50=90914 p99=90930 max=94342
+[GATE-DIST] what=decide n=1 case=first irq=on answer=1 samples=10000 min=2107 mean=2125 p50=2107 p99=2597 max=2611
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=7
+[GATE-DIST] what=decide n=1 case=last irq=on answer=1 samples=10000 min=2198 mean=2215 p50=2198 p99=2684 max=2700
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=O[GATE-DIST] what=decide n=1 case=absent irq=on answer=0 samples=10000 min=2231 mean=2251 p50=2231 p99=2722 max=6067
+[GATE-DIST] what=empty n=0 case=bracket irq=off answer=0 samples=10000 min=10 mean=10 p50=10 p99=10 max=10
+[GATE-DIST] what=decide n=53 case=first irq=off answer=1 samples=2000 min=2107 mean=2107 p50=2107 p99=2107 max=2119
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 ma[HE[GATE-DIST] what=decide n=53 case=last irq=off answer=1 samples=2000 min=89978 mean=89978 p50=89978 p99=89978 max=89995
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=10
+[HEA[GATE-DIST] what=decide n=53 case=absent irq=off answer=0 samples=2000 min=90059 mean=90059 p50=90059 p99=90059 max=90071
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=11
+[GATE-DIST] what=decide n=1 case=first irq=off answer=1 samples=10000 min=2107 mean=2107 p50=2107 p99=2118 max=2118
+[HEARTBEAT] RUNNING[GATE-DIST] what=decide n=1 case=last irq=off answer=1 samples=10000 min=2198 mean=2198 p50=2198 p99=2209 max=2215
+[GATE-DIST] what=decide n=1 case=absent irq=off answer=0 samples=10000 min=2231 mean=2231 p50=2231 p99=2242 max=2243
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_m[GATE-DIST] what=update n=1 case=valid irq=on answer=1 samples=10000 min=3862 mean=3939 p50=3906 p99=4405 max=4416
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap[GATE-DIST] what=update n=1 case=wrong_role irq=on answer=0 samples=10000 min=5728 mean=5778 p50=5728 p99=6224 max=9556
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65[GATE-DIST] what=update n=1 case=valid irq=off answer=1 samples=10000 min=3905 mean=3905 p50=3905 p99=3905 max=3929
+[HEARTBEAT] RUNNING 0/0 stack_[GATE-DIST] what=update n=1 case=wrong_role irq=off answer=0 samples=10000 min=5727 mean=5727 p50=5727 p99=5729 max=5753
+[HEA[HEARTB[GATE-DIST] what=decide n=53 case=worst irq=on answer=0 samples=2000 min=104783 mean=104886 p50=104803 p99=105311 max=108645
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=18
+[GATE-DIST] what=decide n=1 case=worst irq=on answer=0 samples=10000 min=2493 mean=2516 p50=2493 p99=2988 max=2999
+[HEARTBEAT] [HEA[GATE-DIST] what=decide n=53 case=worst irq=off answer=0 samples=2000 min=103945 mean=103945 p50=103945 p99=103945 max=103957
+[HEARTBEAT] RUNNING 0/0 stack_free_bytes=2176/884 margin=OK heap_free=65520 heap_min=65504 log_drops=20
+[GATE-DIST] what=decide n=1 case=worst irq=off answer=0 samples=10000 min=2493 mean=2493 p50=2493 p99=2504 max=2504
+[GATE-DIST] done sink=236808 core_hz=96000000 overflow16=0
+[GATE-N32] done sink=236808
+[ETH] link=UP phy=2 epoch=1
+[HTTP] READY 192.168.40.128/24:80 lab_bearer=1 RAM policy; no TLS
+[MPU] app_unprivileged=1
+[MPU] network_unprivileged=1 gate_privileged=0
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/884 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192
+[HEARTBEAT] PASS 322/322 stack_free_bytes=2176/812 margin=OK heap_free=65040 heap_min=64952 log_drops=20
+[NET] link=1 req=0 rx=0 tx=1 drop=0 txerr=0 stack=5528/3832/1884 margin=OK lwip=0/68 err=0
+[GATE] stack_free=6428 of 8192

@@ -1,0 +1,1 @@
+First post-reboot timing-dist run (all five images): every GATE-DIST sample 0 cycles because DWT CYCCNTENA was not set (no LAR unlock). Raw logs kept; superseded by rerun with paper_dwt.h. a1v-timing-dist-opnsense53/boot01 (pre-reboot, 14:25) was the only nonzero boot.
